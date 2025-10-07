@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Storage;
 
 class Category extends Model
 {
-    protected $fillable = ['name', 'image', 'parent_id'];
+    protected $fillable = ['name', 'image','display_order','parent_id'];
 
     public function parent()
     {

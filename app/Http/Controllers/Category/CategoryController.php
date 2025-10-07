@@ -19,10 +19,13 @@ class CategoryController extends Controller
     {
         $parentOnly = $request->boolean('parent');
         $key = $parentOnly ? 'categories_parents' : 'categories_all';
+
         $categories = Cache::remember($key, 3600, function () use ($parentOnly) {
             $query = Category::query()
+                ->orderBy('display_order', 'asc')
                 ->orderByRaw("CASE WHEN name = 'عقارات' THEN 0 ELSE 1 END")
-                ->orderBy('id');
+                ->orderBy('id', 'asc');
+
             return $parentOnly
                 ? $query->whereNull('parent_id')->get()
                 : $query->whereNull('parent_id')->with('children')->get();
@@ -30,6 +33,7 @@ class CategoryController extends Controller
 
         return CategoryResource::collection($categories);
     }
+
 
     public function store(StoreCategoryRequest $request)
     {
