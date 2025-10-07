@@ -1,0 +1,260 @@
+<?php
+
+namespace App\Services;
+
+use App\Events\ConversationUpdated;
+use App\Events\ConversationUpdatedAfterDelete;
+use App\Events\MessageSent;
+use App\Events\UnreadCountUpdated;
+use App\Jobs\SendFcmNotification;
+use App\Repositories\MessageRepository;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\UploadedFile;
+use App\Models\Message;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Pusher\Pusher;
+
+class MessageService
+{
+    protected MessageRepository $messageRepo;
+
+    public function __construct(MessageRepository $messageRepo)
+    {
+        $this->messageRepo = $messageRepo;
+    }
+
+    public function sendMessage(array $data): Message
+    {
+        $sender = auth('sanctum')->user();
+        $data['sender_id'] = $sender->id;
+
+        $receiver = User::find($data['receiver_id']);
+        if (!$receiver) {
+            throw new \Exception('المستخدم غير موجود');
+        }
+
+        if (!empty($data['file']) && $data['file'] instanceof UploadedFile) {
+            $data = array_merge($data, $this->handleAttachment($data['file']));
+        }
+
+        $message = $this->messageRepo->create($data);
+        $updatedCount = $this->markMessagesAsReadIfBothOnline($sender->id, $receiver->id);
+
+        $is_read = $updatedCount > 0;
+        $this->broadcastEvents($message, $data['TemporaryCode'] ?? null, $is_read, $receiver->id, $sender->id);
+
+        if ($receiver->fcm_token) {
+            $this->sendFcmNotification($receiver, $sender, $message);
+        }
+
+        $message['is_read'] = $is_read;
+        return $message;
+    }
+
+    private function handleAttachment(UploadedFile $file): array
+    {
+        $mime = $file->getMimeType();
+
+        $maxSizes = [
+            'image' => 5 * 1024 * 1024,
+            'pdf' => 10 * 1024 * 1024,
+            'audio' => 7 * 1024 * 1024,
+            'video' => 15 * 1024 * 1024,
+            'zip' => 8 * 1024 * 1024,
+        ];
+
+        $category = match (true) {
+            str_starts_with($mime, 'image/') => 'image',
+            $mime === 'application/pdf' => 'pdf',
+            str_starts_with($mime, 'audio/') => 'audio',
+            str_starts_with($mime, 'video/') => 'video',
+            str_contains($mime, 'zip') => 'zip',
+            default => null,
+        };
+
+        if (!$category || !isset($maxSizes[$category]) || $file->getSize() > $maxSizes[$category]) {
+            throw new \Exception('نوع الملف أو حجمه غير مسموح');
+        }
+
+        return $this->messageRepo->storeAttachment($file);
+    }
+
+    private function broadcastEvents(Message $message, ?string $temporaryCode, bool $is_read,  int $receiverId, int $senderId): void
+    {
+        event(new MessageSent($message->load('ad.images'), $temporaryCode, $is_read));
+
+        $conversation = $this->messageRepo->getUserConversations($receiverId)->first();
+        event(new ConversationUpdated($conversation, $receiverId));
+
+        $conversation = $this->messageRepo->getUserConversations($senderId)->first();
+        event(new ConversationUpdated($conversation, $senderId));
+
+        $unreadCount =  $this->getTotalUnreadConversationsCount($receiverId);
+        event(new UnreadCountUpdated($receiverId, $unreadCount));
+    }
+
+    private function sendFcmNotification(User $receiver, User $sender, Message $message): void
+    {
+        SendFcmNotification::dispatchSync(
+            $receiver->fcm_token,
+            '📢 رسالة جديدة من ' . $sender->name,
+            $message->content,
+            [
+                'id' => $message->id,
+                'name' => $sender->name,
+                'sender_id' => $message->sender_id,
+                'receiver_id' => $message->receiver_id,
+                'content' => $message->content,
+                'attachment_url' => $message->attachmentUrl() ?? null,
+                'attachment_type' => $message->attachment_type ?? null,
+                'created_at' => $message->created_at->toDateTimeString(),
+            ]
+        );
+    }
+
+    public function getConversationWith(int $userId)
+    {
+        $unreadCount = $this->getTotalUnreadConversationsCount(Auth::id());
+        event(new UnreadCountUpdated(Auth::id(), $unreadCount));
+        return $this->messageRepo->getConversation(Auth::id(), $userId);
+    }
+
+    public function getTotalUnreadConversationsCount($userId)
+    {
+        return $this->messageRepo->getTotalUnreadConversationsCount($userId);
+    }
+
+    public function getUserConversations($search = null)
+    {
+        return $this->messageRepo->getUserConversations(Auth::id(), 20, $search);
+    }
+
+    public function delete(array $data)
+    {
+        $userId = Auth::id();
+
+        if (!isset($data['user_id'])) {
+            throw new \Exception('user_id مطلوب');
+        }
+
+        $otherUserId = $data['user_id'];
+
+        if (!empty($data['message_ids']) && is_array($data['message_ids'])) {
+            return $this->deleteSpecificMessages($userId, $data['message_ids']);
+        }
+
+        return $this->deleteConversation($userId, $otherUserId);
+    }
+
+    private function deleteSpecificMessages(int $userId, array $messageIds): bool
+    {
+        $insert = [];
+        $needToTrigger = [];
+
+        foreach ($messageIds as $messageId) {
+            $message = Message::find($messageId);
+            if (!$message) continue;
+
+            $otherUserId = $message->sender_id == $userId ? $message->receiver_id : $message->sender_id;
+
+            if ($message->sender_id === $userId && now()->diffInSeconds($message->created_at) <= 120) {
+                $message->delete();
+            } else {
+                $insert[] = [
+                    'user_id' => $userId,
+                    'message_id' => $messageId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            $needToTrigger[] = $otherUserId;
+        }
+
+        if (!empty($insert)) {
+            DB::table('message_deletions')->upsert($insert, ['user_id', 'message_id']);
+        }
+
+        foreach (array_unique($needToTrigger) as $otherUserId) {
+            $lastVisibleMessage = $this->messageRepo->getLastVisibleMessage($userId, $otherUserId);
+            if ($lastVisibleMessage) {
+                $conversation = $this->messageRepo->getConversationObject($userId, $otherUserId);
+                if ($conversation) {
+                    event(new ConversationUpdatedAfterDelete($conversation, $userId));
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private function deleteConversation(int $userId, int $otherUserId): bool
+    {
+        $messages = Message::where(function ($q) use ($userId, $otherUserId) {
+            $q->where('sender_id', $userId)->where('receiver_id', $otherUserId);
+        })->orWhere(function ($q) use ($userId, $otherUserId) {
+            $q->where('sender_id', $otherUserId)->where('receiver_id', $userId);
+        })->get();
+
+        if ($messages->isEmpty()) return true;
+
+        $insert = [];
+
+        foreach ($messages as $message) {
+            if ($message->sender_id === $userId && now()->diffInSeconds($message->created_at) <= 120) {
+                $message->delete();
+            } else {
+                $insert[] = [
+                    'user_id' => $userId,
+                    'message_id' => $message->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+        }
+
+        if (!empty($insert)) {
+            DB::table('message_deletions')->upsert($insert, ['user_id', 'message_id']);
+        }
+
+        $unreadCount =  $this->getTotalUnreadConversationsCount($userId);
+        event(new UnreadCountUpdated($userId, $unreadCount));
+
+        return true;
+    }
+
+    function markMessagesAsReadIfBothOnline(int $userId, int $receiverId): int
+    {
+        $channelName = 'presence-chat.' . min($userId, $receiverId) . '.' . max($userId, $receiverId);
+
+        $pusher = new Pusher(
+            config('broadcasting.connections.pusher.key'),
+            config('broadcasting.connections.pusher.secret'),
+            config('broadcasting.connections.pusher.app_id'),
+            config('broadcasting.connections.pusher.options')
+        );
+
+        try {
+            $response = $pusher->get("/channels/{$channelName}/users");
+            $users = (array) ($response->users ?? []);
+            $onlineUserIds = collect($users)->pluck('id')->map(fn($id) => (int) $id)->all();
+
+            if (in_array($userId, $onlineUserIds) && in_array($receiverId, $onlineUserIds)) {
+                $updated = Message::where('sender_id', $userId)
+                    ->where('receiver_id', $receiverId)
+                    ->where('is_read', false)
+                    ->update(['is_read' => true]);
+
+                Log::info("🔄 تم تحديث {$updated} رسالة كمقروءة.");
+                return $updated;
+            } else {
+                Log::info("❌ أحد المستخدمين غير متصل: {$userId} أو {$receiverId}");
+            }
+        } catch (\Exception $e) {
+            Log::error('Pusher presence check failed: ' . $e->getMessage(), ['userId' => $userId]);
+        }
+        return 0;
+    }
+}

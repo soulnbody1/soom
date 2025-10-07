@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.soulnbody.soom",
+      "sha256_cert_fingerprints": [
+        "C8:9C:FE:7F:DD:19:B0:F5:B8:16:1E:E9:F1:69:1D:40:6D:7D:7D:F2:DC:68:5C:3C:4E:61:46:11:72:96:61:82"
+      ]
+    }
+  }
+]

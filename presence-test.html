@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Presence Chat - Laravel + Pusher</title>
+    <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
+    <script src="https://unpkg.com/laravel-echo/dist/echo.iife.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        #users,
+        #messages,
+        #allOnlineUsers {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .user {
+            margin-bottom: 5px;
+        }
+
+        .msg {
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        #typingIndicator {
+            color: #999;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        form {
+            margin-top: 20px;
+        }
+
+        select,
+        input,
+        button {
+            margin-top: 10px;
+            padding: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>🔵 Presence Chat</h2>
+
+    <label for="chatWith"><strong>📋 اختر شخص للتحدث معه:</strong></label><br>
+    <select id="chatWith">
+        <option value="">-- اختر مستخدم --</option>
+        <option value="2">👤 المستخدم 2</option>
+        <option value="3">👤 المستخدم 3</option>
+        <option value="4">👤 المستخدم 4</option>
+    </select>
+
+    <div>
+        <strong>🟢 Active Users in Chat:</strong>
+        <div id="users"></div>
+    </div>
+
+    <div>
+        <strong>💬 Messages:</strong>
+        <div id="messages"></div>
+        <div id="typingIndicator"></div>
+    </div>
+
+    <div>
+        <strong>🌐 All Online Users in App:</strong>
+        <div id="allOnlineUsers"></div>
+    </div>
+
+    <form id="sendForm" style="display:none;">
+        <input type="text" id="content" placeholder="Type your message..." required style="width: 60%;">
+        <button type="submit">Send</button>
+    </form>
+
+    <script>
+        const token = "Bearer 100|z6sa8lOQOkrvLZ2Q4qVQyy0ff9wMnMDJmfpBfTVo8e200c88";
+        const apiBase = "https://clinics.soulnbody.net/soom";
+        let currentUserId = null;
+        let receiverId = null;
+        let currentChannel = null;
+        const activeUsers = new Map();
+        const onlineUsers = new Map();
+        const allUsers = [
+            { id: 2, name: "المستخدم 2" },
+            { id: 3, name: "المستخدم 3" },
+            { id: 4, name: "المستخدم 4" }
+        ];
+
+        let typingTimeout = null;
+
+        window.Pusher = Pusher;
+
+        window.Echo = new window.Echo.default({
+            broadcaster: 'pusher',
+            key: '6abad6cfa7a5e8aa3ff3',
+            cluster: 'ap2',
+            forceTLS: true,
+            authEndpoint: `${apiBase}/api/broadcasting/auth`,
+            auth: {
+                headers: {
+                    Authorization: token,
+                    Accept: 'application/json'
+                }
+            }
+        });
+
+        // Get current user and subscribe to global presence
+        fetch(`${apiBase}/api/soom/profile`, {
+            headers: {
+                Authorization: token,
+                Accept: 'application/json'
+            }
+        })
+            .then(res => res.json())
+            .then(user => {
+                currentUserId = user.data.id;
+                console.log("🔑 Logged in as user:", currentUserId);
+
+                updateChatWithOptions();
+
+                window.Echo.join("presence.online-users")
+                    .here(users => {
+                        users.forEach(user => onlineUsers.set(user.id, user));
+                        updateChatWithOptions();
+                        updateOnlineUsersList();
+                    })
+                    .joining(user => {
+                        onlineUsers.set(user.id, user);
+                        updateChatWithOptions();
+                        updateOnlineUsersList();
+                    })
+                    .leaving(user => {
+                        onlineUsers.delete(user.id);
+                        updateChatWithOptions();
+                        updateOnlineUsersList();
+                    });
+
+            })
+            .catch(err => {
+                console.error("❌ Failed to fetch user profile", err);
+            });
+
+        function updateChatWithOptions() {
+            const select = document.getElementById("chatWith");
+            const currentVal = select.value;
+            select.innerHTML = `<option value="">-- اختر مستخدم --</option>`;
+            allUsers.forEach(user => {
+                if (user.id !== currentUserId) {
+                    const online = onlineUsers.has(user.id) ? "✅" : "❌";
+                    select.innerHTML += `<option value="${user.id}">${online} ${user.name}</option>`;
+                }
+            });
+            select.value = currentVal;
+        }
+
+        document.getElementById('chatWith').addEventListener('change', function () {
+            const selectedId = parseInt(this.value);
+            if (!selectedId || selectedId === currentUserId) return;
+
+            receiverId = selectedId;
+
+            if (currentChannel) {
+                window.Echo.leave(currentChannel);
+                activeUsers.clear();
+                updateUserList();
+                document.getElementById('typingIndicator').textContent = '';
+            }
+
+            const chatChannel = `chat.${Math.min(currentUserId, receiverId)}.${Math.max(currentUserId, receiverId)}`;
+            console.log("🛰️ Subscribing to channel:", chatChannel);
+
+            currentChannel = chatChannel;
+
+            window.Echo.join(chatChannel)
+                .here(users => {
+                    users.forEach(user => activeUsers.set(user.id, user));
+                    updateUserList();
+                })
+                .joining(user => {
+                    activeUsers.set(user.id, user);
+                    updateUserList();
+                })
+                .leaving(user => {
+                    activeUsers.delete(user.id);
+                    updateUserList();
+                })
+                .listen('.message.sent', (e) => {
+                    console.log('📨 Received:', e);
+                    appendMessage(e);
+                })
+                .listenForWhisper('typing', (e) => {
+                    console.log("👂 Received whisper.typing:", e);
+                    showTypingIndicator(e.name);
+                });
+
+            document.getElementById('sendForm').style.display = 'block';
+        });
+
+        function updateUserList() {
+            const container = document.getElementById('users');
+            container.innerHTML = '';
+            activeUsers.forEach(user => {
+                container.innerHTML += `<div class="user">👤 ${user.name} (ID: ${user.id})</div>`;
+            });
+        }
+
+        function updateOnlineUsersList() {
+            const container = document.getElementById('allOnlineUsers');
+            container.innerHTML = '';
+            onlineUsers.forEach(user => {
+                container.innerHTML += `<div class="user">🟢 ${user.name} (ID: ${user.id})</div>`;
+            });
+        }
+
+        function appendMessage(msg) {
+            const messagesEl = document.getElementById('messages');
+            messagesEl.innerHTML += `
+                <div class="msg">
+                    <strong>👤 ${msg.sender_id}</strong> ➡️ <strong>${msg.receiver_id}</strong><br>
+                    🕒 ${msg.created_at}<br>
+                    💬 ${msg.content}
+                </div>
+            `;
+        }
+
+        function showTypingIndicator(name) {
+            console.log("🔔 showTypingIndicator called with:", name);
+            const el = document.getElementById('typingIndicator');
+            el.textContent = `✍️ ${name} يكتب الآن...`;
+            if (typingTimeout) clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                el.textContent = '';
+            }, 3000);
+        }
+
+        document.getElementById('content').addEventListener('input', () => {
+            if (currentChannel) {
+                const payload = {
+                    id: currentUserId,
+                    name: allUsers.find(u => u.id === currentUserId)?.name || `User ${currentUserId}`
+                };
+                console.log("✍️ Sending whisper.typing:", payload);
+                window.Echo.join(currentChannel).whisper('typing', {
+                    id: currentUserId,
+                    name: allUsers.find(u => u.id === currentUserId)?.name || `User ${currentUserId}`
+                });
+
+            } else {
+                console.warn("⚠️ currentChannel is null, cannot whisper.");
+            }
+        });
+
+
+
+        document.getElementById('sendForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const content = document.getElementById('content').value;
+
+            fetch(`${apiBase}/api/soom/messages`, {
+                method: 'POST',
+                headers: {
+                    Authorization: token,
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json'
+                },
+                body: JSON.stringify({
+                    content: content,
+                    receiver_id: receiverId
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('content').value = '';
+                    appendMessage(data.data);
+                    console.log('✅ Sent:', data);
+                })
+                .catch(err => {
+                    console.error('❌ Error sending message', err);
+                });
+        });
+    </script>
+</body>
+
+</html>
