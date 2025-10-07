@@ -22,9 +22,7 @@ class CategoryController extends Controller
 
         $categories = Cache::remember($key, 3600, function () use ($parentOnly) {
             $query = Category::query()
-                ->orderBy('display_order', 'asc')
-                ->orderByRaw("CASE WHEN name = 'عقارات' THEN 0 ELSE 1 END")
-                ->orderBy('id', 'asc');
+                ->orderBy('display_order', 'asc');
 
             return $parentOnly
                 ? $query->whereNull('parent_id')->get()
