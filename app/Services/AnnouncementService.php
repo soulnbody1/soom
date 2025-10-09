@@ -40,7 +40,11 @@ class AnnouncementService
         $data = $request->validated();
         if (request()->hasFile('icon')) {
             if ($announcement->icon) {
-                Storage::disk('spaces')->delete($announcement->icon);
+                $deleted = Storage::disk('spaces')->delete($announcement->icon);
+                \Log::info('Deleting old icon from Spaces', [
+                    'path' => $announcement->icon,
+                    'deleted' => $deleted,
+                ]);
             }
 
 
