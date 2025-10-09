@@ -18,7 +18,9 @@ class UserService
         unset($data['phone']);
         if (isset($data['logo'])) {
             if ($user->logo && Storage::disk('spaces')->exists($user->logo)) {
-                Storage::disk('spaces')->delete($user->logo);
+                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+                $path = str_replace($baseUrl, '', $user->logo);
+                Storage::disk('spaces')->delete($path);
             }
             $data['logo'] = $data['logo']->store('users', 'spaces');
         }
@@ -37,7 +39,9 @@ class UserService
                 ->toArray();
 
             if (!empty($adImagePaths)) {
-                Storage::disk('spaces')->delete($adImagePaths);
+                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+                $paths = array_map(function ($path) use ($baseUrl) {return str_replace($baseUrl, '', $path);}, $adImagePaths);
+                Storage::disk('spaces')->delete($paths);
             }
 
 
@@ -46,7 +50,8 @@ class UserService
             $user->ads()->delete();
 
             if ($user->logo) {
-                $path = str_replace(Storage::disk('spaces')->url(''), '', $user->logo);
+                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+                $path = str_replace($baseUrl, '', $user->logo);
                 Storage::disk('spaces')->delete($path);
             }
 

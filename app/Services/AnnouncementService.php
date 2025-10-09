@@ -40,11 +40,9 @@ class AnnouncementService
         $data = $request->validated();
         if (request()->hasFile('icon')) {
             if ($announcement->icon) {
-                $deleted = Storage::disk('spaces')->delete($announcement->icon);
-                \Log::info('Deleting old icon from Spaces', [
-                    'path' => $announcement->icon,
-                    'deleted' => $deleted,
-                ]);
+                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+                $path = str_replace($baseUrl, '', $announcement->icon);
+                Storage::disk('spaces')->delete($path);
             }
 
 
@@ -56,7 +54,9 @@ class AnnouncementService
     public function delete(Announcement $announcement)
     {
         if ($announcement->icon) {
-            Storage::disk('spaces')->delete($announcement->icon);
+            $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+            $path = str_replace($baseUrl, '', $announcement->icon);
+            Storage::disk('spaces')->delete($path);
         }
         return $this->repo->delete($announcement);
     }

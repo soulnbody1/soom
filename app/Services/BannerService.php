@@ -40,7 +40,9 @@ class BannerService
     {
         if (request()->hasFile('image')) {
             if ($banner->image) {
-                Storage::disk('spaces')->delete($banner->image);
+                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+                $path = str_replace($baseUrl, '', $banner->image);
+                Storage::disk('spaces')->delete($path);
             }
 
             $data['image'] = request()->file('image')->store('banners', 'spaces');
@@ -51,7 +53,9 @@ class BannerService
     public function delete(Banner $banner)
     {
         if ($banner->image) {
-            Storage::disk('spaces')->delete($banner->image);
+            $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+            $path = str_replace($baseUrl, '', $banner->image);
+            Storage::disk('spaces')->delete($path);
         }
         return $this->repo->delete($banner);
     }

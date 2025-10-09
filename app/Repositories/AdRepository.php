@@ -111,7 +111,9 @@ class AdRepository
         if (!empty($images)) {
             // حذف الصور القديمة من التخزين ومن قاعدة البيانات
             foreach ($ad->images as $image) {
-                Storage::disk('spaces')->delete($image->image_path);
+                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
+                $path = str_replace($baseUrl, '', $image->image_path);
+                Storage::disk('spaces')->delete($path);
                 $image->delete();
             }
 
