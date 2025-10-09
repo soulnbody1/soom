@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Services\AnnouncementService;
 use App\Http\Requests\AnnouncementRequest;
+use App\Http\Requests\AnnouncementUpdateRequest;
 use App\Http\Resources\AnnouncementResource;
 
 class AnnouncementController extends Controller
@@ -39,7 +40,7 @@ class AnnouncementController extends Controller
         return new AnnouncementResource($announcement);
     }
 
-    public function update(AnnouncementRequest $request, $id)
+    public function update(AnnouncementUpdateRequest $request, $id)
     {
         $announcement = $this->service->show($id);
         $announcement = $this->service->update($announcement, $request->validated());

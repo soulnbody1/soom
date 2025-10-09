@@ -19,12 +19,20 @@ class Ad extends Model
         'country_id',
         'state_id',
         'city_id',
-        'latitude', 
-        'longitude'
+        'latitude',
+        'longitude',
+        'is_featured'
     ];
     protected $casts = [
-    'is_favorite' => 'boolean',
+        'is_favorite' => 'boolean',
+        'is_featured' => 'boolean', // ✅
+
     ];
+    public function scopeOrdered($query)
+    {
+        return $query->orderByDesc('is_featured')->latest('id');
+    }
+
 
     public function country()
     {
