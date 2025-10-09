@@ -3,6 +3,7 @@
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\Ad\AdController;
 use App\Http\Controllers\Ad\AdReelViewController;
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\Location\CityController;
 use App\Http\Controllers\Location\CountryController;
@@ -50,6 +51,9 @@ Route::prefix('soom')->group(function () {
     // ✅ banner
     Route::prefix('banners')->group(function () {
         Route::get('/', [BannerController::class, 'index']);
+    });
+    Route::prefix('announcements')->group(function () {
+        Route::get('/', [AnnouncementController::class, 'index']);
     });
 
 
