@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Ad\AdController;
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Attribute\AttributeController;
 use App\Http\Controllers\Attribute\AttributeOptionController;
 use App\Http\Controllers\BannerController;
@@ -46,6 +47,15 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::post('/', [BannerController::class, 'store']);
         Route::put('/{id}', [BannerController::class, 'update']);
         Route::delete('/{id}', [BannerController::class, 'destroy']);
+    });
+
+
+    Route::prefix('announcements')->group(function () {
+        Route::get('/', [AnnouncementController::class, 'indexforadmin']);
+        Route::get('/{id}', [AnnouncementController::class, 'show']);
+        Route::post('/', [AnnouncementController::class, 'store']);
+        Route::put('/{id}', [AnnouncementController::class, 'update']);
+        Route::delete('/{id}', [AnnouncementController::class, 'destroy']);
     });
 
 
