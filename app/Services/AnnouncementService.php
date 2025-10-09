@@ -35,12 +35,14 @@ class AnnouncementService
         return $this->repo->create($data);
     }
 
-    public function update(Announcement $announcement, array $data)
+    public function update(Announcement $announcement, $request)
     {
+        $data = $request->validated();
         if (request()->hasFile('icon')) {
             if ($announcement->icon) {
                 Storage::disk('spaces')->delete($announcement->icon);
             }
+
 
             $data['icon'] = request()->file('icon')->store('announcements', 'spaces');
         }

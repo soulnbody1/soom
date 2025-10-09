@@ -43,7 +43,7 @@ class AnnouncementController extends Controller
     public function update(AnnouncementUpdateRequest $request, $id)
     {
         $announcement = $this->service->show($id);
-        $announcement = $this->service->update($announcement, $request->validated());
+        $announcement = $this->service->update($announcement, $request);
         return new AnnouncementResource($announcement);
     }
 
