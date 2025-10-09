@@ -40,23 +40,23 @@ class AnnouncementService
         $data = $request->validated();
         if (request()->hasFile('icon')) {
             if ($announcement->icon) {
-                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
-                $path = str_replace($baseUrl, '', $announcement->icon);
-                Storage::disk('spaces')->delete($path);
+                $originalPath = ltrim($announcement->getRawOriginal('icon'), '/');
+                Storage::disk('spaces')->delete($originalPath);
             }
-
-
             $data['icon'] = request()->file('icon')->store('announcements', 'spaces');
         }
+
+
+
+
         return $this->repo->update($announcement, $data);
     }
 
     public function delete(Announcement $announcement)
     {
         if ($announcement->icon) {
-            $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
-            $path = str_replace($baseUrl, '', $announcement->icon);
-            Storage::disk('spaces')->delete($path);
+            $originalPath = ltrim($announcement->getRawOriginal('icon'), '/');
+            Storage::disk('spaces')->delete($originalPath);
         }
         return $this->repo->delete($announcement);
     }

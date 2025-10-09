@@ -20,9 +20,8 @@ class CategoryService
     {
         if (isset($data['image'])) {
             if ($category->image) {
-                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
-                $path = str_replace($baseUrl, '', $category->image);
-                Storage::disk('spaces')->delete($path);
+                $originalPath = ltrim($category->getRawOriginal('image'), '/');
+                Storage::disk('spaces')->delete($originalPath);
             }
             $data['image'] = $data['image']->store('categories', 'spaces');
         }
@@ -43,9 +42,8 @@ class CategoryService
         }
 
         if ($category->image) {
-            $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
-            $path = str_replace($baseUrl, '', $category->image);
-            Storage::disk('spaces')->delete($path);
+            $originalPath = ltrim($category->getRawOriginal('image'), '/');
+            Storage::disk('spaces')->delete($originalPath);
         }
 
         $category->delete();

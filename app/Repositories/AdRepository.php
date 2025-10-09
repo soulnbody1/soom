@@ -71,7 +71,7 @@ class AdRepository
 
     public function getSubcategoriesWithAdCount($parentId)
     {
-        return Category::select('id', 'name','image')
+        return Category::select('id', 'name', 'image')
             ->where('parent_id', $parentId)
             ->withCount('ads')
             ->get();
@@ -109,11 +109,9 @@ class AdRepository
     public function replaceImages(Ad $ad, array $images): void
     {
         if (!empty($images)) {
-            // حذف الصور القديمة من التخزين ومن قاعدة البيانات
             foreach ($ad->images as $image) {
-                $baseUrl = rtrim(env('DO_SPACES_URL'), '/') . '/';
-                $path = str_replace($baseUrl, '', $image->image_path);
-                Storage::disk('spaces')->delete($path);
+                $originalPath = ltrim($image->getRawOriginal('image_path'), '/');
+                Storage::disk('spaces')->delete($originalPath);
                 $image->delete();
             }
 
