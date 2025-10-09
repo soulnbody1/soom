@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::get('/', [AnnouncementController::class, 'indexforadmin']);
         Route::get('/{id}', [AnnouncementController::class, 'show']);
         Route::post('/', [AnnouncementController::class, 'store']);
-        Route::put('/{id}', [AnnouncementController::class, 'update']);
+        Route::post('/{id}', [AnnouncementController::class, 'update']);
         Route::delete('/{id}', [AnnouncementController::class, 'destroy']);
     });
 
