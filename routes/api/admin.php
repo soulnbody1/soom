@@ -64,6 +64,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::get('/', [AdController::class, 'ads']);
         Route::delete('/force-delete/{id}', [AdController::class, 'destroybyadmin']);
         Route::put('/toggle-block/{id}', [AdController::class, 'toggleBlock']);
+        Route::put('/toggle-featured/{id}', [AdController::class, 'toggleFeatured']);
     });
 
 

@@ -25,10 +25,10 @@ class Ad extends Model
     ];
     protected $casts = [
         'is_favorite' => 'boolean',
-        'is_featured' => 'boolean', // ✅
+        'is_featured' => 'boolean',
 
     ];
-    public function scopeOrdered($query)
+    public function scopeFeatured($query)
     {
         return $query->orderByDesc('is_featured')->latest('id');
     }

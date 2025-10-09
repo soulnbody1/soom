@@ -164,7 +164,7 @@ class AdController extends Controller
 
     public function ads()
     {
-        $ads = Ad::withTrashed()->paginate(20);
+        $ads = Ad::withTrashed()->Featured()->paginate(20);
         return AdResource::collection($ads);
     }
 
@@ -179,7 +179,6 @@ class AdController extends Controller
         }
 
         if ($Ad->trashed()) {
-            // Restore the soft-deleted user
             $Ad->restore();
             Cache::forget('home_ads_data');
 
@@ -187,13 +186,31 @@ class AdController extends Controller
                 'message' => 'تم استرجاع الاعلان بنجاح.'
             ], 200);
         } else {
-            // Soft-delete the user
             $Ad->delete();
             Cache::forget('home_ads_data');
 
             return response()->json([
                 'message' => 'تم توقيف  الاعلان .'
             ], 200);
+        }
+    }
+
+    public function toggleFeatured($id)
+    {
+        $Ad = Ad::withTrashed()->find($id);
+        if (!$Ad) {
+            return response()->json(['message' => 'الاعلان غير موجود'], 404);
+        }
+        if (!$Ad->is_featured) {
+            $Ad->is_featured = true;
+            $Ad->save();
+            Cache::forget('home_ads_data');
+            return response()->json(['message' => 'تم جعل الاعلان مميز الان '], 200);
+        } else {
+            $Ad->is_featured = false;
+            $Ad->save();
+            Cache::forget('home_ads_data');
+            return response()->json(['message' => 'تم ارجاع الاعلان الى اعلان عادى  .'], 200);
         }
     }
 

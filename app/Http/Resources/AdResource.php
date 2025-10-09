@@ -42,6 +42,7 @@ class AdResource extends JsonResource
             'views_count' => $this->views_count ?? 0,
             'is_favorite' => $this->is_favorite ?? false,
             'status' => $this->deleted_at ? false : true,
+            'is_featured' => $this->is_featured ? true : false,
         ];
     }
 }
