@@ -60,7 +60,7 @@ class AdService
         $result = [];
         foreach ($parentCategories as $category) {
             $categoryIds = $categoryIdsMap[$category->id];
-            $groupedAds = $ads->whereIn('category_id', $categoryIds)->take(10)->values();
+            $groupedAds = $ads->whereIn('category_id', $categoryIds)->take(4)->values();
             $result[] = [
                 'category' => $category->name,
                 'ads' => $groupedAds,
