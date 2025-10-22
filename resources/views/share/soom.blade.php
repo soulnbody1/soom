@@ -17,7 +17,6 @@
 <body dir="rtl">
     <h1>جاري التحويل الى التطبيق...</h1>
     <script>
-        const adId = "{{ $ad->id }}";
         const deeplink = "soom://home/";
         const playStore = "https://play.google.com/store/apps/details?id=com.soulnbody.soom";
         const appStore =
