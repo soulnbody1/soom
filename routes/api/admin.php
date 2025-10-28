@@ -7,6 +7,7 @@ use App\Http\Controllers\Attribute\AttributeOptionController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Category\CategoryController;
+use App\Http\Controllers\CharitySystemController;
 use App\Http\Controllers\Location\CityController;
 use App\Http\Controllers\Location\StateController;
 use App\Http\Controllers\User\ProfileController;
@@ -47,6 +48,14 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::post('/', [BannerController::class, 'store']);
         Route::put('/{id}', [BannerController::class, 'update']);
         Route::delete('/{id}', [BannerController::class, 'destroy']);
+    });
+
+    Route::prefix('charity_system')->group(function () {
+        Route::get('/', [CharitySystemController::class, 'indexforadmin']);
+        Route::get('/{id}', [CharitySystemController::class, 'show']);
+        Route::post('/', [CharitySystemController::class, 'store']);
+        Route::put('/{id}', [CharitySystemController::class, 'update']);
+        Route::delete('/{id}', [CharitySystemController::class, 'destroy']);
     });
 
 

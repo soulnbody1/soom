@@ -49,7 +49,7 @@ class AdService
 
     public function getHomeAds(?object $user)
     {
-        $allCategories = Category::select('id', 'parent_id', 'name')->get()->groupBy('parent_id');
+        $allCategories = Category::select('id', 'parent_id', 'name', 'display_order')->orderBy('display_order', 'asc')->get()->groupBy('parent_id');
         $parentCategories = $allCategories->get(null, collect());
         $categoryIdsMap = [];
         foreach ($parentCategories as $category) {
@@ -83,11 +83,11 @@ class AdService
     public function recordView(Ad $ad): void
     {
         $user = auth('sanctum')->user();
-    
+
         if (!$user) {
             return;
         }
-    
+
         AdView::firstOrCreate(
             [
                 'ad_id' => $ad->id,

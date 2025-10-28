@@ -81,17 +81,17 @@ class AdRepository
     {
         $query = Ad::whereIn('category_id', $categoryIds)
             ->with(['images' => function ($q) {
-                $q->select('ad_id', 'image_path')->limit(1);
+                $q->select('ad_id', 'image_path')
+                ->orderBy('id', 'asc')
+                ->limit(1);
             }])
             ->latest()
             ->withIsFavorite($user);
-
         $ads = $query->get()->map(function ($ad) {
             $ad->image = optional($ad->images->first())->image_path;
             unset($ad->images);
             return $ad;
         });
-
         return $ads;
     }
 

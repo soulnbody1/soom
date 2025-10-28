@@ -9,6 +9,7 @@ use App\Http\Controllers\Location\CityController;
 use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Location\StateController;
 use App\Http\Controllers\Attribute\AttributeController;
+use App\Http\Controllers\CharitySystemController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -52,10 +53,15 @@ Route::prefix('soom')->group(function () {
     Route::prefix('banners')->group(function () {
         Route::get('/', [BannerController::class, 'index']);
     });
+
+    // ✅ charity_system
+    Route::prefix('charity_system')->group(function () {
+        Route::get('/', [CharitySystemController::class, 'index']);
+    });
+
     Route::prefix('announcements')->group(function () {
         Route::get('/', [AnnouncementController::class, 'index']);
     });
-
 
     Route::prefix('attributes')->group(function () {
         Route::get('/by-category', [AttributeController::class, 'getAttributesByCategory']);
