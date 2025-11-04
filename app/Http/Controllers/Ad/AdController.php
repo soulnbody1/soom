@@ -216,7 +216,7 @@ class AdController extends Controller
 
     public function destroybyadmin($id)
     {
-        $ad = $this->service->getTrashedAdForUser($id);
+        $ad = $this->service->getTrashedAd($id);
         if (!$ad) {
             return $this->sendError('الإعلان غير موجود أو لا ينتمي للمستخدم.', 404);
         }

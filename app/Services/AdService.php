@@ -141,6 +141,12 @@ class AdService
             ->where('user_id', Auth::id())
             ->firstOrFail();
     }
+    public function getTrashedAd(int $id): Ad
+    {
+        return Ad::withTrashed()
+            ->where('id', $id)
+            ->firstOrFail();
+    }
 
     public function getMyAdsWithStats()
     {
