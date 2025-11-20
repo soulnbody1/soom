@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Ad\AdFilter;
 use App\Http\Controllers\Ad\AdSearch;
 use App\Http\Resources\MyAdResource;
+use App\Models\Category;
 use Illuminate\Support\Facades\Cache;
 
 
@@ -57,17 +58,16 @@ class AdController extends Controller
     public function search(Request $request, AdSearch $search)
     {
         $query = $search->apply($request);
-        $ads = $query->latest()
-            ->with((Ad::$defaultRelations))
-            ->paginate(10);
-
+        $active_ads = $query->count();
+        $ads = $query->latest()->with((Ad::$defaultRelations))->paginate(10);
         if ($ads->total() === 0) {
             return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
         }
-
         return $this->sendResponse(
             AdResource::collection($ads),
-            'تم جلب الإعلانات بنجاح.'
+            'تم جلب الإعلانات بنجاح.',
+            200,
+            ['active_ads' => $active_ads,'categories' => Category::all()]
         );
     }
 
