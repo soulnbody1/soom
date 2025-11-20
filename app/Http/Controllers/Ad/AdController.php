@@ -58,16 +58,30 @@ class AdController extends Controller
     public function search(Request $request, AdSearch $search)
     {
         $query = $search->apply($request);
-        $active_ads = $query->count();
         $ads = $query->latest()->with((Ad::$defaultRelations))->paginate(10);
         if ($ads->total() === 0) {
             return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
         }
         return $this->sendResponse(
             AdResource::collection($ads),
+            'تم جلب الإعلانات بنجاح.'
+        );
+    }
+
+    public function search_for_admin(Request $request, AdSearch $search)
+    {
+        $query = $search->apply($request);
+        $active_ads = $query->count();
+        $ads = $query->withTrashed()->latest()->with((Ad::$defaultRelations))->paginate(20);
+        if ($ads->total() === 0) {
+            return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
+        }
+        $categories = Category::select('id', 'name')->get();
+        return $this->sendResponse(
+            AdResource::collection($ads),
             'تم جلب الإعلانات بنجاح.',
             200,
-            ['active_ads' => $active_ads,'categories' => Category::all()]
+            ['active_ads' => $active_ads, 'categories' => $categories]
         );
     }
 
