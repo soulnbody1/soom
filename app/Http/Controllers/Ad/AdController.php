@@ -76,12 +76,11 @@ class AdController extends Controller
         if ($ads->total() === 0) {
             return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
         }
-        $categories = Category::select('id', 'name')->get();
         return $this->sendResponse(
             AdResource::collection($ads),
             'تم جلب الإعلانات بنجاح.',
             200,
-            ['active_ads' => $active_ads, 'categories' => $categories]
+            ['active_ads' => $active_ads]
         );
     }
 
