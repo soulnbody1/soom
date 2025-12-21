@@ -23,6 +23,7 @@ class FavoriteController extends Controller
 
         $favorites = Favorite::with('ad')
             ->where('user_id', $user->id)
+            ->whereHas('ad')
             ->latest()
             ->paginate(10);
 
