@@ -20,4 +20,5 @@ Route::middleware(['api_maintenance'])->group(function () {
     require __DIR__ . '/api/admin.php';
     require __DIR__ . '/api/user.php';
     require __DIR__ . '/api/guest.php';
+    require __DIR__ . '/api/auction.php';
 });

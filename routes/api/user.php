@@ -48,6 +48,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
     Route::prefix('notifications')->group(function () {
         Route::get('/', [NotificationController::class, 'index']);
         Route::post('/mark-all-as-read', [NotificationController::class, 'markAsRead']);
+        Route::put('/{id}/read', [NotificationController::class, 'markSingleAsRead']);
     });
 
 

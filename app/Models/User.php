@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -109,8 +110,23 @@ class User extends Authenticatable
         return $value ? $disk->url($value) : null;
     }
 
-    public function ads()
+    public function ads(): HasMany
     {
         return $this->hasMany(Ad::class, 'user_id');
+    }
+
+    public function auctionsAsAdvertiser(): HasMany
+    {
+        return $this->hasMany(Auction::class, 'winner_id');
+    }
+
+    public function auctionBids(): HasMany
+    {
+        return $this->hasMany(AuctionBid::class, 'user_id');
+    }
+
+    public function wonAuctions(): HasMany
+    {
+        return $this->hasMany(Auction::class, 'winner_id');
     }
 }

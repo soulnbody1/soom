@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
@@ -68,6 +69,16 @@ class Ad extends Model
     public function reel()
     {
         return $this->hasOne(AdReel::class);
+    }
+
+    public function auction(): HasOne
+    {
+        return $this->hasOne(Auction::class);
+    }
+
+    public function isAuction(): bool
+    {
+        return $this->auction !== null;
     }
 
     public function user()

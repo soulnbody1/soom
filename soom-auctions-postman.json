@@ -1,0 +1,324 @@
+{
+  "info": {
+    "name": "Soom Auctions API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"phone\":\"{{phone}}\",\"password\":\"{{password}}\"}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"{{name}}\",\"phone\":\"{{phone}}\",\"password\":\"{{password}}\",\"password_confirmation\":\"{{password}}\"}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Public Auctions (No Auth)",
+      "item": [
+        {
+          "name": "List Auctions",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/auctions?page=1"
+          }
+        },
+        {
+          "name": "Get Auction Details",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/auctions/{{auction_id}}"
+          }
+        },
+        {
+          "name": "Get Auction Bids",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/auctions/{{auction_id}}/bids"
+          }
+        },
+        {
+          "name": "Get Highest Bid",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/auctions/{{auction_id}}/highest-bid"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. My Auctions (Auth Required)",
+      "item": [
+        {
+          "name": "Create Auction (FormData)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "title", "value": "iPhone 15 Pro Max", "type": "text"},
+                {"key": "description", "value": "iPhone 15 Pro Max 256GB بحالة ممتازة مع الكرتون وكل الملحقات الأصلية. استخدام شهر واحد فقط.", "type": "text"},
+                {"key": "category_id", "value": "2", "type": "text"},
+                {"key": "country_id", "value": "1", "type": "text"},
+                {"key": "state_id", "value": "3", "type": "text"},
+                {"key": "city_id", "value": "7", "type": "text"},
+                {"key": "starting_price", "value": "3500", "type": "text"},
+                {"key": "min_accept_price", "value": "3000", "type": "text"},
+                {"key": "starts_at", "value": "", "type": "text", "description": "Optional - leave empty for current time"},
+                {"key": "duration_days", "value": "7", "type": "text"},
+                {"key": "terms_accepted", "value": "true", "type": "text"},
+                {"key": "images[]", "type": "file", "src": "/path/to/image1.jpg"},
+                {"key": "images[]", "type": "file", "src": "/path/to/image2.jpg"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "My Auctions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/my/auctions"
+          }
+        },
+        {
+          "name": "Update Auction",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Updated Title\",\"description\":\"Updated description\",\"starting_price\":4000,\"min_accept_price\":3500,\"starts_at\":\"2026-05-15 10:00:00\",\"duration_days\":10}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Set Deposit (تحديد التأمين)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/set-deposit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deposit_type\":\"percentage\",\"deposit_percentage\":10}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Get Auction Details (with Bids)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}"
+          }
+        },
+        {
+          "name": "Cancel Auction",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/cancel"
+          }
+        },
+        {
+          "name": "Close Auction",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/close"
+          }
+        },
+        {
+          "name": "Pay Advertiser Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/pay-deposit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"payment_method\":\"credit_card\",\"payment_token\":\"tok_visa\"}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Bidding (Auth Required)",
+      "item": [
+        {
+          "name": "Get Deposit Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/deposit-info"
+          }
+        },
+        {
+          "name": "Pay Bidder Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/pay-bid-deposit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"payment_method\":\"credit_card\",\"payment_token\":\"tok_visa\"}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Place Bid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/bid",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":3600,\"deposit_transaction_id\":\"txn_123\",\"terms_accepted\":true}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Increase Bid (رفع المزايدة)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/bid",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":550,\"terms_accepted\":true}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "My Bids",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/my/bids"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Notifications (Auth Required)",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/notifications"
+          }
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/notifications/mark-all-as-read"
+          }
+        },
+        {
+          "name": "Mark Single as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/notifications/{{notification_id}}/read"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000"},
+    {"key": "phone", "value": "+966501234567"},
+    {"key": "password", "value": "password123"},
+    {"key": "name", "value": "Test User"},
+    {"key": "auth_token", "value": ""},
+    {"key": "auction_id", "value": "1"},
+    {"key": "notification_id", "value": "1"}
+  ]
+}
