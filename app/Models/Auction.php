@@ -33,9 +33,6 @@ class Auction extends Model
         'advertiser_deposit_paid',
         'advertiser_deposit_paid_at',
         'advertiser_deposit_transaction_id',
-        'bids_count',
-        'views_count',
-        'unique_bidders_count',
     ];
 
     protected $casts = [
@@ -96,6 +93,11 @@ class Auction extends Model
     public function images(): HasMany
     {
         return $this->hasMany(AuctionImage::class)->orderBy('order');
+    }
+
+    public function views(): HasMany
+    {
+        return $this->hasMany(AuctionView::class);
     }
 
     // Helpers

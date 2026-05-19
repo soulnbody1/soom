@@ -117,6 +117,26 @@ class AuctionController extends Controller
     }
 
     /**
+     * جلب كل المزادات بكل حالاتها (للأدمن فقط)
+     */
+    public function all(Request $request)
+    {
+        if (Auth::user()?->role !== 'admin') {
+            return $this->sendError('غير مصرح لك بتنفيذ هذا الإجراء.', 403);
+        }
+
+        $perPage = $request->get('per_page', 20);
+        $auctions = \App\Models\Auction::with(['images', 'category', 'user', 'winningBid.user'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        return $this->sendResponse(
+            AuctionResource::collection($auctions),
+            'تم جلب كل المزادات بنجاح.'
+        );
+    }
+
+    /**
      * عرض تفاصيل مزاد مع المزايدات
      */
     public function show(int $id)
@@ -140,6 +160,9 @@ class AuctionController extends Controller
         if (!$auction) {
             return $this->sendError('المزاد غير موجود.', 404);
         }
+
+        // تسجيل المشاهدة (View)
+        $this->recordView($auction);
 
         $userId = Auth::id();
         
@@ -222,6 +245,21 @@ class AuctionController extends Controller
             $auction->city?->name,
         ]);
         return implode(', ', $parts);
+    }
+
+    private function recordView($auction): void
+    {
+        $user = Auth::user();
+        \App\Models\AuctionView::firstOrCreate(
+            [
+                'auction_id' => $auction->id,
+                'user_id' => $user?->id,
+            ],
+            [
+                'ip_address' => request()->ip(),
+                'viewed_at' => now(),
+            ]
+        );
     }
 
     /**

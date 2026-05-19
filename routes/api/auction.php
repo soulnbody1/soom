@@ -53,6 +53,9 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
         
         // Admin: Set/Update deposit values
         Route::put('/{id}/set-deposit', [AuctionController::class, 'setDeposit']);
+        
+        // Admin: All auctions (all statuses)
+        Route::get('/all', [AuctionController::class, 'all']);
     });
     
     // My auctions (as advertiser)

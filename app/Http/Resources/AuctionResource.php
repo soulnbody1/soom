@@ -10,6 +10,7 @@ class AuctionResource extends JsonResource
     {
         return [
             // بيانات المزاد
+            'id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
             'location' => $this->getLocation(),
@@ -21,9 +22,9 @@ class AuctionResource extends JsonResource
             // الوقت المتبقي
             'time_remaining' => $this->getTimeRemainingFormatted(),
             
-            // الإحصائيات
-            'views_count' => (int) $this->views_count,
-            'bids_count' => (int) $this->bids_count,
+            // الإحصائيات (محسوبة من العلاقات)
+            'views_count' => (int) ($this->views_count ?? $this->views()->count()),
+            'bids_count' => (int) ($this->bids_count ?? $this->bids()->count()),
             
             // بيانات المعلن (فقط لو دافع التأمين)
             'advertiser' => $this->when($this->advertiser_deposit_paid, function () {

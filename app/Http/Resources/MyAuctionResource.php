@@ -45,10 +45,10 @@ class MyAuctionResource extends JsonResource
             // الوقت المتبقي
             'time_remaining' => $this->getTimeRemainingFormatted(),
             
-            // الإحصائيات
-            'views_count' => (int) $this->views_count,
-            'bids_count' => (int) $this->bids_count,
-            'unique_bidders_count' => (int) $this->unique_bidders_count,
+            // الإحصائيات (محسوبة من العلاقات)
+            'views_count' => (int) $this->views()->count(),
+            'bids_count' => (int) $this->bids()->count(),
+            'unique_bidders_count' => (int) $this->bids()->distinct('user_id')->count('user_id'),
             
             // الحالة
             'status' => $this->status,
