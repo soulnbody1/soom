@@ -11,9 +11,11 @@ use App\Http\Resources\MyAuctionResource;
 use App\Services\AuctionService;
 use App\Services\AuctionDepositService;
 use App\Repositories\AuctionRepository;
+use App\Models\PaymentSlip;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class AuctionController extends Controller
 {
@@ -71,20 +73,29 @@ class AuctionController extends Controller
             }
 
             $data = $request->validated();
-            
-            $transactionId = $this->depositService->payAdvertiserDeposit(
-                $auction,
-                $data['payment_method'],
-                ['token' => $data['payment_token']]
-            );
 
-            $this->auctionService->payAdvertiserDeposit($auction, $transactionId);
+            // رفع صورة إيصال الدفع
+            $imagePath = $request->file('image')->store('payment_slips', 'spaces');
+
+            // إنشاء سجل إيصال الدفع مرتبط بالمزاد
+            $paymentSlip = PaymentSlip::create([
+                'image_path' => $imagePath,
+                'payment_method_id' => $data['payment_method_id'],
+                'amount' => $data['amount'] ?? $auction->getDepositAmount(),
+                'payable_id' => $auction->id,
+                'payable_type' => \App\Models\Auction::class,
+            ]);
+
+            // تحديث حالة المزاد كمدفوع
+            $this->auctionService->payAdvertiserDeposit($auction, $paymentSlip->id);
 
             return $this->sendResponse(
-                new AuctionResource($auction->fresh()),
+                [
+                    'auction' => new AuctionResource($auction->fresh()),
+                    'payment_slip' => new \App\Http\Resources\PaymentSlipResource($paymentSlip->load('paymentMethod')),
+                ],
                 'تم دفع التأمين بنجاح. المزاد الآن نشط.',
-                200,
-                ['transaction_id' => $transactionId]
+                200
             );
         } catch (\Exception $e) {
             return $this->sendError($e->getMessage(), 400);

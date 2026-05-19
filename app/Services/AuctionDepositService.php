@@ -16,20 +16,9 @@ class AuctionDepositService
         protected AuctionBidRepository $bidRepo
     ) {}
 
-    public function payAdvertiserDeposit(Auction $auction, string $paymentMethod, array $paymentData): string
+    public function payAdvertiserDeposit(Auction $auction, int $paymentSlipId): void
     {
-        $amount = $auction->getDepositAmount();
-        
-        // محاكاة عملية الدفع
-        $transactionId = $this->processPayment($amount, $paymentMethod, $paymentData);
-        
-        if (!$transactionId) {
-            throw new \Exception('فشل في معالجة الدفع.');
-        }
-
-        $this->auctionRepo->markAdvertiserDepositPaid($auction, $transactionId);
-        
-        return $transactionId;
+        $this->auctionRepo->markAdvertiserDepositPaid($auction, 'PAYMENT_SLIP_' . $paymentSlipId);
     }
 
     public function payBidderDeposit(Auction $auction, int $userId, string $paymentMethod, array $paymentData): string

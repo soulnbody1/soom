@@ -26,8 +26,8 @@ class PayAuctionDepositRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'payment_method' => 'required|in:cliq,credit_card,bank_transfer,cash',
-            'payment_token' => 'required|string|max:500',
+            'payment_method_id' => 'required|exists:payment_methods,id',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'amount' => 'nullable|numeric|min:0',
         ];
     }
@@ -49,9 +49,12 @@ class PayAuctionDepositRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'payment_method.required' => '⚠️ طريقة الدفع مطلوبة.',
-            'payment_method.in' => '⚠️ طريقة الدفع غير مدعومة.',
-            'payment_token.required' => '⚠️ توكن الدفع مطلوب.',
+            'payment_method_id.required' => '⚠️ طريقة الدفع مطلوبة.',
+            'payment_method_id.exists' => '⚠️ طريقة الدفع غير موجودة.',
+            'image.required' => '⚠️ صورة إيصال الدفع مطلوبة.',
+            'image.image' => '⚠️ الملف يجب أن يكون صورة.',
+            'image.mimes' => '⚠️ الصيغ المسموحة: jpeg, png, jpg, gif, webp.',
+            'image.max' => '⚠️ حجم الصورة يجب ألا يتجاوز 5 ميجا بايت.',
         ];
     }
 }
