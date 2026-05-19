@@ -16,6 +16,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
     Route::apiResource('categories', CategoryController::class)->only(['store', 'update', 'destroy']);
+
+    // ============= قواعد المزادات ============
+    Route::apiResource('auction-rules', \App\Http\Controllers\Auction\AuctionRuleController::class);
+
+    // ============= طرق الدفع ============
+    Route::apiResource('payment-methods', \App\Http\Controllers\Auction\PaymentMethodController::class);
+
     Route::apiResource('countries', CountryController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('states', StateController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('citys', CityController::class)->only(['store', 'update', 'destroy']);

@@ -67,6 +67,18 @@ Route::prefix('soom')->group(function () {
         Route::get('/by-category', [AttributeController::class, 'getAttributesByCategory']);
     });
 
+    // ✅ قواعد المزادات (عامة)
+    Route::prefix('auction-rules')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Auction\AuctionRuleController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\Auction\AuctionRuleController::class, 'show']);
+    });
+
+    // ✅ طرق الدفع (عامة)
+    Route::prefix('payment-methods')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Auction\PaymentMethodController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\Auction\PaymentMethodController::class, 'show']);
+    });
+
     // ✅ Homepage
     Route::get('home', [AdController::class, 'home']);
 });
