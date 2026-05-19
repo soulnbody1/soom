@@ -39,7 +39,7 @@
       "name": "2. Public Auctions (No Auth)",
       "item": [
         {
-          "name": "List Auctions",
+          "name": "List Active Auctions",
           "request": {
             "method": "GET",
             "header": [{"key": "Accept", "value": "application/json"}],
@@ -47,7 +47,7 @@
           }
         },
         {
-          "name": "Get Auction Details",
+          "name": "Get Auction Details (record view)",
           "request": {
             "method": "GET",
             "header": [{"key": "Accept", "value": "application/json"}],
@@ -132,22 +132,6 @@
           }
         },
         {
-          "name": "Admin: Set Deposit (تحديد التأمين)",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {"key": "Accept", "value": "application/json"},
-              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
-            ],
-            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/set-deposit",
-            "body": {
-              "mode": "raw",
-              "raw": "{\"deposit_type\":\"percentage\",\"deposit_percentage\":10}",
-              "options": {"raw": {"language": "json"}}
-            }
-          }
-        },
-        {
           "name": "Get Auction Details (with Bids)",
           "request": {
             "method": "GET",
@@ -181,7 +165,7 @@
           }
         },
         {
-          "name": "Pay Advertiser Deposit",
+          "name": "Pay Advertiser Deposit (FormData - Image Upload)",
           "request": {
             "method": "POST",
             "header": [
@@ -190,10 +174,25 @@
             ],
             "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/pay-deposit",
             "body": {
-              "mode": "raw",
-              "raw": "{\"payment_method\":\"credit_card\",\"payment_token\":\"tok_visa\"}",
-              "options": {"raw": {"language": "json"}}
+              "mode": "formdata",
+              "formdata": [
+                {"key": "payment_method_id", "value": "1", "type": "text", "description": "ID من جدول payment_methods"},
+                {"key": "image", "type": "file", "src": "/path/to/payment_slip.jpg", "description": "صورة إيصال الدفع"},
+                {"key": "amount", "value": "", "type": "text", "description": "اختياري - لو فاضي هياخد deposit_amount من المزاد"}
+              ]
             }
+          }
+        },
+        {
+          "name": "Admin: All Auctions (All Statuses)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/all",
+            "description": "الأدمن فقط - بجيب كل المزادات بكل حالاتها"
           }
         }
       ]
@@ -274,7 +273,259 @@
       ]
     },
     {
-      "name": "5. Notifications (Auth Required)",
+      "name": "5. Public: Settings (No Auth)",
+      "item": [
+        {
+          "name": "List Auction Rules",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/soom/auction-rules"
+          }
+        },
+        {
+          "name": "Get Auction Rule Details",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/soom/auction-rules/{{rule_id}}"
+          }
+        },
+        {
+          "name": "List Payment Methods",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/soom/payment-methods"
+          }
+        },
+        {
+          "name": "Get Payment Method Details",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": "{{base_url}}/api/soom/payment-methods/{{payment_method_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Admin: Settings (Auth Required - Admin)",
+      "item": [
+        {
+          "name": "Admin: List Auction Rules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-rules"
+          }
+        },
+        {
+          "name": "Admin: Create Auction Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-rules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"الحد الأدنى للزيادة هو 1 جنيه\"}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Update Auction Rule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-rules/{{rule_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"الشروط المحدثة للمزادات\"}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Delete Auction Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-rules/{{rule_id}}"
+          }
+        },
+        {
+          "name": "Admin: List Payment Methods",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/payment-methods"
+          }
+        },
+        {
+          "name": "Admin: Create Payment Method",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/payment-methods",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"بطاقة ائتمان\",\"is_active\":true}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Update Payment Method",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/payment-methods/{{payment_method_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"تحويل بنكي\",\"is_active\":true}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Delete Payment Method",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/payment-methods/{{payment_method_id}}"
+          }
+        },
+        {
+          "name": "Admin: List Auctions Configurations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auctions-configurations"
+          }
+        },
+        {
+          "name": "Admin: Create Auctions Configuration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auctions-configurations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deposit_type\":\"percentage\",\"amount\":10,\"category_id\":null,\"duration_days\":7,\"start_date\":null,\"end_date\":null}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Update Auctions Configuration",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auctions-configurations/{{config_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deposit_type\":\"fixed\",\"amount\":500,\"category_id\":null,\"duration_days\":10}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Admin: Delete Auctions Configuration",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auctions-configurations/{{config_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Payment Slips (Auth Required)",
+      "item": [
+        {
+          "name": "Upload Payment Slip (FormData)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/payment-slips",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "image", "type": "file", "src": "/path/to/slip.jpg", "description": "صورة الإيصال"},
+                {"key": "payment_method_id", "value": "1", "type": "text"},
+                {"key": "amount", "value": "500", "type": "text"},
+                {"key": "payable_type", "value": "auction", "type": "text", "description": "auction أو bid"},
+                {"key": "payable_id", "value": "1", "type": "text"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Slips for Auction",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/payment-slips"
+          }
+        },
+        {
+          "name": "Get Payment Slips for Bid",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/bids/{{bid_id}}/payment-slips"
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Notifications (Auth Required)",
       "item": [
         {
           "name": "Get My Notifications",
@@ -319,6 +570,10 @@
     {"key": "name", "value": "Test User"},
     {"key": "auth_token", "value": ""},
     {"key": "auction_id", "value": "1"},
-    {"key": "notification_id", "value": "1"}
+    {"key": "bid_id", "value": "1"},
+    {"key": "notification_id", "value": "1"},
+    {"key": "rule_id", "value": "1"},
+    {"key": "payment_method_id", "value": "1"},
+    {"key": "config_id", "value": "1"}
   ]
 }
