@@ -75,4 +75,13 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
     
     // My bids (as bidder)
     Route::get('/my/bids', [BidController::class, 'myBids']);
+
+    // ============= إيصالات الدفع (Payment Slips) ============
+    Route::prefix('payment-slips')->group(function () {
+        Route::post('/', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'store']);
+    });
+
+    // جلب إيصالات مزاد أو مزايدة معينة
+    Route::get('/auctions/{id}/payment-slips', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'byAuction']);
+    Route::get('/bids/{id}/payment-slips', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'byBid']);
 });
