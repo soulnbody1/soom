@@ -41,11 +41,6 @@ class UpdateAuctionRequest extends FormRequest
             'starting_price' => 'nullable|numeric|min:1|max:999999999.99',
             'min_accept_price' => 'nullable|numeric|min:0|max:999999999.99',
             
-            // نوع وحجم التأمين - اختياري
-            'deposit_type' => 'nullable|in:fixed,percentage',
-            'deposit_fixed_amount' => 'nullable|numeric|min:1|max:999999.99',
-            'deposit_percentage' => 'nullable|numeric|min:0.01|max:100',
-            
             // مدة وتوقيت المزاد - اختياري
             'starts_at' => 'nullable|date',
             'duration_days' => 'nullable|integer|min:1|max:30',

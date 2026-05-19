@@ -22,9 +22,7 @@ class Auction extends Model
         'starting_price',
         'current_bid',
         'min_accept_price',
-        'deposit_type',
-        'deposit_fixed_amount',
-        'deposit_percentage',
+        'deposit_amount',
         'status',
         'starts_at',
         'ends_at',
@@ -44,8 +42,7 @@ class Auction extends Model
         'starting_price' => 'decimal:2',
         'current_bid' => 'decimal:2',
         'min_accept_price' => 'decimal:2',
-        'deposit_fixed_amount' => 'decimal:2',
-        'deposit_percentage' => 'decimal:2',
+        'deposit_amount' => 'decimal:2',
         'advertiser_deposit_paid' => 'boolean',
         'advertiser_deposit_paid_at' => 'datetime',
         'starts_at' => 'datetime',
@@ -114,15 +111,7 @@ class Auction extends Model
 
     public function getDepositAmount(): float
     {
-        if ($this->deposit_type === 'fixed' && $this->deposit_fixed_amount) {
-            return (float) $this->deposit_fixed_amount;
-        }
-        
-        if ($this->deposit_type === 'percentage' && $this->deposit_percentage) {
-            return (float) ($this->starting_price * ($this->deposit_percentage / 100));
-        }
-        
-        return 0;
+        return (float) ($this->deposit_amount ?? 0);
     }
 
     public function getTimeRemaining(): int

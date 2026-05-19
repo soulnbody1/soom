@@ -33,10 +33,7 @@ class AuctionService
                 'longitude' => $data['longitude'] ?? null,
                 'starting_price' => $data['starting_price'],
                 'min_accept_price' => $data['min_accept_price'] ?? 0,
-                // التأمين بيتم تحديده من الأدمن لاحقاً
-                'deposit_type' => null,
-                'deposit_fixed_amount' => null,
-                'deposit_percentage' => null,
+                'deposit_amount' => $data['deposit_amount'] ?? null,
                 'starts_at' => $data['starts_at'] ?? now(),
                 'ends_at' => $data['ends_at'],
                 'duration_days' => $data['duration_days'] ?? 0,
@@ -80,8 +77,7 @@ class AuctionService
             $auctionData = array_intersect_key($data, array_flip([
                 'title', 'description', 'category_id', 'country_id',
                 'state_id', 'city_id', 'latitude', 'longitude',
-                'starting_price', 'min_accept_price', 'deposit_type',
-                'deposit_fixed_amount', 'deposit_percentage',
+                'starting_price', 'min_accept_price', 'deposit_amount',
                 'starts_at', 'duration_days'
             ]));
 

@@ -23,6 +23,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     // ============= طرق الدفع ============
     Route::apiResource('payment-methods', \App\Http\Controllers\Auction\PaymentMethodController::class);
 
+    // ============= إعدادات المزادات (التأمين) ============
+    Route::apiResource('auctions-configurations', \App\Http\Controllers\Auction\AuctionsConfigurationController::class);
+
     Route::apiResource('countries', CountryController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('states', StateController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('citys', CityController::class)->only(['store', 'update', 'destroy']);
