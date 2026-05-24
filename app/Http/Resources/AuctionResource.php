@@ -27,7 +27,7 @@ class AuctionResource extends JsonResource
             'bids_count' => (int) ($this->bids_count ?? $this->bids()->count()),
             
             // بيانات المعلن (فقط لو دافع التأمين)
-            'advertiser' => $this->when($this->advertiser_deposit_paid, function () {
+            'advertiser' => $this->when($this->isAdvertiserDepositPaid(), function () {
                 return [
                     'id' => $this->user?->id,
                     'name' => $this->user?->name,

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class AuctionBid extends Model
 {
@@ -13,21 +14,13 @@ class AuctionBid extends Model
         'amount',
         'is_winning',
         'winning_at',
-        'deposit_paid',
-        'deposit_paid_at',
-        'deposit_transaction_id',
-        'deposit_status',
-        'deposit_processed_at',
         'terms_accepted',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
-        'is_winning' => 'boolean',
+        'is_winning' => 'integer',
         'winning_at' => 'datetime',
-        'deposit_paid' => 'boolean',
-        'deposit_paid_at' => 'datetime',
-        'deposit_processed_at' => 'datetime',
         'terms_accepted' => 'boolean',
     ];
 
@@ -41,21 +34,38 @@ class AuctionBid extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * العلاقة polymorphic مع جدول التأمينات الموحد
+     */
+    public function deposits(): MorphMany
+    {
+        return $this->morphMany(AuctionDeposit::class, 'depositable');
+    }
+
+    /**
+     * التأمين الخاص بهذه المزايدة
+     */
+    public function deposit(): \Illuminate\Database\Eloquent\Relations\MorphOne
+    {
+        return $this->morphOne(AuctionDeposit::class, 'depositable')
+                    ->where('deposit_type', 'bidder');
+    }
+
     // Helpers
     public function isHeld(): bool
     {
-        return $this->deposit_status === 'held';
+        return $this->deposit()->where('deposit_status', 'held')->exists();
     }
 
     public function isRefunded(): bool
     {
-        return $this->deposit_status === 'refunded';
+        return $this->deposit()->where('deposit_status', 'refunded')->exists();
     }
 
     public function markAsWinning(): void
     {
         $this->update([
-            'is_winning' => true,
+            'is_winning' => $this->user_id,
             'winning_at' => now(),
         ]);
     }
@@ -63,45 +73,49 @@ class AuctionBid extends Model
     public function markAsOutbid(): void
     {
         $this->update([
-            'is_winning' => false,
+            'is_winning' => null,
             'winning_at' => null,
         ]);
     }
 
     public function refundDeposit(): void
     {
-        if ($this->isHeld()) {
-            $this->update([
-                'deposit_status' => 'refunded',
-                'deposit_processed_at' => now(),
-            ]);
+        $deposit = $this->deposit;
+        if ($deposit && $deposit->isHeld()) {
+            $deposit->refund();
         }
     }
 
     public function applyDepositToPayment(): void
     {
-        if ($this->isHeld()) {
-            $this->update([
-                'deposit_status' => 'applied_to_payment',
-                'deposit_processed_at' => now(),
-            ]);
+        $deposit = $this->deposit;
+        if ($deposit && $deposit->isHeld()) {
+            $deposit->applyToPayment();
         }
     }
 
     public function forfeitDeposit(): void
     {
-        if ($this->isHeld()) {
-            $this->update([
-                'deposit_status' => 'forfeited',
-                'deposit_processed_at' => now(),
-            ]);
+        $deposit = $this->deposit;
+        if ($deposit && $deposit->isHeld()) {
+            $deposit->forfeit();
         }
+    }
+
+    public function getDepositStatus(): ?string
+    {
+        return $this->deposit?->deposit_status;
+    }
+
+    public function isDepositPaid(): bool
+    {
+        return $this->deposit()->where('paid', true)->exists();
     }
 
     // Scopes
     public function scopeWinning($query)
     {
-        return $query->where('is_winning', true);
+        return $query->whereNotNull('is_winning');
     }
 
     public function scopeForUser($query, int $userId)
@@ -111,7 +125,9 @@ class AuctionBid extends Model
 
     public function scopeHeldDeposits($query)
     {
-        return $query->where('deposit_status', 'held');
+        return $query->whereHas('deposit', function ($q) {
+            $q->where('deposit_status', 'held');
+        });
     }
 
     public function scopeActive($query)

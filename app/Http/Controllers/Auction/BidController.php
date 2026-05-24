@@ -11,9 +11,11 @@ use App\Services\AuctionBidService;
 use App\Services\AuctionDepositService;
 use App\Repositories\AuctionRepository;
 use App\Repositories\AuctionBidRepository;
+use App\Models\PaymentSlip;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class BidController extends Controller
 {
@@ -53,7 +55,7 @@ class BidController extends Controller
     }
 
     /**
-     * دفع تأمين المزايد
+     * دفع تأمين المزايد (FormData - Image Upload) زي المعلن بالظبط
      */
     public function payBidDeposit(int $auctionId, PayAuctionDepositRequest $request)
     {
@@ -76,19 +78,35 @@ class BidController extends Controller
             $data = $request->validated();
             $userId = Auth::id();
 
-            $transactionId = $this->depositService->payBidderDeposit(
+            // رفع صورة إيصال الدفع
+            $imagePath = $request->file('image')->store('payment_slips', 'spaces');
+
+            // إنشاء سجل إيصال الدفع مرتبط بالمزاد (payable_type = auction)
+            // لأن التأمين بيتربط بالمزاد مش بالمزايدة في البداية
+            $paymentSlip = PaymentSlip::create([
+                'image_path' => $imagePath,
+                'payment_method_id' => $data['payment_method_id'],
+                'amount' => $data['amount'] ?? $auction->getDepositAmount(),
+                'payable_id' => $auction->id,
+                'payable_type' => \App\Models\Auction::class,
+            ]);
+
+            // إنشاء سجل التأمين في الجدول الموحد (بانتظار موافقة الأدمن)
+            $depositService = app(\App\Services\AuctionDepositService::class);
+            $transactionId = $depositService->payBidderDeposit(
                 $auction,
                 $userId,
-                $data['payment_method'],
-                ['token' => $data['payment_token']]
+                'PAYMENT_SLIP_' . $paymentSlip->id
             );
 
             return $this->sendResponse(
                 [
                     'transaction_id' => $transactionId,
-                    'deposit_paid' => true,
+                    'payment_slip_id' => $paymentSlip->id,
+                    'deposit_paid' => false,
+                    'message' => 'تم رفع إيصال الدفع. في انتظار موافقة الأدمن.',
                 ],
-                'تم دفع التأمين بنجاح. يمكنك الآن المزايدة.'
+                'تم رفع إيصال دفع التأمين بنجاح. في انتظار موافقة الأدمن.'
             );
         } catch (\Exception $e) {
             return $this->sendError($e->getMessage(), 400);

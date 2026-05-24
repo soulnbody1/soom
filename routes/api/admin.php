@@ -26,6 +26,14 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     // ============= إعدادات المزادات (التأمين) ============
     Route::apiResource('auctions-configurations', \App\Http\Controllers\Auction\AuctionsConfigurationController::class);
 
+    // ============= تأمينات المزادات (موافقة/رفض) ============
+    Route::prefix('auction-deposits')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'show']);
+        Route::post('/{id}/process', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'process']);
+        Route::get('/by-auction/{auctionId}', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'byAuction']);
+    });
+
     Route::apiResource('countries', CountryController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('states', StateController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('citys', CityController::class)->only(['store', 'update', 'destroy']);

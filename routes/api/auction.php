@@ -79,6 +79,9 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
     // My bids (as bidder)
     Route::get('/my/bids', [BidController::class, 'myBids']);
 
+    // My deposits (as user)
+    Route::get('/my/deposits', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'myDeposits']);
+
     // ============= إيصالات الدفع (Payment Slips) ============
     Route::prefix('payment-slips')->group(function () {
         Route::post('/', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'store']);

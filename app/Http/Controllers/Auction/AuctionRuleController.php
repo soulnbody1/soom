@@ -14,7 +14,7 @@ class AuctionRuleController extends Controller
 
     public function index()
     {
-        $rules = AuctionRule::ordered()->get();
+        $rules = AuctionRule::orderBy('id')->get();
         return AuctionRuleResource::collection($rules);
     }
 

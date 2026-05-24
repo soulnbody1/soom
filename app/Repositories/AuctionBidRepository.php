@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\AuctionBid;
 use App\Models\Auction;
+use App\Models\AuctionDeposit;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -27,7 +28,7 @@ class AuctionBidRepository
     public function findWinningBid(int $auctionId): ?AuctionBid
     {
         return AuctionBid::where('auction_id', $auctionId)
-            ->where('is_winning', true)
+            ->whereNotNull('is_winning')
             ->first();
     }
 
@@ -64,10 +65,16 @@ class AuctionBidRepository
 
     public function getUserBidByTransaction(int $auctionId, int $userId, string $transactionId): ?AuctionBid
     {
-        return AuctionBid::where('auction_id', $auctionId)
-            ->where('user_id', $userId)
-            ->where('deposit_transaction_id', $transactionId)
+        // البحث عن المزايدة من خلال جدول التأمين الموحد
+        $deposit = AuctionDeposit::where('depositable_type', AuctionBid::class)
+            ->whereHasMorph('depositable', [AuctionBid::class], function ($q) use ($auctionId, $userId) {
+                $q->where('auction_id', $auctionId)
+                  ->where('user_id', $userId);
+            })
+            ->where('transaction_id', $transactionId)
             ->first();
+
+        return $deposit?->depositable;
     }
 
     public function getHighestBid(int $auctionId): ?AuctionBid
@@ -80,75 +87,92 @@ class AuctionBidRepository
 
     public function markBidAsWinning(int $bidId): void
     {
-        AuctionBid::where('id', $bidId)->update([
-            'is_winning' => true,
-            'winning_at' => now(),
-        ]);
+        $bid = $this->findById($bidId);
+        if ($bid) {
+            $bid->markAsWinning();
+        }
     }
 
     public function markPreviousBidsAsOutbid(int $auctionId, int $excludeBidId): void
     {
         AuctionBid::where('auction_id', $auctionId)
             ->where('id', '!=', $excludeBidId)
-            ->where('is_winning', true)
+            ->whereNotNull('is_winning')
             ->update([
-                'is_winning' => false,
+                'is_winning' => null,
                 'winning_at' => null,
             ]);
     }
 
-    public function markBidDepositPaid(AuctionBid $bid, string $transactionId): void
+    public function markBidDepositPaid(AuctionBid $bid, string $transactionId, ?float $amount = null): void
     {
-        $bid->update([
-            'deposit_paid' => true,
-            'deposit_paid_at' => now(),
-            'deposit_transaction_id' => $transactionId,
+        AuctionDeposit::create([
+            'user_id' => $bid->user_id,
+            'depositable_id' => $bid->id,
+            'depositable_type' => AuctionBid::class,
+            'paid' => false,
+            'paid_at' => now(),
+            'transaction_id' => $transactionId,
+            'amount' => $amount,
+            'deposit_status' => 'held',
+            'deposit_type' => 'bidder',
         ]);
     }
 
     public function getHeldDepositsForAuction(int $auctionId): Collection
     {
-        return AuctionBid::where('auction_id', $auctionId)
+        return AuctionDeposit::where('depositable_type', AuctionBid::class)
+            ->whereHasMorph('depositable', [AuctionBid::class], function ($q) use ($auctionId) {
+                $q->where('auction_id', $auctionId);
+            })
             ->where('deposit_status', 'held')
             ->get();
     }
 
     public function getHeldDepositsForUser(int $userId): Collection
     {
-        return AuctionBid::where('user_id', $userId)
+        return AuctionDeposit::with('depositable.auction')
+            ->where('user_id', $userId)
             ->where('deposit_status', 'held')
-            ->with('auction')
+            ->where('deposit_type', 'bidder')
             ->get();
     }
 
     public function refundAllDepositsForAuction(int $auctionId): void
     {
-        AuctionBid::where('auction_id', $auctionId)
+        AuctionDeposit::where('depositable_type', AuctionBid::class)
+            ->whereHasMorph('depositable', [AuctionBid::class], function ($q) use ($auctionId) {
+                $q->where('auction_id', $auctionId);
+            })
             ->where('deposit_status', 'held')
             ->update([
                 'deposit_status' => 'refunded',
-                'deposit_processed_at' => now(),
+                'processed_at' => now(),
             ]);
     }
 
     public function refundDepositsForLosers(int $auctionId, int $winnerBidId): void
     {
-        AuctionBid::where('auction_id', $auctionId)
-            ->where('id', '!=', $winnerBidId)
+        AuctionDeposit::where('depositable_type', AuctionBid::class)
+            ->whereHasMorph('depositable', [AuctionBid::class], function ($q) use ($auctionId, $winnerBidId) {
+                $q->where('auction_id', $auctionId)
+                  ->where('id', '!=', $winnerBidId);
+            })
             ->where('deposit_status', 'held')
             ->update([
                 'deposit_status' => 'refunded',
-                'deposit_processed_at' => now(),
+                'processed_at' => now(),
             ]);
     }
 
     public function applyWinnerDepositToPayment(int $winnerBidId): void
     {
-        AuctionBid::where('id', $winnerBidId)
+        AuctionDeposit::where('depositable_type', AuctionBid::class)
+            ->where('depositable_id', $winnerBidId)
             ->where('deposit_status', 'held')
             ->update([
                 'deposit_status' => 'applied_to_payment',
-                'deposit_processed_at' => now(),
+                'processed_at' => now(),
             ]);
     }
 

@@ -227,7 +227,7 @@ class AuctionController extends Controller
                     ($userBid->is_winning ? 'أعلى مزايد' : 'تم تجاوزك') : null,
                 
                 // بيانات البائع
-                'advertiser' => $auction->advertiser_deposit_paid ? [
+                'advertiser' => $auction->isAdvertiserDepositPaid() ? [
                     'id' => $auction->user?->id,
                     'name' => $auction->user?->name,
                     'phone' => $auction->user?->phone,

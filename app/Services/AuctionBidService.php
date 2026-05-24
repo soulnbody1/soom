@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Auction;
 use App\Models\AuctionBid;
+use App\Models\AuctionDeposit;
 use App\Repositories\AuctionBidRepository;
 use App\Repositories\AuctionRepository;
 use Illuminate\Support\Facades\DB;
@@ -36,24 +37,17 @@ class AuctionBidService
                 throw new \Exception('يجب دفع التأمين أولاً.');
             }
 
-            // التحقق من أن الـ deposit_transaction_id يخص المستخدم الحالي
-            $depositBid = $this->bidRepo->getUserBidByTransaction($auction->id, $userId, $depositTransactionId);
-            if (!$depositBid) {
-                throw new \Exception('معاملة التأمين غير صالحة أو لا تخصك.');
-            }
-
             // البحث عن مزايدة موجودة (قد تكون من تسجيل التأمين)
             $existingBid = $this->bidRepo->getUserBidForAuction($auction->id, $userId);
 
             if ($existingBid) {
                 // تحديث المزايدة الموجودة (دفع التأمين سابقاً)
-                $this->bidRepo->update($existingBid, [
-                    'amount' => $amount,
-                    'is_winning' => true,
-                    'winning_at' => now(),
-                    'deposit_transaction_id' => $depositTransactionId,
-                    'terms_accepted' => $termsAccepted,
-                ]);
+            $this->bidRepo->update($existingBid, [
+                'amount' => $amount,
+                'is_winning' => $existingBid->user_id,
+                'winning_at' => now(),
+                'terms_accepted' => $termsAccepted,
+            ]);
                 $bid = $existingBid->fresh();
             } else {
                 // إنشاء مزايدة جديدة (حالة نادرة: لم يتم دفع التأمين عبر النظام)
@@ -61,15 +55,24 @@ class AuctionBidService
                     'auction_id' => $auction->id,
                     'user_id' => $userId,
                     'amount' => $amount,
-                    'is_winning' => true,
+                    'is_winning' => $userId,
                     'winning_at' => now(),
-                    'deposit_paid' => true,
-                    'deposit_paid_at' => now(),
-                    'deposit_transaction_id' => $depositTransactionId,
-                    'deposit_status' => 'held',
                     'terms_accepted' => $termsAccepted,
                 ];
                 $bid = $this->bidRepo->create($bidData);
+                
+                // إنشاء سجل التأمين في الجدول الموحد
+                AuctionDeposit::create([
+                    'user_id' => $userId,
+                    'depositable_id' => $bid->id,
+                    'depositable_type' => AuctionBid::class,
+                    'paid' => true,
+                    'paid_at' => now(),
+                    'transaction_id' => $depositTransactionId,
+                    'amount' => $auction->getDepositAmount(),
+                    'deposit_status' => 'held',
+                    'deposit_type' => 'bidder',
+                ]);
             }
 
             // تحديث المزاد
@@ -115,7 +118,7 @@ class AuctionBidService
             // تحديث المزايدة
             $updateData = [
                 'amount' => $newAmount,
-                'is_winning' => true,
+                'is_winning' => $userId,
                 'winning_at' => now(),
                 'terms_accepted' => $termsAccepted,
             ];
@@ -147,19 +150,19 @@ class AuctionBidService
     {
         $existingBid = $this->bidRepo->getUserBidForAuction($auction->id, $userId);
         
-        if ($existingBid && $existingBid->deposit_paid) {
+        if ($existingBid && $existingBid->isDepositPaid()) {
             throw new \Exception('تم دفع التأمين مسبقاً.');
         }
 
         if ($existingBid) {
-            $this->bidRepo->markBidDepositPaid($existingBid, $transactionId);
+            $this->bidRepo->markBidDepositPaid($existingBid, $transactionId, $auction->getDepositAmount());
         }
     }
 
     public function isDepositPaid(Auction $auction, int $userId): bool
     {
         $bid = $this->bidRepo->getUserBidForAuction($auction->id, $userId);
-        return $bid && $bid->deposit_paid;
+        return $bid && $bid->isDepositPaid();
     }
 
     public function getBidDepositAmount(Auction $auction): float
@@ -222,7 +225,7 @@ class AuctionBidService
     public function getWinningBidsCount(int $userId): int
     {
         return AuctionBid::where('user_id', $userId)
-            ->where('is_winning', true)
+            ->whereNotNull('is_winning')
             ->whereHas('auction', function ($q) {
                 $q->active();
             })

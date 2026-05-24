@@ -68,15 +68,23 @@ class AuctionRepository
         $auction->update(['unique_bidders_count' => $count]);
     }
 
-    public function markAdvertiserDepositPaid(Auction $auction, string $transactionId): void
+    public function markAdvertiserDepositPaid(Auction $auction, string $transactionId, ?float $amount = null): void
     {
-        $auction->update([
-            'advertiser_deposit_paid' => true,
-            'advertiser_deposit_paid_at' => now(),
-            'advertiser_deposit_transaction_id' => $transactionId,
-            'status' => 'active',
-            'starts_at' => now(),
+        // إنشاء سجل التأمين في الجدول الموحد (بانتظار موافقة الأدمن)
+        \App\Models\AuctionDeposit::create([
+            'user_id' => $auction->user_id,
+            'depositable_id' => $auction->id,
+            'depositable_type' => Auction::class,
+            'paid' => false,
+            'paid_at' => now(),
+            'transaction_id' => $transactionId,
+            'amount' => $amount ?? $auction->getDepositAmount(),
+            'deposit_status' => 'held',
+            'deposit_type' => 'advertiser',
         ]);
+
+        // المزاد يفضل pending_payment لحد ما الأدمن يأكد
+        // ($auction لا يتغير حالته هنا)
     }
 
     public function setWinner(Auction $auction, int $winnerId): void

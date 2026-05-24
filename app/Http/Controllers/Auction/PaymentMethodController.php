@@ -14,7 +14,7 @@ class PaymentMethodController extends Controller
 
     public function index()
     {
-        $methods = PaymentMethod::ordered()->get();
+        $methods = PaymentMethod::orderBy('id')->get();
         return PaymentMethodResource::collection($methods);
     }
 

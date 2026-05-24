@@ -12,7 +12,7 @@ class AuctionBidResource extends JsonResource
             'id' => $this->id,
             'auction_id' => $this->auction_id,
             'amount' => (float) $this->amount,
-            'is_winning' => (bool) $this->is_winning,
+            'is_winning' => (int) $this->is_winning,
             'winning_at' => $this->winning_at?->toDateTimeString(),
             
             // المزايد
@@ -34,9 +34,9 @@ class AuctionBidResource extends JsonResource
                 ];
             }),
             
-            // حالة التأمين
-            'deposit_paid' => (bool) $this->deposit_paid,
-            'deposit_status' => $this->deposit_status,
+            // حالة التأمين (من الجدول الموحد)
+            'deposit_paid' => $this->isDepositPaid(),
+            'deposit_status' => $this->getDepositStatus(),
             'deposit_status_label' => $this->getDepositStatusLabel(),
             
             'created_at' => $this->created_at?->toDateTimeString(),
@@ -45,6 +45,7 @@ class AuctionBidResource extends JsonResource
 
     protected function getDepositStatusLabel(): string
     {
+        $status = $this->getDepositStatus();
         $labels = [
             'held' => 'محتجز',
             'refunded' => 'مسترد',
@@ -52,6 +53,6 @@ class AuctionBidResource extends JsonResource
             'applied_to_payment' => 'محول للدفع',
         ];
         
-        return $labels[$this->deposit_status] ?? $this->deposit_status;
+        return $labels[$status] ?? $status;
     }
 }

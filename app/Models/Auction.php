@@ -30,9 +30,6 @@ class Auction extends Model
         'winner_id',
         'duration_days',
         'terms_accepted',
-        'advertiser_deposit_paid',
-        'advertiser_deposit_paid_at',
-        'advertiser_deposit_transaction_id',
     ];
 
     protected $casts = [
@@ -40,8 +37,6 @@ class Auction extends Model
         'current_bid' => 'decimal:2',
         'min_accept_price' => 'decimal:2',
         'deposit_amount' => 'decimal:2',
-        'advertiser_deposit_paid' => 'boolean',
-        'advertiser_deposit_paid_at' => 'datetime',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'original_ends_at' => 'datetime',
@@ -87,7 +82,7 @@ class Auction extends Model
 
     public function winningBid(): HasOne
     {
-        return $this->hasOne(AuctionBid::class)->where('is_winning', true);
+        return $this->hasOne(AuctionBid::class)->whereNotNull('is_winning');
     }
 
     public function images(): HasMany
@@ -98,6 +93,19 @@ class Auction extends Model
     public function views(): HasMany
     {
         return $this->hasMany(AuctionView::class);
+    }
+
+    public function deposits(): HasMany
+    {
+        return $this->hasMany(AuctionDeposit::class, 'depositable_id')
+                    ->where('depositable_type', Auction::class);
+    }
+
+    public function advertiserDeposit(): HasOne
+    {
+        return $this->hasOne(AuctionDeposit::class, 'depositable_id')
+                    ->where('depositable_type', Auction::class)
+                    ->where('deposit_type', 'advertiser');
     }
 
     // Helpers
@@ -114,6 +122,11 @@ class Auction extends Model
     public function getDepositAmount(): float
     {
         return (float) ($this->deposit_amount ?? 0);
+    }
+
+    public function isAdvertiserDepositPaid(): bool
+    {
+        return $this->advertiserDeposit()->where('paid', true)->exists();
     }
 
     public function getTimeRemaining(): int

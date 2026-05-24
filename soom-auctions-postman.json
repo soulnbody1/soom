@@ -184,6 +184,22 @@
           }
         },
         {
+          "name": "Admin: Set Auction Deposit Values",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/set-deposit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deposit_type\":\"fixed\",\"deposit_fixed_amount\":500,\"deposit_percentage\":null}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
           "name": "Admin: All Auctions (All Statuses)",
           "request": {
             "method": "GET",
@@ -212,7 +228,7 @@
           }
         },
         {
-          "name": "Pay Bidder Deposit",
+          "name": "Pay Bidder Deposit (FormData - Image Upload)",
           "request": {
             "method": "POST",
             "header": [
@@ -221,9 +237,12 @@
             ],
             "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/pay-bid-deposit",
             "body": {
-              "mode": "raw",
-              "raw": "{\"payment_method\":\"credit_card\",\"payment_token\":\"tok_visa\"}",
-              "options": {"raw": {"language": "json"}}
+              "mode": "formdata",
+              "formdata": [
+                {"key": "payment_method_id", "value": "1", "type": "text", "description": "ID من جدول payment_methods"},
+                {"key": "image", "type": "file", "src": "/path/to/payment_slip.jpg", "description": "صورة إيصال الدفع"},
+                {"key": "amount", "value": "", "type": "text", "description": "اختياري - لو فاضي هياخد deposit_amount من المزاد"}
+              ]
             }
           }
         },
@@ -273,7 +292,48 @@
       ]
     },
     {
-      "name": "5. Public: Settings (No Auth)",
+      "name": "5. Auction Deposits (New - Unified Table)",
+      "item": [
+        {
+          "name": "Get Advertiser Deposit Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/auctions/{{auction_id}}/deposit-info",
+            "description": "بيرجع تفاصيل التأمين الخاص بالمزاد (advertiser) والمزايد (bidder)"
+          }
+        },
+        {
+          "name": "Get Bidder Deposit for my bid",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/my/bids",
+            "description": "بيرجع كل مزايداتي مع تفاصيل التأمين (deposit_paid, deposit_status, deposit_status_label)"
+          }
+        },
+        {
+          "name": "List All Deposits for Auction (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/auctions/{{auction_id}}/payment-slips",
+            "description": "بيرجع كل إيصالات الدفع (payment_slips) المرتبطة بالمزاد - سواء كانت للمعلن أو للمزايدين"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Public: Settings (No Auth)",
       "item": [
         {
           "name": "List Auction Rules",
@@ -310,7 +370,7 @@
       ]
     },
     {
-      "name": "6. Admin: Settings (Auth Required - Admin)",
+      "name": "7. Admin: Settings (Auth Required - Admin)",
       "item": [
         {
           "name": "Admin: List Auction Rules",
@@ -477,7 +537,7 @@
       ]
     },
     {
-      "name": "7. Payment Slips (Auth Required)",
+      "name": "8. Payment Slips (Auth Required)",
       "item": [
         {
           "name": "Upload Payment Slip (FormData)",
@@ -525,7 +585,79 @@
       ]
     },
     {
-      "name": "8. Notifications (Auth Required)",
+      "name": "9. Auction Deposits - Admin Approval (Auth Required - Admin)",
+      "item": [
+        {
+          "name": "Admin: List All Deposits",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-deposits?type=advertiser&verified=no"
+          }
+        },
+        {
+          "name": "Admin: Get Deposit Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-deposits/{{deposit_id}}"
+          }
+        },
+        {
+          "name": "Admin: PROCESS Deposit (Verify or Reject)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-deposits/{{deposit_id}}/process",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"verified\"}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "description": "✔️ `verified` يوافق → المزاد ينشط | ❌ `rejected` يرفض"
+          }
+        },
+        {
+          "name": "Admin: Get Deposits for Auction",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/admin/auction-deposits/by-auction/{{auction_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. My Deposits (Auth Required - User)",
+      "item": [
+        {
+          "name": "My Deposits",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Accept", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{auth_token}}"}
+            ],
+            "url": "{{base_url}}/api/soom/my/deposits",
+            "description": "بيرجع كل تأمينات المستخدم الحالي"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Notifications (Auth Required)",
       "item": [
         {
           "name": "Get My Notifications",
@@ -574,6 +706,7 @@
     {"key": "notification_id", "value": "1"},
     {"key": "rule_id", "value": "1"},
     {"key": "payment_method_id", "value": "1"},
-    {"key": "config_id", "value": "1"}
+    {"key": "config_id", "value": "1"},
+    {"key": "deposit_id", "value": "1"}
   ]
 }
