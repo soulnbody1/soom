@@ -12,6 +12,12 @@ class AuctionsConfigurationController extends Controller
 {
     use ApiResponseTrait;
 
+    /*
+     الكنترولر الخاص بجدول اعدادات المزادات عشان لو حابب تححد مثلا كاتيجورى معينة
+    وتضيفلها مبلغ او نسبة تأمين معينة يدفعها المعلن وتطبق 
+    على كل اعلان يندرج تحت الكاتيجورى
+     */
+
     public function index()
     {
         $configs = AuctionsConfiguration::with('category')->latest()->get();

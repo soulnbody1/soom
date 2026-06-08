@@ -12,6 +12,8 @@ class PaymentMethodController extends Controller
 {
     use ApiResponseTrait;
 
+    /* كنترولر خاص بتسجيل طرق الدفع زى cash,visa,credit-card  */
+
     public function index()
     {
         $methods = PaymentMethod::orderBy('id')->get();

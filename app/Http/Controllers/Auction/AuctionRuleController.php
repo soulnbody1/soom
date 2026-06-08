@@ -12,6 +12,8 @@ class AuctionRuleController extends Controller
 {
     use ApiResponseTrait;
 
+
+    /* الشروظ والأحكام */
     public function index()
     {
         $rules = AuctionRule::orderBy('id')->get();
