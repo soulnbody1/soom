@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('payment_slips')) {
+            return;
+        }
+
         Schema::create('payment_slips', function (Blueprint $table) {
             $table->id();
             $table->string('image_path')->comment('صورة إيصال الدفع');

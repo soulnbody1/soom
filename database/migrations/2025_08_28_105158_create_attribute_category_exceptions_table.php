@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('attribute_category_exceptions')) {
+            return;
+        }
+
         Schema::create('attribute_category_exceptions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('attribute_id')->constrained('attributes')->onDelete('cascade');

@@ -8,10 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('auction_deposits')) {
+            return;
+        }
+
         Schema::table('auction_deposits', function (Blueprint $table) {
-            // تأكيد الدفع من الأدمن
-            $table->timestamp('verified_at')->nullable()->after('paid_at');
-            $table->foreignId('verified_by')->nullable()->constrained('users')->after('verified_at');
+            if (! Schema::hasColumn('auction_deposits', 'verified_at')) {
+                $table->timestamp('verified_at')->nullable()->after('paid_at');
+            }
+
+            if (! Schema::hasColumn('auction_deposits', 'verified_by')) {
+                $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete()->after('verified_at');
+            }
         });
     }
 

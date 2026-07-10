@@ -9,6 +9,10 @@ class CreateAnnouncementsTable extends Migration
 
     public function up()
     {
+        if (Schema::hasTable('announcements')) {
+            return;
+        }
+
         Schema::create('announcements', function (Blueprint $table) {
             $table->id();
             $table->string('title');
