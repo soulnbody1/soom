@@ -55,17 +55,22 @@ final class SubmitPaymentSubmissionAction
 
         $method = $this->payments->findActivePaymentMethod($paymentMethodPublicId);
 
-        [$deposit, $settlement, $amount] = $this->transaction->run(function () use ($auction, $userId, $purpose): array {
+        $this->transaction->run(function () use ($auction, $userId, $purpose): void {
             $auction = $this->auctions->lockForStateChange($auction->id);
-
-            return $this->target($auction, $userId, $purpose);
+            $this->target($auction, $userId, $purpose);
         });
 
         $path = $receipt->store("auction-payments/{$auction->public_id}", 'spaces_private');
 
         try {
-            return $this->transaction->run(function () use ($auction, $userId, $purpose, $method, $receipt, $idempotencyKey, $providerReference, $deposit, $settlement, $amount, $path): PaymentSubmission {
+            return $this->transaction->run(function () use ($auction, $userId, $purpose, $method, $receipt, $idempotencyKey, $providerReference, $path): PaymentSubmission {
                 $auction = $this->auctions->lockForStateChange($auction->id);
+                [$deposit, $settlement, $amount] = $this->target($auction, $userId, $purpose);
+
+                if ($amount <= 0) {
+                    throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
+                }
+
                 $submission = $this->payments->firstOrCreateSubmission(
                     [
                         'auction_id' => $auction->id,
@@ -95,7 +100,7 @@ final class SubmitPaymentSubmissionAction
                     return $submission->load(['paymentMethod', 'deposit', 'settlement']);
                 }
 
-                if ($deposit && $deposit->status === AuctionDepositStatus::PendingSubmission) {
+                if ($deposit && in_array($deposit->status, [AuctionDepositStatus::PendingSubmission, AuctionDepositStatus::Rejected], true)) {
                     $deposit->forceFill([
                         'status' => AuctionDepositStatus::PendingReview,
                         'submitted_at' => Carbon::now(),
@@ -134,6 +139,8 @@ final class SubmitPaymentSubmissionAction
                 ]
             );
 
+            $deposit = $this->deposits->lockPaymentDeposit($auction->id, $userId, 'seller');
+
             return [$deposit, null, $auction->seller_deposit_amount_minor];
         }
 
@@ -154,15 +161,17 @@ final class SubmitPaymentSubmissionAction
                 ]
             );
 
+            $deposit = $this->deposits->lockPaymentDeposit($auction->id, $userId, 'bidder');
+
             return [$deposit, null, $auction->bidder_deposit_amount_minor];
         }
 
-        $settlement = $this->settlements->findByAuctionAndWinner($auction->id, $userId);
+        $settlement = $this->settlements->lockByAuctionAndWinner($auction->id, $userId);
 
         if (! $settlement) {
             throw new AuctionException(__('auction.errors.settlement_payment_unavailable'));
         }
 
-        return [null, $settlement, max(0, $settlement->amount_due_minor - $settlement->amount_paid_minor)];
+        return [null, $settlement, max(0, (int) ($settlement->remaining_amount_minor ?? ($settlement->amount_due_minor - $settlement->amount_paid_minor)))];
     }
 }

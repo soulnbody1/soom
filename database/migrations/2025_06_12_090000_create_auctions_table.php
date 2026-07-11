@@ -224,6 +224,12 @@ return new class extends Migration
             $table->foreignId('auction_id')->constrained('auctions')->restrictOnDelete();
             $table->foreignId('winning_bid_id')->constrained('auction_bids')->restrictOnDelete();
             $table->foreignId('winner_id')->constrained('users')->restrictOnDelete();
+            $table->unsignedInteger('sequence_number')->default(1);
+            $table->boolean('is_current')->default(true);
+            $table->unsignedTinyInteger('current_marker')->nullable()->default(1);
+            $table->foreignId('previous_settlement_id')->nullable()->constrained('auction_settlements')->nullOnDelete();
+            $table->unsignedBigInteger('winner_reassignment_id')->nullable();
+            $table->timestampTz('superseded_at')->nullable();
             $table->string('status', 40)->default('payment_pending');
             $table->unsignedBigInteger('winning_amount_minor');
             $table->unsignedBigInteger('deposit_applied_minor')->default(0);
@@ -231,8 +237,9 @@ return new class extends Migration
             $table->unsignedBigInteger('seller_net_amount_minor')->default(0);
             $table->unsignedBigInteger('amount_due_minor');
             $table->unsignedBigInteger('amount_paid_minor')->default(0);
+            $table->unsignedBigInteger('remaining_amount_minor')->default(0);
             $table->char('currency_code', 3);
-            $table->timestampTz('payment_due_at');
+            $table->timestampTz('payment_due_at')->nullable();
             $table->timestampTz('handover_due_at')->nullable();
             $table->timestampTz('paid_at')->nullable();
             $table->timestampTz('seller_handover_confirmed_at')->nullable();
@@ -241,7 +248,8 @@ return new class extends Migration
             $table->timestampTz('completed_at')->nullable();
             $table->timestampsTz();
 
-            $table->unique('auction_id', 'uq_auction_settlement_one');
+            $table->unique(['auction_id', 'sequence_number'], 'uq_auction_settlement_sequence');
+            $table->unique(['auction_id', 'current_marker'], 'uq_auction_settlement_current');
             $table->unique('winning_bid_id', 'uq_auction_settlement_bid');
             $table->index(['winner_id', 'status'], 'idx_auction_settlement_winner_status');
         });
@@ -339,6 +347,7 @@ return new class extends Migration
             $table->timestampsTz();
 
             $table->unique(['provider', 'idempotency_key'], 'uq_refund_idempotency');
+            $table->unique(['provider', 'provider_refund_id'], 'uq_refund_provider_refund_id');
             $table->index(['auction_id', 'status'], 'idx_refunds_auction_status');
             $table->index(['user_id', 'status'], 'idx_refunds_user_status');
         });
@@ -433,17 +442,21 @@ return new class extends Migration
         Schema::dropIfExists('auction_status_history');
         Schema::dropIfExists('refund_transactions');
         Schema::dropIfExists('payment_transactions');
-        Schema::table('payment_submissions', function (Blueprint $table) {
-            $table->dropForeign('fk_payment_submissions_settlement');
-        });
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            Schema::table('payment_submissions', function (Blueprint $table) {
+                $table->dropForeign('fk_payment_submissions_settlement');
+            });
+        }
         Schema::dropIfExists('auction_winner_reassignments');
         Schema::dropIfExists('auction_disputes');
         Schema::dropIfExists('auction_configuration_versions');
         Schema::dropIfExists('auction_settlements');
-        Schema::table('auctions', function (Blueprint $table) {
-            $table->dropForeign('fk_auctions_current_bid');
-            $table->dropForeign('fk_auctions_winning_bid');
-        });
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            Schema::table('auctions', function (Blueprint $table) {
+                $table->dropForeign('fk_auctions_current_bid');
+                $table->dropForeign('fk_auctions_winning_bid');
+            });
+        }
         Schema::dropIfExists('auction_bids');
         Schema::dropIfExists('payment_submissions');
         Schema::dropIfExists('auction_deposits');
@@ -468,6 +481,7 @@ return new class extends Migration
             'ALTER TABLE auctions ADD CONSTRAINT chk_auction_time CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at)',
             'ALTER TABLE auction_deposits ADD CONSTRAINT chk_deposit_amounts CHECK (held_amount_minor + applied_amount_minor + refunded_amount_minor + forfeited_amount_minor <= required_amount_minor)',
             'ALTER TABLE auction_settlements ADD CONSTRAINT chk_settlement_amounts CHECK (amount_due_minor + deposit_applied_minor = winning_amount_minor)',
+            'ALTER TABLE auction_settlements ADD CONSTRAINT chk_settlement_remaining CHECK (remaining_amount_minor + amount_paid_minor = amount_due_minor)',
         ];
 
         foreach ($statements as $statement) {

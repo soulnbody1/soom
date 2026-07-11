@@ -6,6 +6,7 @@ namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
+use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\RefundTransaction;
 use App\Repositories\Auction\AuctionDepositRepository;
@@ -29,6 +30,15 @@ final class RefundAuctionDepositAction
             $deposit = $this->deposits->lockForRefund($deposit->id);
 
             $amount = $deposit->held_amount_minor;
+
+            if ($amount <= 0) {
+                throw new AuctionException(__('auction.errors.zero_refund_not_allowed'));
+            }
+
+            if ($amount > $deposit->held_amount_minor) {
+                throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+            }
+
             $key = "deposit:{$deposit->id}:refund:{$amount}";
 
             $provider = (string) config('auction.refunds.provider', 'manual');
@@ -76,6 +86,14 @@ final class RefundAuctionDepositAction
             $refund = $this->refunds->lockForConfirmation($refund->id);
             $deposit = $this->deposits->lockForRefund($refund->deposit_id);
 
+            if ($refund->status === RefundTransactionStatus::Succeeded) {
+                return $refund;
+            }
+
+            if ($this->refunds->providerRefundIdExists($refund->provider, $providerRefundId, $refund->id)) {
+                throw new AuctionException(__('auction.errors.duplicate_provider_refund'));
+            }
+
             $this->markSucceeded($refund, $deposit, $refund->amount_minor, $providerRefundId);
 
             $this->audit->log('auction.deposit_refunded', $deposit->auction, $adminId, $adminId ? 'admin' : 'system', [
@@ -94,6 +112,14 @@ final class RefundAuctionDepositAction
         int $amount,
         ?string $providerRefundId = null
     ): void {
+        if ($refund->status === RefundTransactionStatus::Succeeded) {
+            return;
+        }
+
+        if ($amount <= 0 || $amount > $deposit->held_amount_minor) {
+            throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+        }
+
         $refund->forceFill([
             'status' => RefundTransactionStatus::Succeeded,
             'provider_refund_id' => $providerRefundId ?? $refund->provider_refund_id,

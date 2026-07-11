@@ -13,12 +13,18 @@ return new class extends Migration
     private function indexExists(string $table, string $indexName): bool
     {
         $conn = Schema::getConnection();
+
+        if ($conn->getDriverName() === 'sqlite') {
+            return collect($conn->select("PRAGMA index_list('{$table}')"))
+                ->contains(fn ($row): bool => ($row->name ?? null) === $indexName);
+        }
+
         $db = $conn->getDatabaseName();
         $prefix = $conn->getTablePrefix();
-        $prefixedTable = $prefix . $table;
+        $prefixedTable = $prefix.$table;
 
         $result = $conn->select(
-            "SELECT 1 FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? AND index_name = ? LIMIT 1",
+            'SELECT 1 FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? AND index_name = ? LIMIT 1',
             [$db, $prefixedTable, $indexName]
         );
 
@@ -184,10 +190,12 @@ return new class extends Migration
             });
 
             if (Schema::hasColumn('auctions', 'configuration_version_id')) {
-                Schema::table('auctions', function (Blueprint $table) {
-                    $table->dropForeign(['configuration_version_id']);
-                    $table->dropColumn('configuration_version_id');
-                });
+                if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+                    Schema::table('auctions', function (Blueprint $table) {
+                        $table->dropForeign(['configuration_version_id']);
+                        $table->dropColumn('configuration_version_id');
+                    });
+                }
             }
         }
     }

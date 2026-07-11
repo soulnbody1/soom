@@ -18,7 +18,6 @@ use App\Http\Requests\Auction\StoreAuctionRequest;
 use App\Http\Resources\Auction\AdminAuctionResource;
 use App\Http\Resources\Auction\AuctionParticipantResource;
 use App\Http\Resources\Auction\AuctionResource;
-use App\Http\Resources\Auction\AuctionSummaryResource;
 use App\Http\Resources\Auction\PaymentSubmissionResource;
 use App\Http\Resources\Auction\PublicAuctionResource;
 use App\Http\Resources\Auction\SellerAuctionResource;
@@ -266,7 +265,8 @@ final class AuctionController extends Controller
             $auction,
             Auth::id(),
             (string) $request->validated('reason'),
-            (bool) $request->boolean('reassign_to_next')
+            (bool) $request->boolean('reassign_to_next'),
+            (bool) $request->boolean('override_deadline')
         );
 
         return $this->sendResponse(

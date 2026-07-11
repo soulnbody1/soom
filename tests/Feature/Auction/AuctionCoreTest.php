@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\Auction\Enums\SettlementStatus;
+use App\Domain\Auction\Rules\CurrencyDecimalRule;
 use App\Domain\Auction\ValueObjects\Currency;
 use App\Domain\Auction\ValueObjects\Money;
 use App\DTO\Auction\CreateAuctionInputDTO;
 use App\DTO\Auction\CreateAuctionRecordDTO;
 use App\DTO\Auction\CreateSettlementDTO;
-use App\Domain\Auction\Enums\SettlementStatus;
-use App\Domain\Auction\Rules\CurrencyDecimalRule;
-use App\Services\Auction\Support\AuctionStateMachine;
 use Illuminate\Support\Facades\Validator;
 use Tests\TestCase;
 
@@ -142,13 +141,15 @@ class AuctionCoreTest extends TestCase
             platform_fee_minor: 5000,
             seller_net_amount_minor: 95000,
             amount_due_minor: 75000,
-            amount_paid_minor: 25000,
+            amount_paid_minor: 0,
+            remaining_amount_minor: 75000,
             currency_code: 'JOD',
         );
 
         $this->assertSame(100000, $dto->winning_amount_minor);
         $this->assertSame(75000, $dto->amount_due_minor);
-        $this->assertSame(25000, $dto->amount_paid_minor);
+        $this->assertSame(0, $dto->amount_paid_minor);
+        $this->assertSame(75000, $dto->remaining_amount_minor);
     }
 
     // ─── Platform Fee Calculation ────────────────────────────
@@ -205,6 +206,42 @@ class AuctionCoreTest extends TestCase
         });
 
         $this->assertFalse($failed);
+    }
+
+    public function test_place_bid_currency_validation_supports_jod_three_decimals(): void
+    {
+        $request = \Illuminate\Http\Request::create('/', 'POST', [
+            'currency_code' => 'JOD',
+            'amount' => '10.001',
+            'idempotency_key' => 'bid-key',
+        ]);
+        app()->instance('request', $request);
+
+        $validator = Validator::make([
+            'currency_code' => 'JOD',
+            'amount' => '10.001',
+            'idempotency_key' => 'bid-key',
+        ], (new \App\Http\Requests\Auction\PlaceBidRequest)->rules());
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_place_bid_currency_validation_rejects_egp_three_decimals(): void
+    {
+        $request = \Illuminate\Http\Request::create('/', 'POST', [
+            'currency_code' => 'EGP',
+            'amount' => '10.001',
+            'idempotency_key' => 'bid-key',
+        ]);
+        app()->instance('request', $request);
+
+        $validator = Validator::make([
+            'currency_code' => 'EGP',
+            'amount' => '10.001',
+            'idempotency_key' => 'bid-key',
+        ], (new \App\Http\Requests\Auction\PlaceBidRequest)->rules());
+
+        $this->assertTrue($validator->fails());
     }
 
     // ─── DTO Serialization ───────────────────────────────────

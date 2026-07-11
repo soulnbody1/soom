@@ -29,6 +29,7 @@ final class AuctionConfigurationSeeder extends Seeder
                     'maximum_extension_count' => 6,
                     'winner_payment_deadline_hours' => 48,
                     'handover_deadline_hours' => 72,
+                    'non_winner_deposit_policy' => 'hold_all_eligible_bidders_until_winner_payment',
                 ],
             ]
         );

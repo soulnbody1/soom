@@ -98,13 +98,19 @@ final class ReviewPaymentSubmissionAction
                     throw new AuctionException(__('auction.errors.winner_changed'));
                 }
 
+                if (! $settlement->is_current || $settlement->current_marker !== 1) {
+                    throw new AuctionException(__('auction.errors.stale_settlement_payment'));
+                }
+
                 if ($settlement->status === SettlementStatus::Paid) {
                     throw new AuctionException(__('auction.errors.payment_already_processed'));
                 }
 
                 $newPaid = min($settlement->amount_due_minor, $settlement->amount_paid_minor + $submission->amount_minor);
+                $remaining = max(0, $settlement->amount_due_minor - $newPaid);
                 $settlement->forceFill([
                     'amount_paid_minor' => $newPaid,
+                    'remaining_amount_minor' => $remaining,
                     'status' => $newPaid >= $settlement->amount_due_minor ? SettlementStatus::Paid : SettlementStatus::PaymentPending,
                     'paid_at' => $newPaid >= $settlement->amount_due_minor ? Carbon::now() : $settlement->paid_at,
                     'handover_due_at' => $newPaid >= $settlement->amount_due_minor
@@ -150,8 +156,8 @@ final class ReviewPaymentSubmissionAction
 
             if ($submission->deposit) {
                 $submission->deposit->forceFill([
-                    'status' => AuctionDepositStatus::Rejected,
-                    'released_at' => Carbon::now(),
+                    'status' => AuctionDepositStatus::PendingSubmission,
+                    'released_at' => null,
                 ])->save();
             }
 

@@ -20,8 +20,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 final class Auction extends Model
 {
-    use HasPublicId;
     use HasFactory;
+    use HasPublicId;
     use SoftDeletes;
 
     protected $fillable = [
@@ -155,7 +155,14 @@ final class Auction extends Model
 
     public function settlement(): HasOne
     {
-        return $this->hasOne(AuctionSettlement::class);
+        return $this->hasOne(AuctionSettlement::class)
+            ->where('current_marker', 1)
+            ->latestOfMany();
+    }
+
+    public function settlements(): HasMany
+    {
+        return $this->hasMany(AuctionSettlement::class);
     }
 
     public function metric(): HasOne

@@ -16,6 +16,7 @@ use App\Repositories\Auction\AuctionBidRepository;
 use App\Repositories\Auction\AuctionDepositRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
+use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -31,18 +32,25 @@ final class MarkWinnerDefaultedAction
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionBidRepository $bids,
         private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionTermsRepository $terms,
     ) {}
 
-    public function execute(Auction $auction, int $adminId, string $reason, bool $reassignToNext = false): Auction
+    public function execute(Auction $auction, int $adminId, string $reason, bool $reassignToNext = false, bool $overrideDeadline = false): Auction
     {
         if (trim($reason) === '') {
             throw new AuctionException(__('auction.errors.default_reason_required'));
         }
 
-        return $this->transaction->run(function () use ($auction, $adminId, $reason, $reassignToNext): Auction {
+        return $this->transaction->run(function () use ($auction, $adminId, $reason, $reassignToNext, $overrideDeadline): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
             $settlement = $this->settlements->lockSettlement($auction->id);
             $defaultedUserId = $settlement->winner_id;
+
+            if (! $overrideDeadline && $settlement->payment_due_at && Carbon::now()->lessThan($settlement->payment_due_at)) {
+                throw new AuctionException(__('auction.errors.payment_deadline_not_expired'));
+            }
+
+            $this->bids->lockWinningBid($auction->id);
 
             $settlement->forceFill([
                 'status' => SettlementStatus::Defaulted,
@@ -102,7 +110,7 @@ final class MarkWinnerDefaultedAction
                 continue;
             }
 
-            if ($participant->terms_accepted_at === null) {
+            if (! $auction->terms_version_id || ! $this->terms->hasAcceptedTerms($auction->id, $candidateBid->bidder_id, $auction->terms_version_id)) {
                 continue;
             }
 
@@ -128,7 +136,7 @@ final class MarkWinnerDefaultedAction
         $sellerNet = $winningAmount - $platformFee;
         $amountDue = max(0, $winningAmount - $depositApplied);
 
-        AuctionWinnerReassignment::create([
+        $reassignment = AuctionWinnerReassignment::create([
             'auction_id' => $auction->id,
             'from_bid_id' => $defaultedSettlement->winning_bid_id,
             'to_bid_id' => $newBid->id,
@@ -148,16 +156,23 @@ final class MarkWinnerDefaultedAction
             'winning_bid_id' => $newBid->id,
             'winner_id' => $newBid->bidder_id,
             'status' => $amountDue > 0 ? SettlementStatus::PaymentPending : SettlementStatus::Paid,
+            'previous_settlement_id' => $defaultedSettlement->id,
+            'winner_reassignment_id' => $reassignment->id,
             'winning_amount_minor' => $winningAmount,
             'deposit_applied_minor' => $depositApplied,
             'platform_fee_minor' => $platformFee,
             'seller_net_amount_minor' => $sellerNet,
             'amount_due_minor' => $amountDue,
-            'amount_paid_minor' => $depositApplied,
+            'amount_paid_minor' => 0,
+            'remaining_amount_minor' => $amountDue,
             'currency_code' => $auction->currency_code,
             'payment_due_at' => $amountDue > 0
                 ? $now->copy()->addHours($auction->winner_payment_deadline_hours)
                 : null,
+            'handover_due_at' => $amountDue === 0
+                ? $now->copy()->addHours($auction->handover_deadline_hours)
+                : null,
+            'paid_at' => $amountDue === 0 ? $now : null,
         ]);
 
         if ($deposit && $depositApplied > 0) {
@@ -191,9 +206,9 @@ final class MarkWinnerDefaultedAction
     private function calculatePlatformFee(Auction $auction, int $winningAmountMinor): int
     {
         if ($auction->platform_fee_type === 'fixed') {
-            return $auction->platform_fee_fixed_minor;
+            return min($winningAmountMinor, $auction->platform_fee_fixed_minor);
         }
 
-        return (int) (($winningAmountMinor * $auction->platform_fee_basis_points) / 10000);
+        return intdiv($winningAmountMinor * $auction->platform_fee_basis_points, 10_000);
     }
 }

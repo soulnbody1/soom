@@ -67,6 +67,9 @@ final class FinalizeAuctionAction
             $platformFee = $this->platformFee($auction, $winningBid->amount_minor);
             $sellerNet = max(0, $winningBid->amount_minor - $platformFee);
             $amountDue = $winningBid->amount_minor - $depositApplied;
+            $handoverDueAt = $amountDue === 0
+                ? $now->copy()->addHours($auction->handover_deadline_hours)
+                : null;
 
             $settlementStatus = $amountDue > 0
                 ? SettlementStatus::PaymentPending
@@ -82,11 +85,14 @@ final class FinalizeAuctionAction
                 'platform_fee_minor' => $platformFee,
                 'seller_net_amount_minor' => $sellerNet,
                 'amount_due_minor' => $amountDue,
-                'amount_paid_minor' => $depositApplied,
+                'amount_paid_minor' => 0,
+                'remaining_amount_minor' => $amountDue,
                 'currency_code' => $auction->currency_code,
                 'payment_due_at' => $amountDue > 0
                     ? $now->addHours($auction->winner_payment_deadline_hours)
                     : null,
+                'handover_due_at' => $handoverDueAt,
+                'paid_at' => $amountDue === 0 ? $now : null,
             ]);
 
             if ($winnerDeposit && $depositApplied > 0) {
@@ -108,7 +114,9 @@ final class FinalizeAuctionAction
             }
 
             $this->auctions->setWinningBid($auction, $winningBid->id);
-            $this->deposits->markNonWinnerDepositsRefundPending($auction->id, $winningBid->bidder_id);
+            if ($this->shouldRefundNonWinnersImmediately($auction)) {
+                $this->deposits->markNonWinnerDepositsRefundPending($auction->id, $winningBid->bidder_id);
+            }
             $this->stateMachine->transition($auction, AuctionStatus::SettlementPending, null, 'system', 'winning bid selected');
 
             $nextStatus = $amountDue > 0
@@ -134,5 +142,13 @@ final class FinalizeAuctionAction
         }
 
         return intdiv($winningAmount * $auction->platform_fee_basis_points, 10_000);
+    }
+
+    private function shouldRefundNonWinnersImmediately(Auction $auction): bool
+    {
+        $policy = $auction->configurationVersion?->configuration['non_winner_deposit_policy']
+            ?? config('auction.non_winner_deposit_policy', 'hold_all_eligible_bidders_until_winner_payment');
+
+        return $policy === 'refund_all_non_winners_immediately';
     }
 }

@@ -26,6 +26,14 @@ final class AuctionRefundRepository
         return RefundTransaction::whereKey($refundId)->lockForUpdate()->firstOrFail();
     }
 
+    public function providerRefundIdExists(string $provider, string $providerRefundId, int $exceptRefundId): bool
+    {
+        return RefundTransaction::where('provider', $provider)
+            ->where('provider_refund_id', $providerRefundId)
+            ->whereKeyNot($exceptRefundId)
+            ->exists();
+    }
+
     /**
      * Save refund model after in-memory changes.
      */

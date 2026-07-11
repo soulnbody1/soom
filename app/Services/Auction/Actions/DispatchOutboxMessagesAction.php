@@ -30,7 +30,7 @@ final class DispatchOutboxMessagesAction
             }
 
             try {
-                Event::dispatch(new AuctionOutboxEvent(
+                $responses = Event::dispatch(new AuctionOutboxEvent(
                     eventId: $message->event_id ?: $message->public_id,
                     topic: $message->topic,
                     eventType: $message->event_type,
@@ -38,6 +38,10 @@ final class DispatchOutboxMessagesAction
                     aggregateId: $message->aggregate_id,
                     payload: $message->payload ?? [],
                 ));
+
+                if (! in_array(true, $responses, true)) {
+                    throw new \RuntimeException('No outbox consumer handled the message.');
+                }
 
                 $this->outbox->markAsPublished($message);
                 $count++;

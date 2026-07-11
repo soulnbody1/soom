@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories\Auction;
 
 use App\Models\Auction\AuctionSettlement;
+use Illuminate\Support\Carbon;
 
 final class AuctionSettlementRepository
 {
@@ -15,6 +16,7 @@ final class AuctionSettlementRepository
     public function lockSettlement(int $auctionId): AuctionSettlement
     {
         return AuctionSettlement::where('auction_id', $auctionId)
+            ->where('current_marker', 1)
             ->lockForUpdate()
             ->firstOrFail();
     }
@@ -27,6 +29,16 @@ final class AuctionSettlementRepository
     {
         return AuctionSettlement::where('auction_id', $auctionId)
             ->where('winner_id', $winnerId)
+            ->where('current_marker', 1)
+            ->first();
+    }
+
+    public function lockByAuctionAndWinner(int $auctionId, int $winnerId): ?AuctionSettlement
+    {
+        return AuctionSettlement::where('auction_id', $auctionId)
+            ->where('winner_id', $winnerId)
+            ->where('current_marker', 1)
+            ->lockForUpdate()
             ->first();
     }
 
@@ -36,7 +48,32 @@ final class AuctionSettlementRepository
      */
     public function createSettlement(array $attributes): AuctionSettlement
     {
-        return AuctionSettlement::create($attributes);
+        $current = AuctionSettlement::where('auction_id', $attributes['auction_id'])
+            ->where('current_marker', 1)
+            ->lockForUpdate()
+            ->first();
+
+        $sequence = ((int) AuctionSettlement::where('auction_id', $attributes['auction_id'])->max('sequence_number')) + 1;
+
+        if ($current) {
+            $current->forceFill([
+                'is_current' => false,
+                'current_marker' => null,
+                'superseded_at' => Carbon::now(),
+            ])->save();
+        }
+
+        $amountDue = (int) $attributes['amount_due_minor'];
+        $amountPaid = (int) ($attributes['amount_paid_minor'] ?? 0);
+
+        return AuctionSettlement::create(array_merge($attributes, [
+            'sequence_number' => $sequence,
+            'is_current' => true,
+            'current_marker' => 1,
+            'previous_settlement_id' => $attributes['previous_settlement_id'] ?? $current?->id,
+            'amount_paid_minor' => $amountPaid,
+            'remaining_amount_minor' => max(0, $amountDue - $amountPaid),
+        ]));
     }
 
     /**

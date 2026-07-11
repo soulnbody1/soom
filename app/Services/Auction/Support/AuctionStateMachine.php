@@ -42,21 +42,25 @@ final class AuctionStateMachine
         AuctionStatus::Ended->value => [
             AuctionStatus::Unsold,
             AuctionStatus::SettlementPending,
+            AuctionStatus::Cancelled,
             AuctionStatus::Disputed,
         ],
         AuctionStatus::SettlementPending->value => [
             AuctionStatus::PaymentPending,
             AuctionStatus::HandoverPending,
             AuctionStatus::Defaulted,
+            AuctionStatus::Cancelled,
             AuctionStatus::Disputed,
         ],
         AuctionStatus::PaymentPending->value => [
             AuctionStatus::HandoverPending,
             AuctionStatus::Defaulted,
+            AuctionStatus::Cancelled,
             AuctionStatus::Disputed,
         ],
         AuctionStatus::HandoverPending->value => [
             AuctionStatus::Completed,
+            AuctionStatus::Cancelled,
             AuctionStatus::Disputed,
         ],
         AuctionStatus::Defaulted->value => [
