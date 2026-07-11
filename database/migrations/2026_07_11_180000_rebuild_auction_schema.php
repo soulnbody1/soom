@@ -12,9 +12,6 @@ return new class extends Migration
         }
 
         $this->dropAuctionTables();
-
-        $initialSchema = require database_path('migrations/2025_06_12_090000_create_auctions_table.php');
-        $initialSchema->up();
     }
 
     public function down(): void

@@ -5,7 +5,7 @@ declare(strict_types=1);
 test('auction financial code does not use floating point types or casts', function () {
     $paths = [
         app_path('Domain/Auction'),
-        app_path('Application/Auction'),
+        app_path('Services/Auction'),
         app_path('Models/Auction'),
         app_path('Http/Controllers/Auction'),
         app_path('Http/Requests/Auction'),
@@ -32,11 +32,11 @@ test('auction financial code does not use floating point types or casts', functi
 
 test('legacy auction table names are not referenced by application code', function () {
     $legacy = [
-        'payment' . '_slips',
-        'auction' . '_rules',
-        'auctions' . '_configurations',
-        'auction' . '_images',
-        'is' . '_winning',
+        'payment'.'_slips',
+        'auction'.'_rules',
+        'auctions'.'_configurations',
+        'auction'.'_images',
+        'is'.'_winning',
     ];
     $violations = [];
 
@@ -49,7 +49,7 @@ test('legacy auction table names are not referenced by application code', functi
             $contents = file_get_contents($file->getPathname());
             foreach ($legacy as $needle) {
                 if (str_contains($contents, $needle)) {
-                    $violations[] = $file->getPathname() . ':' . $needle;
+                    $violations[] = $file->getPathname().':'.$needle;
                 }
             }
         }

@@ -1,13 +1,12 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Console\Scheduling\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 app(Schedule::class)->command('reels:cleanup')->hourly();
-
-
-
+app(Schedule::class)->command('auction:run-operations')->everyMinute()->withoutOverlapping();
+app(Schedule::class)->command('auction:reconcile')->everyFifteenMinutes()->withoutOverlapping();

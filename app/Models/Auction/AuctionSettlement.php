@@ -30,6 +30,8 @@ final class AuctionSettlement extends Model
         'payment_due_at',
         'handover_due_at',
         'paid_at',
+        'seller_handover_confirmed_at',
+        'buyer_receipt_confirmed_at',
         'handover_completed_at',
         'completed_at',
     ];
@@ -39,6 +41,8 @@ final class AuctionSettlement extends Model
         'payment_due_at' => 'immutable_datetime',
         'handover_due_at' => 'immutable_datetime',
         'paid_at' => 'immutable_datetime',
+        'seller_handover_confirmed_at' => 'immutable_datetime',
+        'buyer_receipt_confirmed_at' => 'immutable_datetime',
         'handover_completed_at' => 'immutable_datetime',
         'completed_at' => 'immutable_datetime',
     ];

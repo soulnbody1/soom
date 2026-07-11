@@ -21,6 +21,20 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Soom Auction Operations
+
+The auction subsystem is isolated under `App\Domain\Auction`, `App\Services\Auction`, `App\Models\Auction`, `App\Http\Controllers\Auction`, and `routes/api/auction.php`.
+
+Operational checklist:
+
+- Run normal migrations with `php artisan migrate`. Do not use `migrate:fresh` for auction rollout; the auction migrations only drop known legacy auction tables when an incompatible legacy auction schema is detected.
+- Run the scheduler with Laravel's normal scheduler process. `routes/console.php` registers `auction:run-operations` every minute and `auction:reconcile` every fifteen minutes.
+- Run a queue worker for auction jobs: `php artisan queue:work --tries=3`.
+- Configure private payment receipt storage with the `spaces_private` disk. Payment receipt uploads use private object storage and authorized temporary URLs.
+- Review manual payment submissions through `api/admin/auctions/payment-submissions/{paymentSubmission}/review`; payment methods are addressed by public ULID, not database IDs.
+- Process outbox messages through the scheduled `auction:run-operations` command. Outbox rows are leased before dispatch and publish `App\Events\Auction\AuctionOutboxEvent`.
+- Exercise the hot bid path with k6: `k6 run load-tests/auction-hot-bid.js -e BASE_URL=http://127.0.0.1:8000 -e AUCTION_ID=<public-id> -e AUTH_TOKEN=<token>`.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

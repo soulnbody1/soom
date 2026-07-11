@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands\Auction;
 
-use App\Application\Auction\Actions\ReconcileAuctionsAction;
+use App\Services\Auction\Actions\ReconcileAuctionsAction;
 use Illuminate\Console\Command;
 
 final class ReconcileAuctionsCommand extends Command

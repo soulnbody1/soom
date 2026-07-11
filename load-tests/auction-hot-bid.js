@@ -41,7 +41,9 @@ export function placeBid() {
     return;
   }
 
-  const amount = (100 + Math.floor(Math.random() * 5000) / 100).toFixed(2);
+  const minor = 10000 + Math.floor(Math.random() * 500000);
+  const amountText = String(minor).padStart(3, '0');
+  const amount = `${amountText.slice(0, -2)}.${amountText.slice(-2)}`;
   const payload = JSON.stringify({
     amount,
     currency_code: __ENV.CURRENCY || 'JOD',
@@ -57,6 +59,6 @@ export function placeBid() {
   });
 
   check(res, {
-    'bid accepted or business rejected': (r) => [201, 422].includes(r.status),
+    'bid accepted': (r) => r.status === 201,
   });
 }

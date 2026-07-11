@@ -4,39 +4,37 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
-use App\Application\Auction\Actions\PlaceBidAction;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\PlaceBidRequest;
 use App\Http\Resources\Auction\AuctionBidResource;
 use App\Models\Auction\Auction;
-use App\Models\Auction\AuctionBid;
+use App\Services\Auction\Actions\ListAuctionBidsAction;
+use App\Services\Auction\Actions\ListUserBidsAction;
+use App\Services\Auction\Actions\PlaceBidAction;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 
 final class BidController extends Controller
 {
     use ApiResponseTrait;
 
-    public function index(AuctionIndexRequest $request, Auction $auction): JsonResponse
+    public function index(AuctionIndexRequest $request, Auction $auction, ListAuctionBidsAction $action): JsonResponse
     {
         return $this->sendResponse(
-            AuctionBidResource::collection(
-                AuctionBid::with(['bidder', 'auction'])
-                    ->where('auction_id', $auction->id)
-                    ->orderByDesc('amount_minor')
-                    ->orderBy('sequence_number')
-                    ->paginate($request->perPage())
-            ),
-            'Auction bids fetched.'
+            AuctionBidResource::collection($action->execute($auction, $request->perPage())),
+            __('auction.messages.auction_bids_fetched')
         );
     }
 
     public function store(PlaceBidRequest $request, Auction $auction, PlaceBidAction $action): JsonResponse
     {
         try {
+            Gate::authorize('bid', $auction);
+
             $data = $request->validated();
             $bid = $action->execute(
                 $auction,
@@ -47,22 +45,17 @@ final class BidController extends Controller
                 $data['client_request_id'] ?? null
             );
 
-            return $this->sendResponse(new AuctionBidResource($bid), 'Bid accepted.', 201);
+            return $this->sendResponse(new AuctionBidResource($bid), __('auction.messages.bid_accepted'), 201);
         } catch (AuctionException $exception) {
             return $this->sendError($exception->getMessage(), 422);
         }
     }
 
-    public function mine(AuctionIndexRequest $request): JsonResponse
+    public function mine(AuctionIndexRequest $request, ListUserBidsAction $action): JsonResponse
     {
         return $this->sendResponse(
-            AuctionBidResource::collection(
-                AuctionBid::with(['auction.media', 'bidder'])
-                    ->where('bidder_id', Auth::id())
-                    ->latest('id')
-                    ->paginate($request->perPage())
-            ),
-            'My bids fetched.'
+            AuctionBidResource::collection($action->execute(Auth::id(), $request->perPage())),
+            __('auction.messages.my_bids_fetched')
         );
     }
 }

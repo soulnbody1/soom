@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
-use App\Application\Auction\Actions\FinalizeAuctionAction;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Models\Auction\Auction;
+use App\Services\Auction\Actions\FinalizeAuctionAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;

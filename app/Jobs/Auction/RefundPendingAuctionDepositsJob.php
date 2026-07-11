@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
-use App\Application\Auction\Actions\RefundAuctionDepositAction;
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Models\Auction\AuctionDeposit;
+use App\Services\Auction\Actions\RefundAuctionDepositAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 

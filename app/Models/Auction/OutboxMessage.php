@@ -14,6 +14,7 @@ final class OutboxMessage extends Model
 
     protected $fillable = [
         'public_id',
+        'event_id',
         'topic',
         'event_type',
         'aggregate_type',
@@ -22,6 +23,10 @@ final class OutboxMessage extends Model
         'status',
         'attempts',
         'available_at',
+        'locked_at',
+        'locked_by',
+        'processed_at',
+        'failed_at',
         'published_at',
         'last_error',
     ];
@@ -30,6 +35,9 @@ final class OutboxMessage extends Model
         'payload' => 'array',
         'status' => OutboxStatus::class,
         'available_at' => 'immutable_datetime',
+        'locked_at' => 'immutable_datetime',
+        'processed_at' => 'immutable_datetime',
+        'failed_at' => 'immutable_datetime',
         'published_at' => 'immutable_datetime',
     ];
 }

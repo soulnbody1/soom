@@ -6,53 +6,43 @@ namespace App\Http\Controllers\Auction;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\CreateTermsVersionRequest;
-use App\Models\Auction\AuctionTermsVersion;
+use App\Models\Auction\Auction;
+use App\Services\Auction\Actions\CreateAuctionTermsVersionAction;
+use App\Services\Auction\Actions\ListAuctionTermsAction;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 
 final class AuctionTermsController extends Controller
 {
     use ApiResponseTrait;
 
-    public function index(): JsonResponse
+    public function index(ListAuctionTermsAction $action): JsonResponse
     {
         return $this->sendResponse(
-            AuctionTermsVersion::latest('version_number')->get()->map(fn (AuctionTermsVersion $terms) => [
-                'id' => $terms->public_id,
-                'version_number' => $terms->version_number,
-                'title' => $terms->title,
-                'is_active' => $terms->is_active,
-                'published_at' => $terms->published_at?->toIso8601String(),
-            ]),
-            'Auction terms fetched.'
+            $action->execute(),
+            __('auction.messages.terms_fetched')
         );
     }
 
-    public function store(CreateTermsVersionRequest $request): JsonResponse
+    public function store(CreateTermsVersionRequest $request, CreateAuctionTermsVersionAction $action): JsonResponse
     {
-        $next = ((int) AuctionTermsVersion::max('version_number')) + 1;
+        Gate::authorize('viewAny', Auction::class);
+
         $publish = (bool) $request->boolean('publish', true);
-
-        if ($publish) {
-            AuctionTermsVersion::query()->update(['is_active' => false]);
-        }
-
-        $terms = AuctionTermsVersion::create([
-            'version_number' => $next,
-            'title' => $request->validated('title'),
-            'body' => $request->validated('body'),
-            'is_active' => $publish,
-            'created_by' => Auth::id(),
-            'published_at' => $publish ? Carbon::now() : null,
-        ]);
+        $terms = $action->execute(
+            (string) $request->validated('title'),
+            (string) $request->validated('body'),
+            $publish,
+            Auth::id()
+        );
 
         return $this->sendResponse([
             'id' => $terms->public_id,
             'version_number' => $terms->version_number,
             'title' => $terms->title,
             'is_active' => $terms->is_active,
-        ], 'Auction terms version created.', 201);
+        ], __('auction.messages.terms_version_created'), 201);
     }
 }

@@ -32,7 +32,9 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
         Route::post('/{auction}/bidder-deposit', [AuctionController::class, 'submitBidderDeposit']);
         Route::post('/{auction}/bids', [BidController::class, 'store']);
         Route::post('/{auction}/winner-payment', [AuctionController::class, 'submitWinnerPayment']);
-        Route::post('/{auction}/complete-handover', [AuctionController::class, 'completeHandover']);
+        Route::post('/{auction}/confirm-handover', [AuctionController::class, 'confirmSellerHandover']);
+        Route::post('/{auction}/confirm-receipt', [AuctionController::class, 'confirmWinnerReceipt']);
+        Route::post('/{auction}/disputes', [AuctionController::class, 'openDispute']);
         Route::delete('/{auction}', [AuctionController::class, 'cancel']);
     });
 });
@@ -43,6 +45,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
     Route::post('/{auction}/review', [AuctionController::class, 'review']);
+    Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
+    Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);
     Route::get('/payment-submissions', [PaymentSubmissionController::class, 'index']);
+    Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
     Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review']);
 });

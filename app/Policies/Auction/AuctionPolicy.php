@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Policies\Auction;
+
+use App\Domain\Auction\Enums\AuctionStatus;
+use App\Models\Auction\Auction;
+use App\Models\User;
+use App\Policies\Auction\Concerns\ChecksAuctionPermissions;
+
+final class AuctionPolicy
+{
+    use ChecksAuctionPermissions;
+
+    public function view(?User $user, Auction $auction): bool
+    {
+        return $auction->status->isPubliclyVisible()
+            || ($user && ($user->id === $auction->seller_id || $this->hasAuctionPermission($user, 'auction.review')));
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->role === 'user' || $user->role === 'admin';
+    }
+
+    public function viewAny(User $user): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.review');
+    }
+
+    public function submitForReview(User $user, Auction $auction): bool
+    {
+        return $user->id === $auction->seller_id
+            && in_array($auction->status, [AuctionStatus::Draft, AuctionStatus::Rejected], true);
+    }
+
+    public function review(User $user, Auction $auction): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.review');
+    }
+
+    public function approve(User $user, Auction $auction): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.approve');
+    }
+
+    public function cancel(User $user, Auction $auction): bool
+    {
+        if ($this->hasAuctionPermission($user, 'auction.cancel')) {
+            return true;
+        }
+
+        return $user->id === $auction->seller_id
+            && in_array($auction->status, [AuctionStatus::Draft, AuctionStatus::PendingReview, AuctionStatus::Rejected], true);
+    }
+
+    public function register(User $user, Auction $auction): bool
+    {
+        return $user->id !== $auction->seller_id
+            && in_array($auction->status, [AuctionStatus::Scheduled, AuctionStatus::Live], true);
+    }
+
+    public function bid(User $user, Auction $auction): bool
+    {
+        return $user->id !== $auction->seller_id && $auction->status === AuctionStatus::Live;
+    }
+
+    public function confirmSellerHandover(User $user, Auction $auction): bool
+    {
+        return $user->id === $auction->seller_id;
+    }
+
+    public function confirmWinnerReceipt(User $user, Auction $auction): bool
+    {
+        return $auction->settlement?->winner_id === $user->id;
+    }
+
+    public function openDispute(User $user, Auction $auction): bool
+    {
+        return $user->id === $auction->seller_id
+            || $auction->settlement?->winner_id === $user->id;
+    }
+
+    public function resolveDispute(User $user, Auction $auction): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.dispute.resolve');
+    }
+}

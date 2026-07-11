@@ -10,7 +10,7 @@ final class AuctionException extends RuntimeException
 {
     public static function invalidTransition(string $from, string $to): self
     {
-        return new self("Auction cannot transition from {$from} to {$to}.");
+        return new self(__('auction.errors.invalid_transition', ['from' => $from, 'to' => $to]));
     }
 
     public static function bidRejected(string $reason): self

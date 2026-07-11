@@ -4,33 +4,30 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
-use App\Application\Auction\Actions\ReviewPaymentSubmissionAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\ReviewPaymentSubmissionRequest;
 use App\Http\Resources\Auction\PaymentSubmissionResource;
 use App\Models\Auction\PaymentSubmission;
+use App\Services\Auction\Actions\ListPaymentSubmissionsAction;
+use App\Services\Auction\Actions\ReviewPaymentSubmissionAction;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 
 final class PaymentSubmissionController extends Controller
 {
     use ApiResponseTrait;
 
-    public function index(AuctionIndexRequest $request): JsonResponse
+    public function index(AuctionIndexRequest $request, ListPaymentSubmissionsAction $action): JsonResponse
     {
-        if ($request->user()?->role !== 'admin') {
-            return $this->sendError('Forbidden.', 403);
-        }
+        Gate::authorize('viewAny', PaymentSubmission::class);
 
         return $this->sendResponse(
-            PaymentSubmissionResource::collection(
-                PaymentSubmission::with(['auction', 'paymentMethod', 'deposit', 'settlement'])
-                    ->latest('id')
-                    ->paginate($request->perPage())
-            ),
-            'Payment submissions fetched.'
+            PaymentSubmissionResource::collection($action->execute($request->perPage())),
+            __('auction.messages.payment_submissions_fetched')
         );
     }
 
@@ -40,10 +37,29 @@ final class PaymentSubmissionController extends Controller
         ReviewPaymentSubmissionAction $action
     ): JsonResponse {
         $data = $request->validated();
+        Gate::authorize($data['action'] === 'approve' ? 'approve' : 'reject', $paymentSubmission);
+
         $submission = $data['action'] === 'approve'
             ? $action->approve($paymentSubmission, Auth::id(), (string) ($data['note'] ?? 'approved'))
             : $action->reject($paymentSubmission, Auth::id(), (string) $data['note']);
 
-        return $this->sendResponse(new PaymentSubmissionResource($submission), 'Payment submission reviewed.');
+        return $this->sendResponse(new PaymentSubmissionResource($submission), __('auction.messages.payment_submission_reviewed'));
+    }
+
+    public function receiptUrl(PaymentSubmission $paymentSubmission): JsonResponse
+    {
+        Gate::authorize('viewReceipt', $paymentSubmission);
+
+        try {
+            $url = Storage::disk($paymentSubmission->receipt_disk)
+                ->temporaryUrl($paymentSubmission->receipt_path, now()->addMinutes(10));
+        } catch (\Throwable) {
+            return $this->sendError(__('auction.errors.receipt_url_unavailable'), 404);
+        }
+
+        return $this->sendResponse([
+            'url' => $url,
+            'expires_at' => now()->addMinutes(10)->toIso8601String(),
+        ], __('auction.messages.payment_receipt_url_created'));
     }
 }

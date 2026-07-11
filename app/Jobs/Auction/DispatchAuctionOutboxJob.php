@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
-use App\Application\Auction\Actions\DispatchOutboxMessagesAction;
+use App\Services\Auction\Actions\DispatchOutboxMessagesAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 

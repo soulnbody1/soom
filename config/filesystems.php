@@ -41,7 +41,7 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => env('APP_URL') . '/storage',
+            'url' => env('APP_URL').'/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,
@@ -62,7 +62,7 @@ return [
         'cloudinary' => [
             'driver' => 'cloudinary',
             'cloud' => env('CLOUDINARY_CLOUD_NAME'),
-            'key'    => env('CLOUDINARY_API_KEY'),
+            'key' => env('CLOUDINARY_API_KEY'),
             'secret' => env('CLOUDINARY_API_SECRET'),
             'secure' => env('CLOUDINARY_SECURE', true),
         ],
@@ -76,9 +76,17 @@ return [
             'url' => env('DO_SPACES_URL', 'https://soom.sfo3.digitaloceanspaces.com'),
             'visibility' => 'public',
         ],
-
-
-
+        'spaces_private' => [
+            'driver' => 's3',
+            'key' => env('DO_SPACES_KEY'),
+            'secret' => env('DO_SPACES_SECRET'),
+            'endpoint' => env('DO_SPACES_ENDPOINT'),
+            'region' => env('DO_SPACES_REGION'),
+            'bucket' => env('DO_SPACES_BUCKET'),
+            'url' => env('DO_SPACES_URL', 'https://soom.sfo3.digitaloceanspaces.com'),
+            'visibility' => 'private',
+            'throw' => true,
+        ],
 
     ],
 
