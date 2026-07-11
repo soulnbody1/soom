@@ -94,12 +94,10 @@ final class ReviewPaymentSubmissionAction
             if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
                 $settlement = $this->payments->lockSubmissionSettlement($submission);
 
-                // Verify winner hasn't changed since submission
                 if ($settlement->winner_id !== $submission->user_id) {
                     throw new AuctionException(__('auction.errors.winner_changed'));
                 }
 
-                // Verify settlement isn't already fully paid
                 if ($settlement->status === SettlementStatus::Paid) {
                     throw new AuctionException(__('auction.errors.payment_already_processed'));
                 }

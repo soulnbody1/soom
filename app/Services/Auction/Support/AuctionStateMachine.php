@@ -19,7 +19,7 @@ final class AuctionStateMachine
         AuctionStatus::PendingReview->value => [
             AuctionStatus::Rejected,
             AuctionStatus::AwaitingSellerDeposit,
-            AuctionStatus::Scheduled, // when seller_deposit = 0
+            AuctionStatus::Scheduled,
             AuctionStatus::Cancelled,
         ],
         AuctionStatus::Rejected->value => [
@@ -46,7 +46,7 @@ final class AuctionStateMachine
         ],
         AuctionStatus::SettlementPending->value => [
             AuctionStatus::PaymentPending,
-            AuctionStatus::HandoverPending, // when remaining_amount = 0
+            AuctionStatus::HandoverPending,
             AuctionStatus::Defaulted,
             AuctionStatus::Disputed,
         ],
@@ -60,9 +60,9 @@ final class AuctionStateMachine
             AuctionStatus::Disputed,
         ],
         AuctionStatus::Defaulted->value => [
-            AuctionStatus::PaymentPending, // alternative winner with balance
-            AuctionStatus::HandoverPending, // alternative winner fully paid by deposit
-            AuctionStatus::Unsold, // no eligible alternative
+            AuctionStatus::PaymentPending,
+            AuctionStatus::HandoverPending,
+            AuctionStatus::Unsold,
         ],
         AuctionStatus::Disputed->value => [
             AuctionStatus::PaymentPending,

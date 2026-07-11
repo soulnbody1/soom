@@ -9,10 +9,6 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use InvalidArgumentException;
 
-/**
- * Validates decimal amount precision based on currency exponent.
- * JOD: up to 3 decimal places. EGP/USD: up to 2.
- */
 final class CurrencyDecimalRule implements ValidationRule
 {
     public function __construct(

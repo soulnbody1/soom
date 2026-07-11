@@ -108,15 +108,12 @@ final class PlaceBidAction
                     'accepted_at' => $now,
                 ]);
             } catch (QueryException $e) {
-                // Only treat as idempotent duplicate if it's a unique constraint violation
-                // SQLSTATE 23000 = Integrity constraint violation, MySQL error 1062 = Duplicate entry
                 if ($e->errorInfo[0] === '23000' && ($e->errorInfo[1] ?? 0) == 1062) {
                     $bid = $this->bids->findByIdempotencyKey($auction->id, $bidderId, $idempotencyKey);
                     if ($bid) {
                         return $bid->load(['auction.currentLeadingBid', 'bidder']);
                     }
                 }
-                // Deadlock, FK violation, or other SQL error — rethrow
                 throw $e;
             }
 

@@ -35,8 +35,6 @@ final class AuctionConfigurationVersion extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    // ─── Virtual Accessors for JSON configuration ───────────
-
     public function getSellerDepositMinorAttribute(): int
     {
         return (int) ($this->configuration['seller_deposit_minor'] ?? 0);

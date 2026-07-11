@@ -34,16 +34,4 @@ final class StoreAuctionRequest extends FormRequest
             'media.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
-
-    /**
-     * Platform-controlled fields are NOT accepted from the seller.
-     * They come from AuctionConfigurationVersion.
-     *
-     * Removed from seller input:
-     * - platform_fee_type, platform_fee_basis_points, platform_fee_fixed_amount
-     * - seller_deposit_amount, bidder_deposit_amount
-     * - minimum_bid_increment (comes from config)
-     * - winner_payment_deadline_hours, handover_deadline_hours
-     * - extension_window_seconds, extension_duration_seconds, maximum_extension_count
-     */
 }

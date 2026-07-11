@@ -86,7 +86,6 @@ final class AuctionController extends Controller
         $loaded = $action->execute($auction);
         $user = $request->user();
 
-        // Choose resource based on viewer role
         $resource = match (true) {
             $user?->role === 'admin' => new AdminAuctionResource($loaded),
             $user?->id === $auction->seller_id => new SellerAuctionResource($loaded),

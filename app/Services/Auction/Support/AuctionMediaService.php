@@ -8,16 +8,10 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionMedia;
 use Illuminate\Http\UploadedFile;
 
-/**
- * Handles media file storage for auctions.
- * Encapsulates Storage/UploadedFile operations away from Actions/Controllers.
- */
 final class AuctionMediaService
 {
     /**
-     * Store uploaded media files for an auction.
-     *
-     * @param  array<int, UploadedFile>  $media
+     * @param array<int, UploadedFile> $media
      */
     public function storeAuctionMedia(Auction $auction, array $media): void
     {

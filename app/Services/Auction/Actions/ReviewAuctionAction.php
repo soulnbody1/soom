@@ -24,7 +24,6 @@ final class ReviewAuctionAction
         return $this->transaction->run(function () use ($auction, $adminId, $reason): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
 
-            // If seller deposit is zero, skip AwaitingSellerDeposit → go directly to Scheduled
             $targetStatus = $auction->seller_deposit_amount_minor > 0
                 ? AuctionStatus::AwaitingSellerDeposit
                 : AuctionStatus::Scheduled;

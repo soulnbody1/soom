@@ -44,13 +44,11 @@ final class MarkWinnerDefaultedAction
             $settlement = $this->settlements->lockSettlement($auction->id);
             $defaultedUserId = $settlement->winner_id;
 
-            // Mark current settlement as Defaulted (preserve history, do NOT reuse)
             $settlement->forceFill([
                 'status' => SettlementStatus::Defaulted,
             ]);
             $this->settlements->save($settlement);
 
-            // Forfeit defaulted winner's deposit
             $winnerDeposit = $this->deposits->lockDepositForForfeiture($auction->id, $defaultedUserId);
             if ($winnerDeposit && $winnerDeposit->held_amount_minor > 0) {
                 $winnerDeposit->forceFill([
@@ -80,18 +78,12 @@ final class MarkWinnerDefaultedAction
                 }
             }
 
-            // No eligible alternative → transition to Defaulted or Unsold
             return $this->stateMachine->transition($auction, AuctionStatus::Defaulted, $adminId, 'admin', $reason);
         });
     }
 
-    /**
-     * Find the next eligible bid, excluding ALL bids from the defaulted bidder.
-     * Also validates the alternative bidder is still eligible.
-     */
     private function findEligibleAlternativeBid(Auction $auction, int $defaultedUserId): ?AuctionBid
     {
-        // Get all bids ordered by amount desc, sequence asc, EXCLUDING defaulted user entirely
         $candidates = AuctionBid::where('auction_id', $auction->id)
             ->where('bidder_id', '!=', $defaultedUserId)
             ->orderByDesc('amount_minor')
@@ -100,19 +92,16 @@ final class MarkWinnerDefaultedAction
             ->get();
 
         foreach ($candidates as $candidateBid) {
-            // Check participant is still qualified
             $participant = $candidateBid->participant;
             if (! $participant || $participant->status !== AuctionParticipantStatus::Qualified) {
                 continue;
             }
 
-            // Check deposit is still held (not refunded)
             $deposit = $this->deposits->lockWinnerDeposit($auction->id, $candidateBid->bidder_id);
             if (! $deposit || $deposit->status !== AuctionDepositStatus::Held || $deposit->held_amount_minor <= 0) {
                 continue;
             }
 
-            // Check terms acceptance
             if ($participant->terms_accepted_at === null) {
                 continue;
             }
@@ -123,10 +112,6 @@ final class MarkWinnerDefaultedAction
         return null;
     }
 
-    /**
-     * Create a NEW settlement for the alternative winner.
-     * Never reuses the old defaulted settlement.
-     */
     private function assignAlternativeWinner(
         Auction $auction,
         $defaultedSettlement,
@@ -136,7 +121,6 @@ final class MarkWinnerDefaultedAction
     ): Auction {
         $now = Carbon::now();
 
-        // Calculate new settlement financials
         $winningAmount = $newBid->amount_minor;
         $deposit = $this->deposits->lockWinnerDeposit($auction->id, $newBid->bidder_id);
         $depositApplied = $deposit ? min($deposit->held_amount_minor, $winningAmount) : 0;
@@ -144,7 +128,6 @@ final class MarkWinnerDefaultedAction
         $sellerNet = $winningAmount - $platformFee;
         $amountDue = max(0, $winningAmount - $depositApplied);
 
-        // Record reassignment
         AuctionWinnerReassignment::create([
             'auction_id' => $auction->id,
             'from_bid_id' => $defaultedSettlement->winning_bid_id,
@@ -160,7 +143,6 @@ final class MarkWinnerDefaultedAction
             'created_at' => $now,
         ]);
 
-        // Create NEW settlement (never reuse old one)
         $newSettlement = $this->settlements->createSettlement([
             'auction_id' => $auction->id,
             'winning_bid_id' => $newBid->id,
@@ -178,7 +160,6 @@ final class MarkWinnerDefaultedAction
                 : null,
         ]);
 
-        // Apply deposit if exists
         if ($deposit && $depositApplied > 0) {
             $deposit->forceFill([
                 'status' => AuctionDepositStatus::AppliedToSettlement,
@@ -207,16 +188,12 @@ final class MarkWinnerDefaultedAction
         return $this->stateMachine->transition($auction, $targetStatus, $adminId, 'admin', $reason);
     }
 
-    /**
-     * Calculate platform fee using auction's snapshotted configuration.
-     */
     private function calculatePlatformFee(Auction $auction, int $winningAmountMinor): int
     {
         if ($auction->platform_fee_type === 'fixed') {
             return $auction->platform_fee_fixed_minor;
         }
 
-        // Percentage: basis_points / 10000 * amount, integer arithmetic
         return (int) (($winningAmountMinor * $auction->platform_fee_basis_points) / 10000);
     }
 }

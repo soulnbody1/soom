@@ -68,7 +68,6 @@ final class FinalizeAuctionAction
             $sellerNet = max(0, $winningBid->amount_minor - $platformFee);
             $amountDue = $winningBid->amount_minor - $depositApplied;
 
-            // Determine settlement status based on remaining amount
             $settlementStatus = $amountDue > 0
                 ? SettlementStatus::PaymentPending
                 : SettlementStatus::Paid;
@@ -100,7 +99,6 @@ final class FinalizeAuctionAction
                 $this->deposits->save($winnerDeposit);
             }
 
-            // If deposit exceeds winning amount, mark excess for refund
             if ($depositExcess > 0 && $winnerDeposit) {
                 $winnerDeposit->forceFill([
                     'status' => AuctionDepositStatus::RefundPending,
@@ -113,7 +111,6 @@ final class FinalizeAuctionAction
             $this->deposits->markNonWinnerDepositsRefundPending($auction->id, $winningBid->bidder_id);
             $this->stateMachine->transition($auction, AuctionStatus::SettlementPending, null, 'system', 'winning bid selected');
 
-            // If remaining = 0, skip PaymentPending → go to HandoverPending
             $nextStatus = $amountDue > 0
                 ? AuctionStatus::PaymentPending
                 : AuctionStatus::HandoverPending;
