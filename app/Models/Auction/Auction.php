@@ -32,6 +32,7 @@ final class Auction extends Model
         'state_id',
         'city_id',
         'terms_version_id',
+        'configuration_version_id',
         'currency_code',
         'title',
         'description',
@@ -112,6 +113,11 @@ final class Auction extends Model
         return $this->belongsTo(AuctionTermsVersion::class, 'terms_version_id');
     }
 
+    public function configurationVersion(): BelongsTo
+    {
+        return $this->belongsTo(AuctionConfigurationVersion::class, 'configuration_version_id');
+    }
+
     public function media(): HasMany
     {
         return $this->hasMany(AuctionMedia::class)->orderBy('sort_order');
@@ -155,6 +161,21 @@ final class Auction extends Model
     public function metric(): HasOne
     {
         return $this->hasOne(AuctionMetric::class);
+    }
+
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(AuctionDispute::class);
+    }
+
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(AuctionStatusHistory::class);
+    }
+
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(AuctionActivityLog::class);
     }
 
     public function scopePublic($query)

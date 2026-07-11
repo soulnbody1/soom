@@ -28,6 +28,11 @@ class Handler extends ExceptionHandler
                     'message' => $e->getMessage() ?: 'حدث خطأ في الطلب',
                 ], $e->getStatusCode());
             }
+            if ($e instanceof \App\Domain\Auction\Exceptions\AuctionException) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                ], $e->getStatusCode());
+            }
             return response()->json([
                 'message' => 'حدث خطأ غير متوقع',
                 'error' => $e->getMessage(),

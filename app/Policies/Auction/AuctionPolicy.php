@@ -68,16 +68,23 @@ final class AuctionPolicy
 
     public function confirmSellerHandover(User $user, Auction $auction): bool
     {
-        return $user->id === $auction->seller_id;
+        return $user->id === $auction->seller_id
+            && $auction->status === AuctionStatus::HandoverPending;
     }
 
     public function confirmWinnerReceipt(User $user, Auction $auction): bool
     {
-        return $auction->settlement?->winner_id === $user->id;
+        return $auction->status === AuctionStatus::HandoverPending
+            && $auction->settlement?->winner_id === $user->id;
     }
 
     public function openDispute(User $user, Auction $auction): bool
     {
+        $allowedStatuses = [AuctionStatus::Live, AuctionStatus::Ended, AuctionStatus::HandoverPending, AuctionStatus::PaymentPending];
+        if (! in_array($auction->status, $allowedStatuses, true)) {
+            return false;
+        }
+
         return $user->id === $auction->seller_id
             || $auction->settlement?->winner_id === $user->id;
     }

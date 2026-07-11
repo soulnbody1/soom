@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auction;
 
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\DTO\Auction\CreateAuctionInputDTO;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\MarkWinnerDefaultedRequest;
@@ -14,10 +15,13 @@ use App\Http\Requests\Auction\PaymentSubmissionRequest;
 use App\Http\Requests\Auction\ResolveAuctionDisputeRequest;
 use App\Http\Requests\Auction\ReviewAuctionRequest;
 use App\Http\Requests\Auction\StoreAuctionRequest;
+use App\Http\Resources\Auction\AdminAuctionResource;
 use App\Http\Resources\Auction\AuctionParticipantResource;
 use App\Http\Resources\Auction\AuctionResource;
 use App\Http\Resources\Auction\AuctionSummaryResource;
 use App\Http\Resources\Auction\PaymentSubmissionResource;
+use App\Http\Resources\Auction\PublicAuctionResource;
+use App\Http\Resources\Auction\SellerAuctionResource;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Services\Auction\Actions\AcceptAuctionTermsAction;
@@ -50,7 +54,7 @@ final class AuctionController extends Controller
     public function index(AuctionIndexRequest $request, ListPublicAuctionsAction $action): JsonResponse
     {
         return $this->sendResponse(
-            AuctionSummaryResource::collection($action->execute(
+            PublicAuctionResource::collection($action->execute(
                 $request->filled('category_id') ? $request->integer('category_id') : null,
                 $request->perPage()
             )),
@@ -63,7 +67,7 @@ final class AuctionController extends Controller
         Gate::authorize('viewAny', Auction::class);
 
         return $this->sendResponse(
-            AuctionResource::collection($action->execute($request->perPage())),
+            AdminAuctionResource::collection($action->execute($request->perPage())),
             __('auction.messages.admin_auctions_fetched')
         );
     }
@@ -79,24 +83,27 @@ final class AuctionController extends Controller
         }
 
         $metrics->recordView($auction, $request->user()?->id, $request->ip(), $request->userAgent());
+        $loaded = $action->execute($auction);
+        $user = $request->user();
 
-        return $this->sendResponse(
-            new AuctionResource($action->execute($auction)),
-            __('auction.messages.auction_fetched')
-        );
+        // Choose resource based on viewer role
+        $resource = match (true) {
+            $user?->role === 'admin' => new AdminAuctionResource($loaded),
+            $user?->id === $auction->seller_id => new SellerAuctionResource($loaded),
+            default => new PublicAuctionResource($loaded),
+        };
+
+        return $this->sendResponse($resource, __('auction.messages.auction_fetched'));
     }
 
     public function store(StoreAuctionRequest $request, CreateAuctionAction $action): JsonResponse
     {
         Gate::authorize('create', Auction::class);
 
-        try {
-            $auction = $action->execute($request->validated(), Auth::id());
+        $input = CreateAuctionInputDTO::fromValidated($request->validated());
+        $auction = $action->execute($input, Auth::id());
 
-            return $this->sendResponse(new AuctionResource($auction), __('auction.messages.auction_created'), 201);
-        } catch (\Throwable $exception) {
-            return $this->sendError($exception->getMessage(), 422);
-        }
+        return $this->sendResponse(new SellerAuctionResource($auction), __('auction.messages.auction_created'), 201);
     }
 
     public function submitForReview(Auction $auction, SubmitAuctionForReviewAction $action): JsonResponse
@@ -272,7 +279,7 @@ final class AuctionController extends Controller
     public function mine(AuctionIndexRequest $request, ListSellerAuctionsAction $action): JsonResponse
     {
         return $this->sendResponse(
-            AuctionResource::collection($action->execute(Auth::id(), $request->perPage())),
+            SellerAuctionResource::collection($action->execute(Auth::id(), $request->perPage())),
             __('auction.messages.seller_auctions_fetched')
         );
     }

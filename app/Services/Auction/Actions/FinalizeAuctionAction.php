@@ -61,31 +61,50 @@ final class FinalizeAuctionAction
 
             $winnerDeposit = $this->deposits->lockWinnerDeposit($auction->id, $winningBid->bidder_id);
 
-            $depositApplied = min($winnerDeposit?->held_amount_minor ?? 0, $winningBid->amount_minor);
+            $depositHeld = $winnerDeposit?->held_amount_minor ?? 0;
+            $depositApplied = min($depositHeld, $winningBid->amount_minor);
+            $depositExcess = max(0, $depositHeld - $depositApplied);
             $platformFee = $this->platformFee($auction, $winningBid->amount_minor);
             $sellerNet = max(0, $winningBid->amount_minor - $platformFee);
+            $amountDue = $winningBid->amount_minor - $depositApplied;
+
+            // Determine settlement status based on remaining amount
+            $settlementStatus = $amountDue > 0
+                ? SettlementStatus::PaymentPending
+                : SettlementStatus::Paid;
 
             $settlement = $this->settlements->createSettlement([
                 'auction_id' => $auction->id,
                 'winning_bid_id' => $winningBid->id,
                 'winner_id' => $winningBid->bidder_id,
-                'status' => SettlementStatus::PaymentPending,
+                'status' => $settlementStatus,
                 'winning_amount_minor' => $winningBid->amount_minor,
                 'deposit_applied_minor' => $depositApplied,
                 'platform_fee_minor' => $platformFee,
                 'seller_net_amount_minor' => $sellerNet,
-                'amount_due_minor' => $winningBid->amount_minor - $depositApplied,
-                'amount_paid_minor' => 0,
+                'amount_due_minor' => $amountDue,
+                'amount_paid_minor' => $depositApplied,
                 'currency_code' => $auction->currency_code,
-                'payment_due_at' => $now->addHours($auction->winner_payment_deadline_hours),
+                'payment_due_at' => $amountDue > 0
+                    ? $now->addHours($auction->winner_payment_deadline_hours)
+                    : null,
             ]);
 
             if ($winnerDeposit && $depositApplied > 0) {
                 $winnerDeposit->forceFill([
                     'status' => AuctionDepositStatus::AppliedToSettlement,
                     'applied_amount_minor' => $depositApplied,
-                    'held_amount_minor' => max(0, $winnerDeposit->held_amount_minor - $depositApplied),
-                    'released_at' => $now,
+                    'held_amount_minor' => $depositExcess,
+                    'released_at' => $depositExcess === 0 ? $now : null,
+                ]);
+                $this->deposits->save($winnerDeposit);
+            }
+
+            // If deposit exceeds winning amount, mark excess for refund
+            if ($depositExcess > 0 && $winnerDeposit) {
+                $winnerDeposit->forceFill([
+                    'status' => AuctionDepositStatus::RefundPending,
+                    'held_amount_minor' => $depositExcess,
                 ]);
                 $this->deposits->save($winnerDeposit);
             }
@@ -93,11 +112,18 @@ final class FinalizeAuctionAction
             $this->auctions->setWinningBid($auction, $winningBid->id);
             $this->deposits->markNonWinnerDepositsRefundPending($auction->id, $winningBid->bidder_id);
             $this->stateMachine->transition($auction, AuctionStatus::SettlementPending, null, 'system', 'winning bid selected');
-            $this->stateMachine->transition($auction->refresh(), AuctionStatus::PaymentPending, null, 'system', 'settlement created');
+
+            // If remaining = 0, skip PaymentPending → go to HandoverPending
+            $nextStatus = $amountDue > 0
+                ? AuctionStatus::PaymentPending
+                : AuctionStatus::HandoverPending;
+            $this->stateMachine->transition($auction->refresh(), $nextStatus, null, 'system', $amountDue > 0 ? 'settlement created' : 'fully paid by deposit');
+
             $this->audit->outbox('auction.finalized', $auction->refresh(), [
                 'auction_public_id' => $auction->public_id,
                 'settlement_public_id' => $settlement->public_id,
                 'winner_id' => $winningBid->bidder_id,
+                'remaining_amount' => $amountDue,
             ]);
 
             return $auction->refresh()->load('settlement');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\DTO\Auction\CreateAuctionRecordDTO;
 use App\Models\Auction\Auction;
 use Illuminate\Support\Collection;
 
@@ -120,5 +121,14 @@ final class AuctionRepository
                 $query->where('status', 'refund_pending');
             })
             ->get();
+    }
+
+    /**
+     * Create a new auction from a trusted persistence DTO.
+     * Platform-controlled fields are already set via configuration snapshot.
+     */
+    public function createFromDTO(CreateAuctionRecordDTO $dto): Auction
+    {
+        return Auction::create($dto->toPersistenceArray());
     }
 }

@@ -124,11 +124,16 @@ class User extends Authenticatable
 
     public function auctionBids(): HasMany
     {
-        return $this->hasMany(AuctionBid::class, 'user_id');
+        return $this->hasMany(AuctionBid::class, 'bidder_id');
     }
 
-    public function wonAuctions(): HasMany
+    public function wonSettlements(): HasMany
     {
-        return $this->hasMany(Auction::class, 'winner_id');
+        return $this->hasMany(\App\Models\Auction\AuctionSettlement::class, 'winner_id');
+    }
+
+    public function auctionParticipants(): HasMany
+    {
+        return $this->hasMany(\App\Models\Auction\AuctionParticipant::class, 'user_id');
     }
 }

@@ -6,8 +6,15 @@ namespace App\Domain\Auction\Exceptions;
 
 use RuntimeException;
 
-final class AuctionException extends RuntimeException
+class AuctionException extends RuntimeException
 {
+    protected int $statusCode = 422;
+
+    public function getStatusCode(): int
+    {
+        return $this->statusCode;
+    }
+
     public static function invalidTransition(string $from, string $to): self
     {
         return new self(__('auction.errors.invalid_transition', ['from' => $from, 'to' => $to]));
@@ -22,4 +29,10 @@ final class AuctionException extends RuntimeException
     {
         return new self($reason);
     }
+
+    public static function configurationRequired(): self
+    {
+        return new self(__('auction.errors.active_configuration_required'));
+    }
 }
+
