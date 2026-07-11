@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Actions;
 
-use App\Domain\Auction\Enums\AuctionDepositStatus;
-use App\Domain\Auction\Enums\AuctionParticipantStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Domain\Auction\ValueObjects\Money;
-use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionBid;
-use App\Models\Auction\AuctionParticipant;
-use App\Models\Auction\AuctionTermsAcceptance;
+use App\Repositories\Auction\AuctionBidRepository;
+use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionParticipantRepository;
+use App\Repositories\Auction\AuctionRepository;
+use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -24,11 +24,16 @@ final class PlaceBidAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionMetricsRecorder $metrics,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionRepository $auctions,
+        private readonly AuctionBidRepository $bids,
+        private readonly AuctionParticipantRepository $participants,
+        private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionTermsRepository $terms,
     ) {}
 
     public function execute(
-        Auction $auction,
+        \App\Models\Auction\Auction $auction,
         int $bidderId,
         string $amount,
         string $currency,
@@ -36,13 +41,9 @@ final class PlaceBidAction
         ?string $clientRequestId = null
     ): AuctionBid {
         return $this->transaction->run(function () use ($auction, $bidderId, $amount, $currency, $idempotencyKey, $clientRequestId): AuctionBid {
-            $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
+            $auction = $this->auctions->lockForBidding($auction->id);
 
-            $existing = AuctionBid::where('auction_id', $auction->id)
-                ->where('bidder_id', $bidderId)
-                ->where('idempotency_key', $idempotencyKey)
-                ->first();
-
+            $existing = $this->bids->findByIdempotencyKey($auction->id, $bidderId, $idempotencyKey);
             if ($existing) {
                 return $existing->load(['auction.currentLeadingBid', 'bidder']);
             }
@@ -61,26 +62,18 @@ final class PlaceBidAction
                 throw AuctionException::bidRejected(__('auction.errors.bidding_window_closed'));
             }
 
-            $participant = AuctionParticipant::where('auction_id', $auction->id)
-                ->where('user_id', $bidderId)
-                ->lockForUpdate()
-                ->first();
+            $participant = $this->participants->lockParticipant($auction->id, $bidderId);
 
-            if (! $participant || $participant->status !== AuctionParticipantStatus::Qualified) {
+            if (! $participant || $participant->status !== \App\Domain\Auction\Enums\AuctionParticipantStatus::Qualified) {
                 throw AuctionException::bidRejected(__('auction.errors.bidder_not_qualified'));
             }
 
-            $acceptedTerms = AuctionTermsAcceptance::where('auction_id', $auction->id)
-                ->where('user_id', $bidderId)
-                ->where('terms_version_id', $auction->terms_version_id)
-                ->exists();
-
-            if (! $acceptedTerms) {
+            if (! $this->terms->hasAcceptedTerms($auction->id, $bidderId, $auction->terms_version_id)) {
                 throw AuctionException::bidRejected(__('auction.errors.terms_required_before_bidding'));
             }
 
-            $deposit = $participant->bidderDeposit()->lockForUpdate()->first();
-            if (! $deposit || $deposit->status !== AuctionDepositStatus::Held || $deposit->held_amount_minor < $auction->bidder_deposit_amount_minor) {
+            $deposit = $this->deposits->lockBidderDeposit($participant->id);
+            if (! $deposit || $deposit->status !== \App\Domain\Auction\Enums\AuctionDepositStatus::Held || $deposit->held_amount_minor < $auction->bidder_deposit_amount_minor) {
                 throw AuctionException::bidRejected(__('auction.errors.bidder_deposit_required'));
             }
 
@@ -98,10 +91,10 @@ final class PlaceBidAction
                 throw AuctionException::bidRejected(__('auction.errors.bid_below_minimum'));
             }
 
-            $sequence = ((int) AuctionBid::where('auction_id', $auction->id)->max('sequence_number')) + 1;
+            $sequence = $this->bids->nextSequenceNumber($auction->id);
 
             try {
-                $bid = AuctionBid::create([
+                $bid = $this->bids->createAcceptedBid([
                     'auction_id' => $auction->id,
                     'participant_id' => $participant->id,
                     'bidder_id' => $bidderId,
@@ -115,10 +108,7 @@ final class PlaceBidAction
                     'accepted_at' => $now,
                 ]);
             } catch (QueryException) {
-                $bid = AuctionBid::where('auction_id', $auction->id)
-                    ->where('bidder_id', $bidderId)
-                    ->where('idempotency_key', $idempotencyKey)
-                    ->firstOrFail();
+                $bid = $this->bids->findByIdempotencyKey($auction->id, $bidderId, $idempotencyKey);
 
                 return $bid->load(['auction.currentLeadingBid', 'bidder']);
             }
@@ -138,7 +128,7 @@ final class PlaceBidAction
                 ]);
             }
 
-            $auction->save();
+            $this->auctions->save($auction);
             $this->metrics->refreshBidMetrics($auction->id);
             $this->audit->log('auction.bid_accepted', $auction, $bidderId, 'user', [
                 'bid_public_id' => $bid->public_id,

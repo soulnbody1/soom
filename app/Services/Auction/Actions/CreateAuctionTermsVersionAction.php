@@ -5,21 +5,27 @@ declare(strict_types=1);
 namespace App\Services\Auction\Actions;
 
 use App\Models\Auction\AuctionTermsVersion;
+use App\Repositories\Auction\AuctionTermsRepository;
+use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 final class CreateAuctionTermsVersionAction
 {
+    public function __construct(
+        private readonly AuctionTransaction $transaction,
+        private readonly AuctionTermsRepository $terms,
+    ) {}
+
     public function execute(string $title, string $body, bool $publish, int $creatorId): AuctionTermsVersion
     {
-        return DB::transaction(function () use ($title, $body, $publish, $creatorId): AuctionTermsVersion {
-            $next = ((int) AuctionTermsVersion::max('version_number')) + 1;
+        return $this->transaction->run(function () use ($title, $body, $publish, $creatorId): AuctionTermsVersion {
+            $next = $this->terms->nextVersionNumber();
 
             if ($publish) {
-                AuctionTermsVersion::query()->update(['is_active' => false]);
+                $this->terms->deactivateAllVersions();
             }
 
-            return AuctionTermsVersion::create([
+            return $this->terms->createVersion([
                 'version_number' => $next,
                 'title' => $title,
                 'body' => $body,

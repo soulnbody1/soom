@@ -8,9 +8,10 @@ use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Models\Auction\Auction;
-use App\Models\Auction\AuctionBid;
-use App\Models\Auction\AuctionDeposit;
-use App\Models\Auction\AuctionSettlement;
+use App\Repositories\Auction\AuctionBidRepository;
+use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionRepository;
+use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -21,13 +22,17 @@ final class FinalizeAuctionAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionRepository $auctions,
+        private readonly AuctionBidRepository $bids,
+        private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionSettlementRepository $settlements,
     ) {}
 
     public function execute(Auction $auction): Auction
     {
         return $this->transaction->run(function () use ($auction): Auction {
-            $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
+            $auction = $this->auctions->lockForFinalization($auction->id);
             $now = Carbon::now();
 
             if ($auction->status === AuctionStatus::Live) {
@@ -46,29 +51,21 @@ final class FinalizeAuctionAction
                 return $auction->load('settlement');
             }
 
-            $winningBid = AuctionBid::where('auction_id', $auction->id)
-                ->orderByDesc('amount_minor')
-                ->orderBy('sequence_number')
-                ->lockForUpdate()
-                ->first();
+            $winningBid = $this->bids->lockWinningBid($auction->id);
 
             if (! $winningBid || ($auction->reserve_amount_minor !== null && $winningBid->amount_minor < $auction->reserve_amount_minor)) {
-                $this->markRefundsPending($auction, null);
+                $this->deposits->markNonWinnerDepositsRefundPending($auction->id, null);
 
                 return $this->stateMachine->transition($auction, AuctionStatus::Unsold, null, 'system', 'reserve not met or no bids');
             }
 
-            $winnerDeposit = AuctionDeposit::where('auction_id', $auction->id)
-                ->where('user_id', $winningBid->bidder_id)
-                ->where('type', 'bidder')
-                ->lockForUpdate()
-                ->first();
+            $winnerDeposit = $this->deposits->lockWinnerDeposit($auction->id, $winningBid->bidder_id);
 
             $depositApplied = min($winnerDeposit?->held_amount_minor ?? 0, $winningBid->amount_minor);
             $platformFee = $this->platformFee($auction, $winningBid->amount_minor);
             $sellerNet = max(0, $winningBid->amount_minor - $platformFee);
 
-            $settlement = AuctionSettlement::create([
+            $settlement = $this->settlements->createSettlement([
                 'auction_id' => $auction->id,
                 'winning_bid_id' => $winningBid->id,
                 'winner_id' => $winningBid->bidder_id,
@@ -89,11 +86,12 @@ final class FinalizeAuctionAction
                     'applied_amount_minor' => $depositApplied,
                     'held_amount_minor' => max(0, $winnerDeposit->held_amount_minor - $depositApplied),
                     'released_at' => $now,
-                ])->save();
+                ]);
+                $this->deposits->save($winnerDeposit);
             }
 
-            $auction->forceFill(['winning_bid_id' => $winningBid->id])->save();
-            $this->markRefundsPending($auction, $winningBid->bidder_id);
+            $this->auctions->setWinningBid($auction, $winningBid->id);
+            $this->deposits->markNonWinnerDepositsRefundPending($auction->id, $winningBid->bidder_id);
             $this->stateMachine->transition($auction, AuctionStatus::SettlementPending, null, 'system', 'winning bid selected');
             $this->stateMachine->transition($auction->refresh(), AuctionStatus::PaymentPending, null, 'system', 'settlement created');
             $this->audit->outbox('auction.finalized', $auction->refresh(), [
@@ -113,14 +111,5 @@ final class FinalizeAuctionAction
         }
 
         return intdiv($winningAmount * $auction->platform_fee_basis_points, 10_000);
-    }
-
-    private function markRefundsPending(Auction $auction, ?int $exceptUserId): void
-    {
-        AuctionDeposit::where('auction_id', $auction->id)
-            ->where('type', 'bidder')
-            ->where('status', AuctionDepositStatus::Held->value)
-            ->when($exceptUserId, fn ($query) => $query->where('user_id', '!=', $exceptUserId))
-            ->update(['status' => AuctionDepositStatus::RefundPending->value]);
     }
 }

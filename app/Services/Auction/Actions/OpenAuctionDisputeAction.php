@@ -9,6 +9,9 @@ use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
+use App\Repositories\Auction\AuctionDisputeRepository;
+use App\Repositories\Auction\AuctionRepository;
+use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -19,7 +22,10 @@ final class OpenAuctionDisputeAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionRepository $auctions,
+        private readonly AuctionSettlementRepository $settlements,
+        private readonly AuctionDisputeRepository $disputes,
     ) {}
 
     public function execute(Auction $auction, int $actorId, string $reason): AuctionDispute
@@ -29,14 +35,14 @@ final class OpenAuctionDisputeAction
         }
 
         return $this->transaction->run(function () use ($auction, $actorId, $reason): AuctionDispute {
-            $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
-            $settlement = $auction->settlement()->lockForUpdate()->firstOrFail();
+            $auction = $this->auctions->lockForStateChange($auction->id);
+            $settlement = $this->settlements->lockSettlement($auction->id);
 
             if ($auction->status !== AuctionStatus::HandoverPending) {
                 throw new AuctionException(__('auction.errors.dispute_not_available'));
             }
 
-            $dispute = AuctionDispute::firstOrCreate(
+            $dispute = $this->disputes->firstOrCreateOpenDispute(
                 [
                     'auction_id' => $auction->id,
                     'settlement_id' => $settlement->id,
@@ -49,7 +55,8 @@ final class OpenAuctionDisputeAction
                 ]
             );
 
-            $settlement->forceFill(['status' => SettlementStatus::Disputed])->save();
+            $settlement->forceFill(['status' => SettlementStatus::Disputed]);
+            $this->settlements->save($settlement);
             $this->stateMachine->transition($auction, AuctionStatus::Disputed, $actorId, 'user', $reason);
             $this->audit->outbox('auction.dispute_opened', $auction, [
                 'auction_public_id' => $auction->public_id,

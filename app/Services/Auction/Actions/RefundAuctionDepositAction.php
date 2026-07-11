@@ -8,6 +8,8 @@ use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\RefundTransaction;
+use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionRefundRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Support\Carbon;
@@ -16,20 +18,22 @@ final class RefundAuctionDepositAction
 {
     public function __construct(
         private readonly AuctionTransaction $transaction,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionRefundRepository $refunds,
     ) {}
 
     public function execute(AuctionDeposit $deposit, string $reason, ?int $adminId = null): RefundTransaction
     {
         return $this->transaction->run(function () use ($deposit, $reason, $adminId): RefundTransaction {
-            $deposit = AuctionDeposit::whereKey($deposit->id)->lockForUpdate()->firstOrFail();
+            $deposit = $this->deposits->lockForRefund($deposit->id);
 
             $amount = $deposit->held_amount_minor;
             $key = "deposit:{$deposit->id}:refund:{$amount}";
 
             $provider = (string) config('auction.refunds.provider', 'manual');
 
-            $refund = RefundTransaction::firstOrCreate(
+            $refund = $this->refunds->firstOrCreateRefund(
                 ['provider' => $provider, 'idempotency_key' => $key],
                 [
                     'auction_id' => $deposit->auction_id,
@@ -48,7 +52,8 @@ final class RefundAuctionDepositAction
 
             $deposit->forceFill([
                 'status' => AuctionDepositStatus::RefundPending,
-            ])->save();
+            ]);
+            $this->deposits->save($deposit);
 
             if (config('auction.refunds.auto_succeed_manual_refunds') === true && $provider === 'manual') {
                 $this->markSucceeded($refund, $deposit, $amount);
@@ -68,8 +73,8 @@ final class RefundAuctionDepositAction
     public function confirmSucceeded(RefundTransaction $refund, string $providerRefundId, ?int $adminId = null): RefundTransaction
     {
         return $this->transaction->run(function () use ($refund, $providerRefundId, $adminId): RefundTransaction {
-            $refund = RefundTransaction::whereKey($refund->id)->lockForUpdate()->firstOrFail();
-            $deposit = AuctionDeposit::whereKey($refund->deposit_id)->lockForUpdate()->firstOrFail();
+            $refund = $this->refunds->lockForConfirmation($refund->id);
+            $deposit = $this->deposits->lockForRefund($refund->deposit_id);
 
             $this->markSucceeded($refund, $deposit, $refund->amount_minor, $providerRefundId);
 
@@ -93,13 +98,15 @@ final class RefundAuctionDepositAction
             'status' => RefundTransactionStatus::Succeeded,
             'provider_refund_id' => $providerRefundId ?? $refund->provider_refund_id,
             'processed_at' => Carbon::now(),
-        ])->save();
+        ]);
+        $this->refunds->save($refund);
 
         $deposit->forceFill([
             'status' => AuctionDepositStatus::Refunded,
             'refunded_amount_minor' => $deposit->refunded_amount_minor + $amount,
             'held_amount_minor' => 0,
             'released_at' => Carbon::now(),
-        ])->save();
+        ]);
+        $this->deposits->save($deposit);
     }
 }

@@ -8,7 +8,7 @@ use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\ValueObjects\Money;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionMedia;
-use App\Models\Auction\AuctionTermsVersion;
+use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -19,7 +19,8 @@ final class CreateAuctionAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionMetricsRecorder $metrics,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionTermsRepository $terms,
     ) {}
 
     public function execute(array $data, int $sellerId): Auction
@@ -34,7 +35,7 @@ final class CreateAuctionAction
             $sellerDeposit = Money::fromDecimalString($data['seller_deposit_amount'] ?? '0', $currency);
             $bidderDeposit = Money::fromDecimalString($data['bidder_deposit_amount'] ?? '0', $currency);
 
-            $terms = AuctionTermsVersion::query()->where('is_active', true)->latest('version_number')->first();
+            $terms = $this->terms->getActiveTermsVersion();
 
             $auction = Auction::create([
                 'seller_id' => $sellerId,

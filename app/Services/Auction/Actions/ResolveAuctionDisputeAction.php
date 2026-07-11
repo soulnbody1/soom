@@ -9,6 +9,9 @@ use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
+use App\Repositories\Auction\AuctionDisputeRepository;
+use App\Repositories\Auction\AuctionRepository;
+use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -19,7 +22,10 @@ final class ResolveAuctionDisputeAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionRepository $auctions,
+        private readonly AuctionSettlementRepository $settlements,
+        private readonly AuctionDisputeRepository $disputes,
     ) {}
 
     public function execute(Auction $auction, AuctionDispute $dispute, int $adminId, string $resolution, string $note): Auction
@@ -29,9 +35,9 @@ final class ResolveAuctionDisputeAction
         }
 
         return $this->transaction->run(function () use ($auction, $dispute, $adminId, $resolution, $note): Auction {
-            $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
-            $dispute = AuctionDispute::whereKey($dispute->id)->lockForUpdate()->firstOrFail();
-            $settlement = $auction->settlement()->lockForUpdate()->firstOrFail();
+            $auction = $this->auctions->lockForStateChange($auction->id);
+            $dispute = $this->disputes->lockForResolution($dispute->id);
+            $settlement = $this->settlements->lockSettlement($auction->id);
 
             if ($dispute->auction_id !== $auction->id || $dispute->status !== 'open') {
                 throw new AuctionException(__('auction.errors.dispute_not_available'));
@@ -55,14 +61,16 @@ final class ResolveAuctionDisputeAction
             $settlement->forceFill([
                 'status' => $settlementStatus,
                 'completed_at' => $target === AuctionStatus::Completed ? ($settlement->completed_at ?? $now) : $settlement->completed_at,
-            ])->save();
+            ]);
+            $this->settlements->save($settlement);
 
             $dispute->forceFill([
                 'status' => 'resolved',
                 'resolved_by' => $adminId,
                 'resolution_note' => $note,
                 'resolved_at' => $now,
-            ])->save();
+            ]);
+            $this->disputes->save($dispute);
 
             $this->audit->log('auction.dispute_resolved', $auction, $adminId, 'admin', [
                 'dispute_public_id' => $dispute->public_id,

@@ -13,7 +13,8 @@ use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\PaymentSubmission;
-use App\Models\Auction\PaymentTransaction;
+use App\Repositories\Auction\AuctionPaymentRepository;
+use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -24,27 +25,30 @@ final class ReviewPaymentSubmissionAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionPaymentRepository $payments,
+        private readonly AuctionSettlementRepository $settlements,
     ) {}
 
     public function approve(PaymentSubmission $submission, int $adminId, string $note = ''): PaymentSubmission
     {
         return $this->transaction->run(function () use ($submission, $adminId, $note): PaymentSubmission {
-            $submission = PaymentSubmission::whereKey($submission->id)->lockForUpdate()->firstOrFail();
+            $submission = $this->payments->lockSubmissionForReview($submission->id);
 
             if ($submission->status !== PaymentSubmissionStatus::PendingReview) {
                 return $submission->load(['auction', 'deposit', 'settlement', 'transaction']);
             }
 
-            $auction = $submission->auction()->lockForUpdate()->firstOrFail();
+            $auction = $this->payments->lockSubmissionAuction($submission);
             $submission->forceFill([
                 'status' => PaymentSubmissionStatus::Approved,
                 'reviewed_by' => $adminId,
                 'review_note' => $note,
                 'reviewed_at' => Carbon::now(),
-            ])->save();
+            ]);
+            $this->payments->save($submission);
 
-            PaymentTransaction::firstOrCreate(
+            $this->payments->firstOrCreateTransaction(
                 [
                     'purpose' => $submission->purpose->value,
                     'idempotency_key' => "submission:{$submission->id}:approved",
@@ -63,7 +67,7 @@ final class ReviewPaymentSubmissionAction
             );
 
             if ($submission->purpose === PaymentPurpose::SellerDeposit) {
-                $deposit = $submission->deposit()->lockForUpdate()->firstOrFail();
+                $deposit = $this->payments->lockSubmissionDeposit($submission);
                 $deposit->forceFill([
                     'status' => AuctionDepositStatus::Held,
                     'held_amount_minor' => $submission->amount_minor,
@@ -74,7 +78,7 @@ final class ReviewPaymentSubmissionAction
             }
 
             if ($submission->purpose === PaymentPurpose::BidderDeposit) {
-                $deposit = $submission->deposit()->lockForUpdate()->firstOrFail();
+                $deposit = $this->payments->lockSubmissionDeposit($submission);
                 $deposit->forceFill([
                     'status' => AuctionDepositStatus::Held,
                     'held_amount_minor' => $submission->amount_minor,
@@ -88,7 +92,7 @@ final class ReviewPaymentSubmissionAction
             }
 
             if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
-                $settlement = $submission->settlement()->lockForUpdate()->firstOrFail();
+                $settlement = $this->payments->lockSubmissionSettlement($submission);
                 $newPaid = min($settlement->amount_due_minor, $settlement->amount_paid_minor + $submission->amount_minor);
                 $settlement->forceFill([
                     'amount_paid_minor' => $newPaid,
@@ -97,7 +101,8 @@ final class ReviewPaymentSubmissionAction
                     'handover_due_at' => $newPaid >= $settlement->amount_due_minor
                         ? Carbon::now()->addHours($auction->handover_deadline_hours)
                         : $settlement->handover_due_at,
-                ])->save();
+                ]);
+                $this->settlements->save($settlement);
 
                 if ($newPaid >= $settlement->amount_due_minor) {
                     $this->stateMachine->transition($auction, AuctionStatus::HandoverPending, $adminId, 'admin', 'winner payment approved');
@@ -120,7 +125,7 @@ final class ReviewPaymentSubmissionAction
         }
 
         return $this->transaction->run(function () use ($submission, $adminId, $note): PaymentSubmission {
-            $submission = PaymentSubmission::whereKey($submission->id)->lockForUpdate()->firstOrFail();
+            $submission = $this->payments->lockSubmissionForReview($submission->id);
 
             if ($submission->status !== PaymentSubmissionStatus::PendingReview) {
                 return $submission;
@@ -131,7 +136,8 @@ final class ReviewPaymentSubmissionAction
                 'reviewed_by' => $adminId,
                 'review_note' => $note,
                 'reviewed_at' => Carbon::now(),
-            ])->save();
+            ]);
+            $this->payments->save($submission);
 
             if ($submission->deposit) {
                 $submission->deposit->forceFill([

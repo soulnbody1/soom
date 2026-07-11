@@ -9,11 +9,12 @@ use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\PaymentSubmissionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
-use App\Models\Auction\AuctionDeposit;
-use App\Models\Auction\AuctionParticipant;
-use App\Models\Auction\AuctionSettlement;
-use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
+use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionParticipantRepository;
+use App\Repositories\Auction\AuctionPaymentRepository;
+use App\Repositories\Auction\AuctionRepository;
+use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Http\UploadedFile;
@@ -24,7 +25,12 @@ final class SubmitPaymentSubmissionAction
 {
     public function __construct(
         private readonly AuctionTransaction $transaction,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionRepository $auctions,
+        private readonly AuctionPaymentRepository $payments,
+        private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionParticipantRepository $participants,
+        private readonly AuctionSettlementRepository $settlements,
     ) {}
 
     public function execute(
@@ -36,23 +42,21 @@ final class SubmitPaymentSubmissionAction
         string $idempotencyKey,
         ?string $providerReference = null
     ): PaymentSubmission {
-        $existing = PaymentSubmission::with(['paymentMethod', 'deposit', 'settlement'])
-            ->where('auction_id', $auction->id)
-            ->where('user_id', $userId)
-            ->where('purpose', $purpose->value)
-            ->where('idempotency_key', $idempotencyKey)
-            ->first();
+        $existing = $this->payments->findSubmissionByIdempotencyKey(
+            $auction->id,
+            $userId,
+            $purpose->value,
+            $idempotencyKey
+        );
 
         if ($existing) {
             return $existing;
         }
 
-        $method = PaymentMethod::where('public_id', $paymentMethodPublicId)
-            ->where('is_active', true)
-            ->firstOrFail();
+        $method = $this->payments->findActivePaymentMethod($paymentMethodPublicId);
 
         [$deposit, $settlement, $amount] = $this->transaction->run(function () use ($auction, $userId, $purpose): array {
-            $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
+            $auction = $this->auctions->lockForStateChange($auction->id);
 
             return $this->target($auction, $userId, $purpose);
         });
@@ -61,8 +65,8 @@ final class SubmitPaymentSubmissionAction
 
         try {
             return $this->transaction->run(function () use ($auction, $userId, $purpose, $method, $receipt, $idempotencyKey, $providerReference, $deposit, $settlement, $amount, $path): PaymentSubmission {
-                $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
-                $submission = PaymentSubmission::firstOrCreate(
+                $auction = $this->auctions->lockForStateChange($auction->id);
+                $submission = $this->payments->firstOrCreateSubmission(
                     [
                         'auction_id' => $auction->id,
                         'user_id' => $userId,
@@ -96,7 +100,8 @@ final class SubmitPaymentSubmissionAction
                         'status' => AuctionDepositStatus::PendingReview,
                         'submitted_at' => Carbon::now(),
                         'idempotency_key' => $idempotencyKey,
-                    ])->save();
+                    ]);
+                    $this->deposits->save($deposit);
                 }
 
                 $this->audit->log('auction.payment_submitted', $auction, $userId, 'user', [
@@ -120,7 +125,7 @@ final class SubmitPaymentSubmissionAction
                 throw new AuctionException(__('auction.errors.seller_deposit_only_seller'));
             }
 
-            $deposit = AuctionDeposit::firstOrCreate(
+            $deposit = $this->deposits->firstOrCreateDeposit(
                 ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'seller'],
                 [
                     'status' => AuctionDepositStatus::PendingSubmission,
@@ -133,13 +138,13 @@ final class SubmitPaymentSubmissionAction
         }
 
         if ($purpose === PaymentPurpose::BidderDeposit) {
-            $participant = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $userId)->first();
+            $participant = $this->participants->findByAuctionAndUser($auction->id, $userId);
 
             if (! $participant) {
                 throw new AuctionException(__('auction.errors.registration_required'));
             }
 
-            $deposit = AuctionDeposit::firstOrCreate(
+            $deposit = $this->deposits->firstOrCreateDeposit(
                 ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'bidder'],
                 [
                     'participant_id' => $participant->id,
@@ -152,7 +157,7 @@ final class SubmitPaymentSubmissionAction
             return [$deposit, null, $auction->bidder_deposit_amount_minor];
         }
 
-        $settlement = AuctionSettlement::where('auction_id', $auction->id)->where('winner_id', $userId)->first();
+        $settlement = $this->settlements->findByAuctionAndWinner($auction->id, $userId);
 
         if (! $settlement) {
             throw new AuctionException(__('auction.errors.settlement_payment_unavailable'));

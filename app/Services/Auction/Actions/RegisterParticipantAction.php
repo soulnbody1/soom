@@ -9,6 +9,8 @@ use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionParticipant;
+use App\Repositories\Auction\AuctionParticipantRepository;
+use App\Repositories\Auction\AuctionRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -19,13 +21,15 @@ final class RegisterParticipantAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionMetricsRecorder $metrics,
-        private readonly AuctionAudit $audit
+        private readonly AuctionAudit $audit,
+        private readonly AuctionRepository $auctions,
+        private readonly AuctionParticipantRepository $participants,
     ) {}
 
     public function execute(Auction $auction, int $userId): AuctionParticipant
     {
         return $this->transaction->run(function () use ($auction, $userId): AuctionParticipant {
-            $auction = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
+            $auction = $this->auctions->lockForStateChange($auction->id);
 
             if ($auction->seller_id === $userId) {
                 throw new AuctionException(__('auction.errors.seller_cannot_register'));
@@ -35,8 +39,9 @@ final class RegisterParticipantAction
                 throw new AuctionException(__('auction.errors.registration_closed'));
             }
 
-            $participant = AuctionParticipant::firstOrCreate(
-                ['auction_id' => $auction->id, 'user_id' => $userId],
+            $participant = $this->participants->firstOrCreateParticipant(
+                $auction->id,
+                $userId,
                 [
                     'status' => AuctionParticipantStatus::Registered,
                     'registered_at' => Carbon::now(),
