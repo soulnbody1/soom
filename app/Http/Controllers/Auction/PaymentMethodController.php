@@ -1,77 +1,67 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auction;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\PaymentMethodRequest;
-use App\Http\Resources\PaymentMethodResource;
-use App\Models\PaymentMethod;
+use App\Http\Resources\Auction\PaymentMethodResource;
+use App\Models\Auction\PaymentMethod;
 use App\Traits\ApiResponseTrait;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
-class PaymentMethodController extends Controller
+final class PaymentMethodController extends Controller
 {
     use ApiResponseTrait;
 
-    /* كنترولر خاص بتسجيل طرق الدفع زى cash,visa,credit-card  */
-
-    public function index()
+    public function index(): JsonResponse
     {
-        $methods = PaymentMethod::orderBy('id')->get();
-        return PaymentMethodResource::collection($methods);
+        return $this->sendResponse(
+            PaymentMethodResource::collection(PaymentMethod::where('is_active', true)->orderBy('name')->get()),
+            'Payment methods fetched.'
+        );
     }
 
-    public function store(PaymentMethodRequest $request)
+    public function store(Request $request): JsonResponse
     {
-        $data = $request->validated();
-
-        // لو أول طريقة دفع نخليها default
-        if (PaymentMethod::count() === 0) {
-            $data['is_default'] = true;
+        if ($request->user()?->role !== 'admin') {
+            return $this->sendError('Forbidden.', 403);
         }
 
-        // لو user اختار default، نشيل الـ default عن الباقي
-        if (!empty($data['is_default'])) {
-            PaymentMethod::where('is_default', true)->update(['is_default' => false]);
-        }
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'code' => ['required', 'string', 'max:80', 'unique:payment_methods,code'],
+            'instructions' => ['nullable', 'string'],
+            'requires_manual_review' => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
 
-        $method = PaymentMethod::create($data);
-        return new PaymentMethodResource($method);
+        return $this->sendResponse(
+            new PaymentMethodResource(PaymentMethod::create($data)),
+            'Payment method created.',
+            201
+        );
     }
 
-    public function show($id)
+    public function show(PaymentMethod $paymentMethod): JsonResponse
     {
-        $method = PaymentMethod::find($id);
-        if (!$method) {
-            return $this->sendError('طريقة الدفع غير موجودة.', 404);
-        }
-        return new PaymentMethodResource($method);
+        return $this->sendResponse(new PaymentMethodResource($paymentMethod), 'Payment method fetched.');
     }
 
-    public function update(PaymentMethodRequest $request, $id)
+    public function update(Request $request, PaymentMethod $paymentMethod): JsonResponse
     {
-        $method = PaymentMethod::find($id);
-        if (!$method) {
-            return $this->sendError('طريقة الدفع غير موجودة.', 404);
+        if ($request->user()?->role !== 'admin') {
+            return $this->sendError('Forbidden.', 403);
         }
 
-        $data = $request->validated();
+        $paymentMethod->update($request->validate([
+            'name' => ['sometimes', 'string', 'max:120'],
+            'instructions' => ['nullable', 'string'],
+            'requires_manual_review' => ['sometimes', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
+        ]));
 
-        // لو user اختار default، نشيل الـ default عن الباقي
-        if (!empty($data['is_default'])) {
-            PaymentMethod::where('is_default', true)->where('id', '!=', $id)->update(['is_default' => false]);
-        }
-
-        $method->update($data);
-        return new PaymentMethodResource($method->fresh());
-    }
-
-    public function destroy($id)
-    {
-        $method = PaymentMethod::find($id);
-        if (!$method) {
-            return $this->sendError('طريقة الدفع غير موجودة.', 404);
-        }
-        $method->delete();
-        return $this->sendResponse([], 'تم حذف طريقة الدفع بنجاح.');
+        return $this->sendResponse(new PaymentMethodResource($paymentMethod->refresh()), 'Payment method updated.');
     }
 }

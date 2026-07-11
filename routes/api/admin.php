@@ -5,60 +5,37 @@ use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Attribute\AttributeController;
 use App\Http\Controllers\Attribute\AttributeOptionController;
 use App\Http\Controllers\BannerController;
-use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\CharitySystemController;
 use App\Http\Controllers\Location\CityController;
+use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Location\StateController;
 use App\Http\Controllers\User\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
     Route::apiResource('categories', CategoryController::class)->only(['store', 'update', 'destroy']);
-
-    // ============= قواعد المزادات ============
-    Route::apiResource('auction-rules', \App\Http\Controllers\Auction\AuctionRuleController::class);
-
-    // ============= طرق الدفع ============
-    Route::apiResource('payment-methods', \App\Http\Controllers\Auction\PaymentMethodController::class);
-
-    // ============= إعدادات المزادات (التأمين) ============
-    Route::apiResource('auctions-configurations', \App\Http\Controllers\Auction\AuctionsConfigurationController::class);
-
-    // ============= تأمينات المزادات (موافقة/رفض) ============
-    Route::prefix('auction-deposits')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'index']);
-        Route::get('/{id}', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'show']);
-        Route::post('/{id}/process', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'process']);
-        Route::get('/by-auction/{auctionId}', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'byAuction']);
-    });
-
     Route::apiResource('countries', CountryController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('states', StateController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('citys', CityController::class)->only(['store', 'update', 'destroy']);
 
-    // ============= السمات والحقول ============
     Route::prefix('attributes')->group(function () {
         Route::post('/', [AttributeController::class, 'store']);
         Route::put('/{id}', [AttributeController::class, 'update']);
-        Route::delete('/{id}', [AttributeController::class, 'destroy']);//
+        Route::delete('/{id}', [AttributeController::class, 'destroy']);
         Route::get('/{id}', [AttributeController::class, 'getOptionsByAttributeId']);
         Route::post('/sync-attributes', [AttributeController::class, 'syncAttributesToCategory']);
         Route::post('/exclude', [AttributeController::class, 'excludeAttributeFromCategory']);
         Route::post('/include', [AttributeController::class, 'includeAttributeBack']);
     });
 
-    // ============= ادارة المستخدمين  ============
     Route::prefix('users')->group(function () {
-        Route::get('/', [ProfileController::class,'users']);
-        Route::get('/analytics', [ProfileController::class,'analytics']);
+        Route::get('/', [ProfileController::class, 'users']);
+        Route::get('/analytics', [ProfileController::class, 'analytics']);
         Route::get('/search', [ProfileController::class, 'search']);
         Route::delete('/force-delete/{id}', [ProfileController::class, 'destroybyadmin']);
         Route::put('/toggle-block/{id}', [ProfileController::class, 'toggleBlock']);
     });
-
-    //  banner
 
     Route::prefix('banners')->group(function () {
         Route::get('/', [BannerController::class, 'indexforadmin']);
@@ -76,7 +53,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::delete('/{id}', [CharitySystemController::class, 'destroy']);
     });
 
-
     Route::prefix('announcements')->group(function () {
         Route::get('/', [AnnouncementController::class, 'indexforadmin']);
         Route::get('/{id}', [AnnouncementController::class, 'show']);
@@ -85,8 +61,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::delete('/{id}', [AnnouncementController::class, 'destroy']);
     });
 
-
-    // ============= ادارة الاعلانات  ============
     Route::prefix('ads')->group(function () {
         Route::get('/', [AdController::class, 'ads']);
         Route::get('/search', [AdController::class, 'search_for_admin']);
@@ -95,8 +69,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::put('/toggle-featured/{id}', [AdController::class, 'toggleFeatured']);
     });
 
-
-    // ============= قيم السمات ============
     Route::prefix('attribute-options')->group(function () {
         Route::post('/', [AttributeOptionController::class, 'store']);
         Route::put('/{id}', [AttributeOptionController::class, 'update']);

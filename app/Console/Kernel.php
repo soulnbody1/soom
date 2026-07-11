@@ -9,6 +9,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('reels:cleanup')->daily();
+        $schedule->command('auction:run-operations')->everyMinute()->withoutOverlapping();
+        $schedule->command('auction:reconcile')->everyFifteenMinutes()->withoutOverlapping();
     }
     protected function commands(): void
     {

@@ -71,16 +71,6 @@ class Ad extends Model
         return $this->hasOne(AdReel::class);
     }
 
-    public function auction(): HasOne
-    {
-        return $this->hasOne(Auction::class);
-    }
-
-    public function isAuction(): bool
-    {
-        return $this->auction !== null;
-    }
-
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -4,6 +4,10 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Ad\AdController;
 
+Route::get('/', function () {
+    return response()->json(['status' => 'ok']);
+});
+
 Route::get('/clear-cache', function () {
     Artisan::call('optimize:clear');
     return 'تم مسح الكاش بنجاح';

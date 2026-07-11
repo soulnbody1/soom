@@ -1,93 +1,48 @@
 <?php
 
 use App\Http\Controllers\Auction\AuctionController;
+use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
+use App\Http\Controllers\Auction\PaymentMethodController;
+use App\Http\Controllers\Auction\PaymentSubmissionController;
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| Auction Routes
-|--------------------------------------------------------------------------
-|
-| Routes for auction system - both public and protected
-|
-*/
-
-// Public routes (Guest + Auth)
 Route::prefix('auctions')->group(function () {
-    // List all active auctions
     Route::get('/', [AuctionController::class, 'index']);
-    
-    // View single auction details
-    Route::get('/{id}', [AuctionController::class, 'show']);
-    
-    // List bids for an auction
-    Route::get('/{id}/bids', [BidController::class, 'index']);
-    
-    // Get highest bid
-    Route::get('/{id}/highest-bid', [BidController::class, 'highestBid']);
+    Route::get('/{auction}', [AuctionController::class, 'show']);
+    Route::get('/{auction}/bids', [BidController::class, 'index']);
 });
 
-// Protected routes (Auth required)
+Route::prefix('soom')->group(function () {
+    Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
+    Route::get('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'show']);
+    Route::get('/auction-terms', [AuctionTermsController::class, 'index']);
+});
+
 Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(function () {
-    
-    // Auction management (for advertisers)
+    Route::get('/my/auctions', [AuctionController::class, 'mine']);
+    Route::get('/my/bids', [BidController::class, 'mine']);
+
     Route::prefix('auctions')->group(function () {
-        // Get auction details (protected)
-        Route::get('/{id}', [AuctionController::class, 'show']);
-        
-        // Create auction
         Route::post('/', [AuctionController::class, 'store']);
-        
-        // Update auction (only draft/pending_payment)
-        Route::put('/{id}', [AuctionController::class, 'update']);
-        
-        // Cancel auction (only before start)
-        Route::delete('/{id}/cancel', [AuctionController::class, 'cancel']);
-        
-        // Close auction manually
-        Route::put('/{id}/close', [AuctionController::class, 'close']);
-        
-        // Pay advertiser deposit
-        Route::post('/{id}/pay-deposit', [AuctionController::class, 'payDeposit']);
-        
-        // Admin: Set/Update deposit values
-        Route::put('/{id}/set-deposit', [AuctionController::class, 'setDeposit']);
-        
-        // Admin: All auctions (all statuses)
-        Route::get('/all', [AuctionController::class, 'all']);
+        Route::post('/{auction}/submit-review', [AuctionController::class, 'submitForReview']);
+        Route::post('/{auction}/seller-deposit', [AuctionController::class, 'submitSellerDeposit']);
+        Route::post('/{auction}/register', [AuctionController::class, 'register']);
+        Route::post('/{auction}/accept-terms', [AuctionController::class, 'acceptTerms']);
+        Route::post('/{auction}/bidder-deposit', [AuctionController::class, 'submitBidderDeposit']);
+        Route::post('/{auction}/bids', [BidController::class, 'store']);
+        Route::post('/{auction}/winner-payment', [AuctionController::class, 'submitWinnerPayment']);
+        Route::post('/{auction}/complete-handover', [AuctionController::class, 'completeHandover']);
+        Route::delete('/{auction}', [AuctionController::class, 'cancel']);
     });
-    
-    // My auctions (as advertiser)
-    Route::get('/my/auctions', [AuctionController::class, 'myAuctions']);
-    
-    // Bid management (for bidders)
-    Route::prefix('auctions/{id}')->group(function () {
-        // Get deposit info
-        Route::get('/deposit-info', [BidController::class, 'getDepositInfo']);
-        
-        // Pay bidder deposit
-        Route::post('/pay-bid-deposit', [BidController::class, 'payBidDeposit']);
-        
-        // Place a bid
-        Route::post('/bid', [BidController::class, 'store']);
-        
-        // Increase existing bid
-        Route::put('/bid', [BidController::class, 'increaseBid']);
-    });
-    
-    // My bids (as bidder)
-    Route::get('/my/bids', [BidController::class, 'myBids']);
+});
 
-    // My deposits (as user)
-    Route::get('/my/deposits', [\App\Http\Controllers\Auction\AuctionDepositController::class, 'myDeposits']);
-
-    // ============= إيصالات الدفع (Payment Slips) ============
-    Route::prefix('payment-slips')->group(function () {
-        Route::post('/', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'store']);
-    });
-
-    // جلب إيصالات مزاد أو مزايدة معينة
-    Route::get('/auctions/{id}/payment-slips', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'byAuction']);
-    Route::get('/bids/{id}/payment-slips', [\App\Http\Controllers\Auction\PaymentSlipController::class, 'byBid']);
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->group(function () {
+    Route::get('/', [AuctionController::class, 'all']);
+    Route::post('/terms', [AuctionTermsController::class, 'store']);
+    Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
+    Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
+    Route::post('/{auction}/review', [AuctionController::class, 'review']);
+    Route::get('/payment-submissions', [PaymentSubmissionController::class, 'index']);
+    Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review']);
 });

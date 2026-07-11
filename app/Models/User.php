@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Auction\Auction;
+use App\Models\Auction\AuctionBid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -117,7 +119,7 @@ class User extends Authenticatable
 
     public function auctionsAsAdvertiser(): HasMany
     {
-        return $this->hasMany(Auction::class, 'winner_id');
+        return $this->hasMany(Auction::class, 'seller_id');
     }
 
     public function auctionBids(): HasMany
