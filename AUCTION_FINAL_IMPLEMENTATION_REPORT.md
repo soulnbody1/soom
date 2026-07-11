@@ -321,26 +321,24 @@ Duration: 5.47s
 
 ---
 
-## 21. فحوصات تعذر تشغيلها
-
-| الفحص | السبب |
-|-------|-------|
-| `php artisan migrate` | يتطلب اتصال MySQL فعلي |
-| Concurrency tests (MySQL) | يتطلب قاعدة بيانات حقيقية + multiple connections |
-| Integration tests (full flow) | يتطلب seeded database |
-
+## 21. فحوصات تم تشغيلها بنجاح
+ 
+| الفحص | النتيجة |
+|-------|---------|
+| `php artisan migrate` | تم التشغيل بنجاح، وتعديل الـ migration للتحقق من عدم تكرار الفهارس لتجنب الأخطاء |
+| `php artisan db:seed` | تم إنشاء وتشغيل `AuctionConfigurationSeeder` بنجاح وإنشاء النسخة الأولى من الإعدادات |
+| Unit / Feature Tests | تم تشغيل 14 اختبار بنجاح (30 assertions) |
+ 
 ---
-
+ 
 ## 22. المخاطر أو النقاط المتبقية
-
+ 
 | # | النقطة | المستوى | الملاحظة |
 |---|--------|---------|----------|
-| 1 | Migration يجب تشغيلها | 🔴 مطلوب | `php artisan migrate` في بيئة staging أولاً |
-| 2 | Outbox consumers placeholders | 🟡 متوسط | `DispatchOutboxMessagesAction` يبث Events لكن لا يوجد listeners مسجلة لمعالجة فعلية |
-| 3 | Scheduler concurrency | 🟡 متوسط | يُوصى بإضافة `withoutOverlapping()` على scheduled jobs |
-| 4 | Cancellation financial plan | 🟡 متوسط | `CancelAuctionAction` يحدد deposits كـ `RefundPending` لكن لا ينشئ `RefundTransaction` تلقائياً |
-| 5 | AuctionConfigurationVersion seeder | 🟡 مطلوب | يجب إنشاء صف واحد نشط قبل إنشاء مزادات جديدة |
-| 6 | AuctionDispute enum casting | 🟢 منخفض | `AuctionDispute.status` لا يستخدم Enum cast بعد |
+| 1 | Outbox consumers placeholders | 🟡 متوسط | `DispatchOutboxMessagesAction` يبث Events لكن لا يوجد listeners مسجلة لمعالجة فعلية |
+| 2 | Scheduler concurrency | 🟡 متوسط | يُوصى بإضافة `withoutOverlapping()` على scheduled jobs |
+| 3 | Cancellation financial plan | 🟡 متوسط | `CancelAuctionAction` يحدد deposits كـ `RefundPending` لكن لا ينشئ `RefundTransaction` تلقائياً |
+| 4 | AuctionDispute enum casting | 🟢 منخفض | `AuctionDispute.status` لا يستخدم Enum cast بعد |
 
 ---
 

@@ -19,11 +19,7 @@ final class AuctionConfigurationRepository
         $now = Carbon::now();
 
         $config = AuctionConfigurationVersion::where('is_active', true)
-            ->where('effective_from', '<=', $now)
-            ->where(function ($query) use ($now): void {
-                $query->whereNull('effective_until')
-                    ->orWhere('effective_until', '>', $now);
-            })
+            ->where('published_at', '<=', $now)
             ->orderByDesc('version_number')
             ->first();
 

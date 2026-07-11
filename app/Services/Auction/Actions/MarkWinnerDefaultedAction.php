@@ -181,7 +181,7 @@ final class MarkWinnerDefaultedAction
         // Apply deposit if exists
         if ($deposit && $depositApplied > 0) {
             $deposit->forceFill([
-                'status' => AuctionDepositStatus::Applied,
+                'status' => AuctionDepositStatus::AppliedToSettlement,
                 'applied_amount_minor' => $depositApplied,
                 'held_amount_minor' => $deposit->held_amount_minor - $depositApplied,
             ]);
