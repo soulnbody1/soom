@@ -7,11 +7,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('auctions') && Schema::hasColumn('auctions', 'public_id')) {
+        if ($this->hasCurrentAuctionSchema()) {
             return;
         }
 
         $this->dropAuctionTables();
+        $this->createAuctionSchema();
     }
 
     public function down(): void
@@ -23,35 +24,52 @@ return new class extends Migration
     {
         Schema::disableForeignKeyConstraints();
 
-        foreach ([
-            'outbox_messages',
-            'auction_views',
-            'auction_metrics',
-            'auction_activity_logs',
-            'auction_status_history',
-            'refund_transactions',
-            'payment_transactions',
-            'payment_submissions',
-            'auction_settlements',
-            'auction_bids',
-            'auction_deposits',
-            'auction_terms_acceptances',
-            'auction_participants',
-            'auction_media',
-            'auction_images',
-            'auctions',
-            'auction_terms_versions',
-            'payment_slips',
-            'auctions_configurations',
-            'auction_rules',
-        ] as $table) {
-            Schema::dropIfExists($table);
+        try {
+            foreach ([
+                'outbox_messages',
+                'auction_views',
+                'auction_metrics',
+                'auction_activity_logs',
+                'auction_status_history',
+                'refund_transactions',
+                'payment_transactions',
+                'payment_submissions',
+                'auction_winner_reassignments',
+                'auction_disputes',
+                'auction_settlements',
+                'auction_bids',
+                'auction_deposits',
+                'auction_terms_acceptances',
+                'auction_participants',
+                'auction_media',
+                'auction_images',
+                'auctions',
+                'auction_configuration_versions',
+                'auction_terms_versions',
+                'payment_methods',
+                'payment_slips',
+                'auctions_configurations',
+                'auction_rules',
+            ] as $table) {
+                Schema::dropIfExists($table);
+            }
+        } finally {
+            Schema::enableForeignKeyConstraints();
         }
+    }
 
-        if (Schema::hasTable('payment_methods') && ! Schema::hasColumn('payment_methods', 'public_id')) {
-            Schema::dropIfExists('payment_methods');
-        }
+    private function hasCurrentAuctionSchema(): bool
+    {
+        return Schema::hasTable('auctions')
+            && Schema::hasColumn('auctions', 'public_id')
+            && Schema::hasTable('auction_settlements')
+            && Schema::hasColumn('auction_settlements', 'remaining_amount_minor')
+            && Schema::hasColumn('auction_settlements', 'current_marker');
+    }
 
-        Schema::enableForeignKeyConstraints();
+    private function createAuctionSchema(): void
+    {
+        $createAuctionSchema = require __DIR__.'/2025_06_12_090000_create_auctions_table.php';
+        $createAuctionSchema->up();
     }
 };

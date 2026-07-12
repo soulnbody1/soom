@@ -17,20 +17,17 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('phone')->unique();
 
-
             $table->string('logo')->nullable();
             $table->date('birth_date')->nullable();
-            $table->enum('gender',['male','female'])->nullable();
-            $table->foreignId('country_id')->nullable()->constrained('countries')->onDelete('cascade');
-            $table->foreignId('state_id')->nullable()->constrained('states')->onDelete('cascade');
-            $table->foreignId('city_id')->nullable()->constrained('cities')->onDelete('cascade');
+            $table->enum('gender', ['male', 'female'])->nullable();
+            $this->nullableLocationReference($table, 'country_id', 'countries');
+            $this->nullableLocationReference($table, 'state_id', 'states');
+            $this->nullableLocationReference($table, 'city_id', 'cities');
             $table->boolean('allow_ad_notifications')->default(true);
-            
-
 
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->enum('role',['user','admin'])->default('user');
+            $table->enum('role', ['user', 'admin'])->default('user');
             $table->string('fcm_token')->nullable();
             $table->rememberToken();
             $table->softDeletes();
@@ -61,5 +58,16 @@ return new class extends Migration
         Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+    }
+
+    private function nullableLocationReference(Blueprint $table, string $column, string $referencedTable): void
+    {
+        if (Schema::hasTable($referencedTable)) {
+            $table->foreignId($column)->nullable()->constrained($referencedTable)->onDelete('cascade');
+
+            return;
+        }
+
+        $table->foreignId($column)->nullable()->index();
     }
 };
