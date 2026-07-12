@@ -29,6 +29,7 @@ final class CancelAuctionAction
         private readonly AuctionPaymentRepository $payments,
         private readonly AuctionRefundRepository $refunds,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
     ) {}
 
     public function execute(Auction $auction, int $actorId, string $actorType, string $reason): Auction
@@ -44,13 +45,16 @@ final class CancelAuctionAction
 
             $this->createRefundPlan($auction, $reason);
 
-            return $this->stateMachine->transition(
+            $auction = $this->stateMachine->transition(
                 $auction,
                 AuctionStatus::Cancelled,
                 $actorId,
                 $actorType,
                 $reason
             );
+            $this->nonWinnerDeposits->execute($auction, 'cancelled', $actorId, $actorType);
+
+            return $auction->refresh();
         });
     }
 

@@ -32,6 +32,9 @@ final class AuctionDeposit extends Model
         'submitted_at',
         'held_at',
         'released_at',
+        'hold_reason',
+        'hold_expires_at',
+        'hold_metadata',
     ];
 
     protected $casts = [
@@ -39,6 +42,8 @@ final class AuctionDeposit extends Model
         'submitted_at' => 'immutable_datetime',
         'held_at' => 'immutable_datetime',
         'released_at' => 'immutable_datetime',
+        'hold_expires_at' => 'immutable_datetime',
+        'hold_metadata' => 'array',
     ];
 
     public function auction(): BelongsTo

@@ -35,6 +35,7 @@ final class MarkWinnerDefaultedAction
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionTermsRepository $terms,
         private readonly AuctionWinnerReassignmentRepository $winnerReassignments,
+        private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
     ) {}
 
     public function execute(Auction $auction, int $adminId, string $reason, bool $reassignToNext = false, bool $overrideDeadline = false): Auction
@@ -84,11 +85,17 @@ final class MarkWinnerDefaultedAction
                 $alternativeBid = $this->findEligibleAlternativeBid($auction, $defaultedUserId);
 
                 if ($alternativeBid) {
-                    return $this->assignAlternativeWinner($auction, $settlement, $alternativeBid, $adminId, $reason);
+                    $auction = $this->assignAlternativeWinner($auction, $settlement, $alternativeBid, $adminId, $reason);
+                    $this->nonWinnerDeposits->execute($auction, 'alternative_selected', $adminId, 'admin', [$defaultedUserId]);
+
+                    return $auction->refresh();
                 }
             }
 
-            return $this->stateMachine->transition($auction, AuctionStatus::Defaulted, $adminId, 'admin', $reason);
+            $auction = $this->stateMachine->transition($auction, AuctionStatus::Defaulted, $adminId, 'admin', $reason);
+            $this->nonWinnerDeposits->execute($auction, 'no_alternative', $adminId, 'admin', [$defaultedUserId]);
+
+            return $auction->refresh();
         });
     }
 

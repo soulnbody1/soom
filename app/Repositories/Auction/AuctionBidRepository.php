@@ -77,4 +77,14 @@ final class AuctionBidRepository
             ->lockForUpdate()
             ->get();
     }
+
+    public function lockRankedBids(int $auctionId): Collection
+    {
+        return AuctionBid::with('participant')
+            ->where('auction_id', $auctionId)
+            ->orderByDesc('amount_minor')
+            ->orderBy('sequence_number')
+            ->lockForUpdate()
+            ->get();
+    }
 }

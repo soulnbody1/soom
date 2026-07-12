@@ -87,6 +87,24 @@ final class AuctionDepositRepository
             ->update(['status' => AuctionDepositStatus::RefundPending->value]);
     }
 
+    public function lockBidderDepositsForAuction(int $auctionId): Collection
+    {
+        return AuctionDeposit::with(['participant', 'auction'])
+            ->where('auction_id', $auctionId)
+            ->where('type', 'bidder')
+            ->whereIn('status', [
+                AuctionDepositStatus::Held->value,
+                AuctionDepositStatus::AppliedToSettlement->value,
+                AuctionDepositStatus::RefundPending->value,
+                AuctionDepositStatus::PendingSubmission->value,
+                AuctionDepositStatus::PendingReview->value,
+                AuctionDepositStatus::Rejected->value,
+            ])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+    }
+
     public function lockRefundableForCancellation(int $auctionId): Collection
     {
         return AuctionDeposit::where('auction_id', $auctionId)

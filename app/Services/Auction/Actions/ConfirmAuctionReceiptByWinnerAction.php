@@ -23,6 +23,7 @@ final class ConfirmAuctionReceiptByWinnerAction
         private readonly AuctionAudit $audit,
         private readonly AuctionRepository $auctions,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
     ) {}
 
     public function execute(Auction $auction, int $winnerId): Auction
@@ -52,9 +53,12 @@ final class ConfirmAuctionReceiptByWinnerAction
                 'settlement_public_id' => $settlement->public_id,
             ]);
 
-            return $this->stateMachine
+            $auction = $this->stateMachine
                 ->transition($auction, AuctionStatus::Completed, $winnerId, 'user', __('auction.audit.winner_receipt_confirmed'))
                 ->load('settlement');
+            $this->nonWinnerDeposits->execute($auction, 'completed', $winnerId, 'user');
+
+            return $auction->refresh()->load('settlement');
         });
     }
 }

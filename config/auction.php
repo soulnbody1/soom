@@ -23,6 +23,7 @@ return [
     ],
 
     'non_winner_deposit_policy' => env('AUCTION_NON_WINNER_DEPOSIT_POLICY', 'hold_all_eligible_bidders_until_winner_payment'),
+    'non_winner_deposit_hold_count' => (int) env('AUCTION_NON_WINNER_DEPOSIT_HOLD_COUNT', 1),
 
     'outbox' => [
         'max_attempts' => (int) env('AUCTION_OUTBOX_MAX_ATTEMPTS', 3),

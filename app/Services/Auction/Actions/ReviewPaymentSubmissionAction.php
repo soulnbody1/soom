@@ -36,6 +36,7 @@ final class ReviewPaymentSubmissionAction
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionSettlementRepository $settlements,
         private readonly PaymentEligibilityRule $eligibility,
+        private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
     ) {}
 
     public function approve(
@@ -185,6 +186,7 @@ final class ReviewPaymentSubmissionAction
 
                 if ($newPaid >= $settlement->amount_due_minor) {
                     $this->stateMachine->transition($auction, AuctionStatus::HandoverPending, $adminId, 'admin', 'winner payment approved');
+                    $this->nonWinnerDeposits->execute($auction->refresh(), 'winner_payment', $adminId, 'admin');
                 }
             }
 

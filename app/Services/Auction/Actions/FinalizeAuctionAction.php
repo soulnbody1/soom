@@ -34,6 +34,7 @@ final class FinalizeAuctionAction
         private readonly AuctionPaymentRepository $payments,
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionRefundRepository $refunds,
+        private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
     ) {}
 
     public function execute(Auction $auction): Auction
@@ -61,9 +62,10 @@ final class FinalizeAuctionAction
             $winningBid = $this->bids->lockWinningBid($auction->id);
 
             if (! $winningBid || ($auction->reserve_amount_minor !== null && $winningBid->amount_minor < $auction->reserve_amount_minor)) {
-                $this->deposits->markNonWinnerDepositsRefundPending($auction->id, null);
+                $auction = $this->stateMachine->transition($auction, AuctionStatus::Unsold, null, 'system', 'reserve not met or no bids');
+                $this->nonWinnerDeposits->execute($auction, 'unsold');
 
-                return $this->stateMachine->transition($auction, AuctionStatus::Unsold, null, 'system', 'reserve not met or no bids');
+                return $auction->refresh();
             }
 
             $winnerDeposit = $this->deposits->lockWinnerDeposit($auction->id, $winningBid->bidder_id);
@@ -146,9 +148,7 @@ final class FinalizeAuctionAction
             }
 
             $this->auctions->setWinningBid($auction, $winningBid->id);
-            if ($this->shouldRefundNonWinnersImmediately($auction)) {
-                $this->deposits->markNonWinnerDepositsRefundPending($auction->id, $winningBid->bidder_id);
-            }
+            $this->nonWinnerDeposits->execute($auction->refresh(), 'finalization');
             $this->stateMachine->transition($auction, AuctionStatus::SettlementPending, null, 'system', 'winning bid selected');
 
             $nextStatus = $amountDue > 0
@@ -174,13 +174,5 @@ final class FinalizeAuctionAction
         }
 
         return intdiv($winningAmount * $auction->platform_fee_basis_points, 10_000);
-    }
-
-    private function shouldRefundNonWinnersImmediately(Auction $auction): bool
-    {
-        $policy = $auction->configurationVersion?->configuration['non_winner_deposit_policy']
-            ?? config('auction.non_winner_deposit_policy', 'hold_all_eligible_bidders_until_winner_payment');
-
-        return $policy === 'refund_all_non_winners_immediately';
     }
 }
