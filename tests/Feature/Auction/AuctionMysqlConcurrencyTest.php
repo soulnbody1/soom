@@ -126,6 +126,35 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         $this->assertSame(1, AuctionSettlement::where('auction_id', $auction->id)->count());
     }
 
+    public function test_parallel_scheduler_finalization_processes_create_one_settlement(): void
+    {
+        [$auction] = $this->auctionWithTwoBids(AuctionStatus::Ended);
+        $workDir = storage_path('framework/testing/auction-concurrency-'.Str::ulid());
+        mkdir($workDir, 0777, true);
+
+        $worker = $workDir.DIRECTORY_SEPARATOR.'finalize-auction-worker.php';
+        $barrier = $workDir.DIRECTORY_SEPARATOR.'go';
+        $firstResult = $workDir.DIRECTORY_SEPARATOR.'first-result.txt';
+        $secondResult = $workDir.DIRECTORY_SEPARATOR.'second-result.txt';
+        file_put_contents($worker, $this->finalizeAuctionWorkerScript());
+
+        $first = $this->finalizeAuctionProcess($worker, $barrier, $firstResult, $auction->id);
+        $second = $this->finalizeAuctionProcess($worker, $barrier, $secondResult, $auction->id);
+
+        $first->start();
+        $second->start();
+        usleep(200_000);
+        touch($barrier);
+
+        $first->wait();
+        $second->wait();
+
+        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput().file_get_contents($firstResult));
+        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput().file_get_contents($secondResult));
+        $this->assertSame(1, AuctionSettlement::where('auction_id', $auction->id)->where('current_marker', 1)->count());
+        $this->assertSame(1, AuctionSettlement::where('auction_id', $auction->id)->count());
+    }
+
     public function test_two_payment_approvals_apply_winner_payment_once(): void
     {
         [$auction, $firstBid] = $this->auctionWithTwoBids(AuctionStatus::PaymentPending);
@@ -149,13 +178,13 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         $settlement = $this->currentSettlementForBid($auction, $firstBid, 90_000);
         $submission = $this->paymentSubmission($auction, $settlement, $firstBid->bidder_id, 90_000);
         $admin = $this->user('admin');
-        $workDir = storage_path('framework/testing/auction-concurrency-' . Str::ulid());
+        $workDir = storage_path('framework/testing/auction-concurrency-'.Str::ulid());
         mkdir($workDir, 0777, true);
 
-        $worker = $workDir . DIRECTORY_SEPARATOR . 'approve-payment-worker.php';
-        $barrier = $workDir . DIRECTORY_SEPARATOR . 'go';
-        $firstResult = $workDir . DIRECTORY_SEPARATOR . 'first-result.txt';
-        $secondResult = $workDir . DIRECTORY_SEPARATOR . 'second-result.txt';
+        $worker = $workDir.DIRECTORY_SEPARATOR.'approve-payment-worker.php';
+        $barrier = $workDir.DIRECTORY_SEPARATOR.'go';
+        $firstResult = $workDir.DIRECTORY_SEPARATOR.'first-result.txt';
+        $secondResult = $workDir.DIRECTORY_SEPARATOR.'second-result.txt';
         file_put_contents($worker, $this->paymentApprovalWorkerScript());
 
         $first = $this->paymentApprovalProcess($worker, $barrier, $firstResult, $submission->id, $admin->id);
@@ -169,8 +198,8 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         $first->wait();
         $second->wait();
 
-        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput() . file_get_contents($firstResult));
-        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput() . file_get_contents($secondResult));
+        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput().file_get_contents($firstResult));
+        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput().file_get_contents($secondResult));
 
         $settlement->refresh();
         $this->assertSame(90_000, $settlement->amount_paid_minor);
@@ -188,7 +217,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
 
         $action = app(RefundAuctionDepositAction::class);
         $refund = $action->execute($deposit, 'mysql replay refund');
-        $providerRefundId = 'mysql-refund-' . uniqid();
+        $providerRefundId = 'mysql-refund-'.uniqid();
 
         $action->confirmSucceeded($refund, $providerRefundId);
         $action->confirmSucceeded($refund->refresh(), $providerRefundId);
@@ -207,14 +236,14 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             ->firstOrFail();
 
         $refund = app(RefundAuctionDepositAction::class)->execute($deposit, 'parallel refund');
-        $providerRefundId = 'mysql-parallel-refund-' . uniqid();
-        $workDir = storage_path('framework/testing/auction-concurrency-' . Str::ulid());
+        $providerRefundId = 'mysql-parallel-refund-'.uniqid();
+        $workDir = storage_path('framework/testing/auction-concurrency-'.Str::ulid());
         mkdir($workDir, 0777, true);
 
-        $worker = $workDir . DIRECTORY_SEPARATOR . 'confirm-refund-worker.php';
-        $barrier = $workDir . DIRECTORY_SEPARATOR . 'go';
-        $firstResult = $workDir . DIRECTORY_SEPARATOR . 'first-result.txt';
-        $secondResult = $workDir . DIRECTORY_SEPARATOR . 'second-result.txt';
+        $worker = $workDir.DIRECTORY_SEPARATOR.'confirm-refund-worker.php';
+        $barrier = $workDir.DIRECTORY_SEPARATOR.'go';
+        $firstResult = $workDir.DIRECTORY_SEPARATOR.'first-result.txt';
+        $secondResult = $workDir.DIRECTORY_SEPARATOR.'second-result.txt';
         file_put_contents($worker, $this->refundConfirmationWorkerScript());
 
         $first = $this->refundConfirmationProcess($worker, $barrier, $firstResult, $refund->id, $providerRefundId);
@@ -228,8 +257,8 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         $first->wait();
         $second->wait();
 
-        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput() . file_get_contents($firstResult));
-        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput() . file_get_contents($secondResult));
+        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput().file_get_contents($firstResult));
+        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput().file_get_contents($secondResult));
 
         $deposit->refresh();
         $this->assertSame(10_000, $deposit->refunded_amount_minor);
@@ -269,8 +298,8 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'is_active' => true,
             'published_at' => Carbon::now()->subDay(),
         ]);
-        $category = Category::create(['name' => 'cat-' . uniqid(), 'display_order' => 0]);
-        $country = Country::create(['name' => 'country-' . uniqid(), 'code' => 'C' . strtoupper(substr(md5(uniqid()), 0, 5))]);
+        $category = Category::create(['name' => 'cat-'.uniqid(), 'display_order' => 0]);
+        $country = Country::create(['name' => 'country-'.uniqid(), 'code' => 'C'.strtoupper(substr(md5(uniqid()), 0, 5))]);
 
         $auction = Auction::create([
             'seller_id' => $seller->id,
@@ -314,7 +343,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'amount_minor' => $amount,
             'currency_code' => 'JOD',
             'sequence_number' => $sequence,
-            'idempotency_key' => 'mysql-bid-' . uniqid(),
+            'idempotency_key' => 'mysql-bid-'.uniqid(),
             'server_received_at' => Carbon::now(),
             'accepted_at' => Carbon::now(),
         ]);
@@ -383,7 +412,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
     {
         $method = PaymentMethod::create([
             'name' => 'MySQL test method',
-            'code' => 'mysql-test-' . uniqid(),
+            'code' => 'mysql-test-'.uniqid(),
             'instructions' => 'Test method.',
             'requires_manual_review' => true,
             'is_active' => true,
@@ -402,8 +431,8 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'receipt_path' => 'mysql-test.pdf',
             'receipt_mime_type' => 'application/pdf',
             'receipt_size_bytes' => 100,
-            'provider_reference' => 'mysql-payment-' . uniqid(),
-            'idempotency_key' => 'mysql-payment-' . uniqid(),
+            'provider_reference' => 'mysql-payment-'.uniqid(),
+            'idempotency_key' => 'mysql-payment-'.uniqid(),
             'submitted_at' => Carbon::now(),
         ]);
     }
@@ -416,7 +445,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         return User::create([
             'name' => fake()->name(),
             'email' => "auction-mysql-{$unique}@example.test",
-            'phone' => '+96278' . $phoneSuffix,
+            'phone' => '+96278'.$phoneSuffix,
             'password' => Hash::make('password'),
             'role' => $role,
             'email_verified_at' => Carbon::now(),
@@ -432,6 +461,28 @@ final class AuctionMysqlConcurrencyTest extends TestCase
     ): Process {
         return new Process(
             [PHP_BINARY, $worker, base_path(), (string) $submissionId, (string) $adminId, $barrier, $result],
+            base_path(),
+            [
+                'APP_ENV' => 'testing',
+                'DB_CONNECTION' => config('database.default'),
+                'DB_HOST' => config('database.connections.mysql.host'),
+                'DB_PORT' => (string) config('database.connections.mysql.port'),
+                'DB_DATABASE' => config('database.connections.mysql.database'),
+                'DB_USERNAME' => config('database.connections.mysql.username'),
+                'DB_PASSWORD' => (string) config('database.connections.mysql.password'),
+                'CACHE_STORE' => 'array',
+                'SESSION_DRIVER' => 'array',
+                'QUEUE_CONNECTION' => 'sync',
+            ],
+            null,
+            20
+        );
+    }
+
+    private function finalizeAuctionProcess(string $worker, string $barrier, string $result, int $auctionId): Process
+    {
+        return new Process(
+            [PHP_BINARY, $worker, base_path(), (string) $auctionId, $barrier, $result],
             base_path(),
             [
                 'APP_ENV' => 'testing',
@@ -475,6 +526,41 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             null,
             20
         );
+    }
+
+    private function finalizeAuctionWorkerScript(): string
+    {
+        return <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+[$script, $basePath, $auctionId, $barrier, $result] = $argv;
+
+chdir($basePath);
+
+require $basePath.'/vendor/autoload.php';
+$app = require $basePath.'/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$deadline = microtime(true) + 10;
+while (! file_exists($barrier) && microtime(true) < $deadline) {
+    usleep(10_000);
+}
+
+try {
+    $auction = App\Models\Auction\Auction::findOrFail((int) $auctionId);
+    app(App\Services\Auction\Actions\FinalizeAuctionAction::class)
+        ->execute($auction);
+
+    file_put_contents($result, 'ok');
+    exit(0);
+} catch (Throwable $exception) {
+    file_put_contents($result, get_class($exception).': '.$exception->getMessage());
+    exit(1);
+}
+PHP;
     }
 
     private function paymentApprovalWorkerScript(): string
