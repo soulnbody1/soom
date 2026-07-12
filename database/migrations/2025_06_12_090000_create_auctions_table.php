@@ -320,12 +320,15 @@ return new class extends Migration
             $table->string('provider_event_id')->nullable();
             $table->json('provider_payload')->nullable();
             $table->string('idempotency_key');
+            $table->string('successful_obligation_key')->nullable();
             $table->timestampTz('processed_at')->nullable();
             $table->timestampsTz();
 
+            $table->unique('payment_submission_id', 'uq_payment_transaction_submission');
             $table->unique(['provider', 'provider_event_id'], 'uq_payment_transaction_provider_event');
             $table->unique(['provider', 'provider_transaction_id'], 'uniq_provider_txn');
             $table->unique(['purpose', 'idempotency_key'], 'uq_payment_transaction_idempotency');
+            $table->unique('successful_obligation_key', 'uq_payment_successful_obligation');
             $table->index(['auction_id', 'purpose', 'status'], 'idx_payment_transactions_auction');
         });
 

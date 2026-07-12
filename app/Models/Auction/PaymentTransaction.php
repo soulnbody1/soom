@@ -29,6 +29,7 @@ final class PaymentTransaction extends Model
         'provider_event_id',
         'provider_payload',
         'idempotency_key',
+        'successful_obligation_key',
         'processed_at',
     ];
 

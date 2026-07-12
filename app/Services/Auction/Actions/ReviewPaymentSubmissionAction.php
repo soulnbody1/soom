@@ -20,6 +20,8 @@ use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\FinancialObligationKey;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 
 final class ReviewPaymentSubmissionAction
@@ -52,7 +54,41 @@ final class ReviewPaymentSubmissionAction
                 throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
             }
 
+            if ($submission->currency_code !== $auction->currency_code) {
+                throw new AuctionException(__('auction.errors.unsupported_currency', ['code' => $submission->currency_code]));
+            }
+
+            $deposit = null;
             $settlement = null;
+            if (in_array($submission->purpose, [PaymentPurpose::SellerDeposit, PaymentPurpose::BidderDeposit], true)) {
+                $deposit = $this->payments->lockSubmissionDeposit($submission);
+
+                if ($deposit->user_id !== $submission->user_id) {
+                    throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+                }
+
+                if (
+                    ($submission->purpose === PaymentPurpose::SellerDeposit && $deposit->type !== 'seller')
+                    || ($submission->purpose === PaymentPurpose::BidderDeposit && $deposit->type !== 'bidder')
+                ) {
+                    throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+                }
+
+                if (in_array($deposit->status, [
+                    AuctionDepositStatus::Held,
+                    AuctionDepositStatus::AppliedToSettlement,
+                    AuctionDepositStatus::RefundPending,
+                    AuctionDepositStatus::Refunded,
+                    AuctionDepositStatus::Forfeited,
+                ], true)) {
+                    throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                }
+
+                if ($submission->amount_minor > $deposit->required_amount_minor) {
+                    throw new AuctionException(__('auction.errors.payment_amount_exceeds_remaining'));
+                }
+            }
+
             if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
                 $settlement = $this->payments->lockSubmissionSettlement($submission);
 
@@ -65,13 +101,18 @@ final class ReviewPaymentSubmissionAction
                 }
 
                 if ($settlement->status === SettlementStatus::Paid) {
-                    throw new AuctionException(__('auction.errors.payment_already_processed'));
+                    throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
                 }
 
                 $remainingBeforePayment = max(0, $settlement->amount_due_minor - $settlement->amount_paid_minor);
                 if ($submission->amount_minor > $remainingBeforePayment) {
                     throw new AuctionException(__('auction.errors.payment_amount_exceeds_remaining'));
                 }
+            }
+
+            $obligationKey = FinancialObligationKey::forSubmission($submission);
+            if ($this->payments->lockSucceededTransactionForObligation($obligationKey)) {
+                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
             }
 
             $providerTransactionId = $this->trustedProviderTransactionId($submission, $providerTransactionId);
@@ -87,26 +128,38 @@ final class ReviewPaymentSubmissionAction
             ]);
             $this->payments->save($submission);
 
-            $this->payments->firstOrCreateTransaction(
-                [
-                    'purpose' => $submission->purpose->value,
-                    'idempotency_key' => "submission:{$submission->id}:approved",
-                ],
-                [
-                    'payment_submission_id' => $submission->id,
-                    'auction_id' => $auction->id,
-                    'user_id' => $submission->user_id,
-                    'status' => PaymentTransactionStatus::Succeeded,
-                    'amount_minor' => $submission->amount_minor,
-                    'currency_code' => $submission->currency_code,
-                    'provider' => 'manual',
-                    'provider_transaction_id' => $providerTransactionId,
-                    'processed_at' => Carbon::now(),
-                ]
-            );
+            try {
+                $this->payments->firstOrCreateTransaction(
+                    [
+                        'purpose' => $submission->purpose->value,
+                        'idempotency_key' => "submission:{$submission->id}:approved",
+                    ],
+                    [
+                        'payment_submission_id' => $submission->id,
+                        'auction_id' => $auction->id,
+                        'user_id' => $submission->user_id,
+                        'status' => PaymentTransactionStatus::Succeeded,
+                        'amount_minor' => $submission->amount_minor,
+                        'currency_code' => $submission->currency_code,
+                        'provider' => 'manual',
+                        'provider_transaction_id' => $providerTransactionId,
+                        'successful_obligation_key' => $obligationKey,
+                        'processed_at' => Carbon::now(),
+                    ]
+                );
+            } catch (QueryException $exception) {
+                if ($this->isProviderTransactionCollision($exception)) {
+                    throw new AuctionException(__('auction.errors.duplicate_provider_transaction'));
+                }
+
+                if ($this->isPaymentUniquenessCollision($exception)) {
+                    throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                }
+
+                throw $exception;
+            }
 
             if ($submission->purpose === PaymentPurpose::SellerDeposit) {
-                $deposit = $this->payments->lockSubmissionDeposit($submission);
                 $deposit->forceFill([
                     'status' => AuctionDepositStatus::Held,
                     'held_amount_minor' => $submission->amount_minor,
@@ -118,7 +171,6 @@ final class ReviewPaymentSubmissionAction
             }
 
             if ($submission->purpose === PaymentPurpose::BidderDeposit) {
-                $deposit = $this->payments->lockSubmissionDeposit($submission);
                 $deposit->forceFill([
                     'status' => AuctionDepositStatus::Held,
                     'held_amount_minor' => $submission->amount_minor,
@@ -209,5 +261,19 @@ final class ReviewPaymentSubmissionAction
         return $providerTransactionId !== ''
             ? $providerTransactionId
             : "manual:submission:{$submission->id}:approved";
+    }
+
+    private function isPaymentUniquenessCollision(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'uq_payment_successful_obligation')
+            || str_contains($message, 'uq_payment_transaction_submission')
+            || str_contains($message, 'duplicate entry');
+    }
+
+    private function isProviderTransactionCollision(QueryException $exception): bool
+    {
+        return str_contains(strtolower($exception->getMessage()), 'uniq_provider_txn');
     }
 }

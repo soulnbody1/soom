@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Repositories\Auction;
 
+use App\Domain\Auction\Enums\PaymentSubmissionStatus;
+use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
@@ -61,6 +63,22 @@ final class AuctionPaymentRepository
         return PaymentSubmission::firstOrCreate($uniqueAttributes, $defaults);
     }
 
+    public function findPendingReviewSubmissionForDeposit(int $depositId): ?PaymentSubmission
+    {
+        return PaymentSubmission::where('deposit_id', $depositId)
+            ->where('status', PaymentSubmissionStatus::PendingReview->value)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    public function findPendingReviewSubmissionForSettlement(int $settlementId): ?PaymentSubmission
+    {
+        return PaymentSubmission::where('settlement_id', $settlementId)
+            ->where('status', PaymentSubmissionStatus::PendingReview->value)
+            ->lockForUpdate()
+            ->first();
+    }
+
     /**
      * Lock a payment submission for review.
      * Used by ReviewPaymentSubmissionAction.
@@ -116,10 +134,18 @@ final class AuctionPaymentRepository
             ->exists();
     }
 
+    public function lockSucceededTransactionForObligation(string $obligationKey): ?PaymentTransaction
+    {
+        return PaymentTransaction::where('successful_obligation_key', $obligationKey)
+            ->where('status', PaymentTransactionStatus::Succeeded->value)
+            ->lockForUpdate()
+            ->first();
+    }
+
     public function lockSucceededTransactionsForAuction(int $auctionId): Collection
     {
         return PaymentTransaction::where('auction_id', $auctionId)
-            ->where('status', \App\Domain\Auction\Enums\PaymentTransactionStatus::Succeeded->value)
+            ->where('status', PaymentTransactionStatus::Succeeded->value)
             ->lockForUpdate()
             ->get();
     }

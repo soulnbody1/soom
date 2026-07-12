@@ -17,6 +17,7 @@ use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\FinancialObligationKey;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -70,6 +71,12 @@ final class SubmitPaymentSubmissionAction
                 if ($amount <= 0) {
                     throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
                 }
+
+                $obligationKey = $deposit
+                    ? FinancialObligationKey::forDeposit($deposit)
+                    : FinancialObligationKey::forSettlement($settlement);
+
+                $this->ensurePaymentSubmissionCanBeCreated($deposit, $settlement, $obligationKey);
 
                 $submission = $this->payments->firstOrCreateSubmission(
                     [
@@ -173,5 +180,38 @@ final class SubmitPaymentSubmissionAction
         }
 
         return [null, $settlement, max(0, (int) ($settlement->remaining_amount_minor ?? ($settlement->amount_due_minor - $settlement->amount_paid_minor)))];
+    }
+
+    private function ensurePaymentSubmissionCanBeCreated($deposit, $settlement, string $obligationKey): void
+    {
+        if ($this->payments->lockSucceededTransactionForObligation($obligationKey)) {
+            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+        }
+
+        if ($deposit) {
+            if (in_array($deposit->status, [
+                AuctionDepositStatus::Held,
+                AuctionDepositStatus::AppliedToSettlement,
+                AuctionDepositStatus::RefundPending,
+                AuctionDepositStatus::Refunded,
+                AuctionDepositStatus::Forfeited,
+            ], true)) {
+                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+            }
+
+            if ($this->payments->findPendingReviewSubmissionForDeposit($deposit->id)) {
+                throw new AuctionException(__('auction.errors.active_payment_submission_exists'));
+            }
+
+            return;
+        }
+
+        if ((int) $settlement->remaining_amount_minor <= 0) {
+            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+        }
+
+        if ($this->payments->findPendingReviewSubmissionForSettlement($settlement->id)) {
+            throw new AuctionException(__('auction.errors.active_payment_submission_exists'));
+        }
     }
 }
