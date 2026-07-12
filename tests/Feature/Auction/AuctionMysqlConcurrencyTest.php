@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 #[Group('mysql-concurrency')]
@@ -140,6 +141,42 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         $this->assertSame(90_000, $settlement->amount_paid_minor);
         $this->assertSame(0, $settlement->remaining_amount_minor);
         $this->assertSame(1, PaymentTransaction::where('payment_submission_id', $submission->id)->count());
+    }
+
+    public function test_parallel_payment_approval_processes_apply_winner_payment_once(): void
+    {
+        [$auction, $firstBid] = $this->auctionWithTwoBids(AuctionStatus::PaymentPending);
+        $settlement = $this->currentSettlementForBid($auction, $firstBid, 90_000);
+        $submission = $this->paymentSubmission($auction, $settlement, $firstBid->bidder_id, 90_000);
+        $admin = $this->user('admin');
+        $workDir = storage_path('framework/testing/auction-concurrency-'.Str::ulid());
+        mkdir($workDir, 0777, true);
+
+        $worker = $workDir.DIRECTORY_SEPARATOR.'approve-payment-worker.php';
+        $barrier = $workDir.DIRECTORY_SEPARATOR.'go';
+        $firstResult = $workDir.DIRECTORY_SEPARATOR.'first-result.txt';
+        $secondResult = $workDir.DIRECTORY_SEPARATOR.'second-result.txt';
+        file_put_contents($worker, $this->paymentApprovalWorkerScript());
+
+        $first = $this->paymentApprovalProcess($worker, $barrier, $firstResult, $submission->id, $admin->id);
+        $second = $this->paymentApprovalProcess($worker, $barrier, $secondResult, $submission->id, $admin->id);
+
+        $first->start();
+        $second->start();
+        usleep(200_000);
+        touch($barrier);
+
+        $first->wait();
+        $second->wait();
+
+        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput().file_get_contents($firstResult));
+        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput().file_get_contents($secondResult));
+
+        $settlement->refresh();
+        $this->assertSame(90_000, $settlement->amount_paid_minor);
+        $this->assertSame(0, $settlement->remaining_amount_minor);
+        $this->assertSame(1, PaymentTransaction::where('payment_submission_id', $submission->id)->count());
+        $this->assertSame(PaymentSubmissionStatus::Approved, $submission->refresh()->status);
     }
 
     public function test_two_refund_confirmations_apply_amount_once(): void
@@ -345,5 +382,67 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'role' => $role,
             'email_verified_at' => Carbon::now(),
         ]);
+    }
+
+    private function paymentApprovalProcess(
+        string $worker,
+        string $barrier,
+        string $result,
+        int $submissionId,
+        int $adminId
+    ): Process {
+        return new Process(
+            [PHP_BINARY, $worker, base_path(), (string) $submissionId, (string) $adminId, $barrier, $result],
+            base_path(),
+            [
+                'APP_ENV' => 'testing',
+                'DB_CONNECTION' => config('database.default'),
+                'DB_HOST' => config('database.connections.mysql.host'),
+                'DB_PORT' => (string) config('database.connections.mysql.port'),
+                'DB_DATABASE' => config('database.connections.mysql.database'),
+                'DB_USERNAME' => config('database.connections.mysql.username'),
+                'DB_PASSWORD' => (string) config('database.connections.mysql.password'),
+                'CACHE_STORE' => 'array',
+                'SESSION_DRIVER' => 'array',
+                'QUEUE_CONNECTION' => 'sync',
+            ],
+            null,
+            20
+        );
+    }
+
+    private function paymentApprovalWorkerScript(): string
+    {
+        return <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+[$script, $basePath, $submissionId, $adminId, $barrier, $result] = $argv;
+
+chdir($basePath);
+
+require $basePath.'/vendor/autoload.php';
+$app = require $basePath.'/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$deadline = microtime(true) + 10;
+while (! file_exists($barrier) && microtime(true) < $deadline) {
+    usleep(10_000);
+}
+
+try {
+    $submission = App\Models\Auction\PaymentSubmission::findOrFail((int) $submissionId);
+    app(App\Services\Auction\Actions\ReviewPaymentSubmissionAction::class)
+        ->approve($submission, (int) $adminId, 'parallel approval');
+
+    file_put_contents($result, 'ok');
+    exit(0);
+} catch (Throwable $exception) {
+    file_put_contents($result, get_class($exception).': '.$exception->getMessage());
+    exit(1);
+}
+PHP;
     }
 }

@@ -416,18 +416,47 @@ final class AuctionFinancialFlowTest extends TestCase
         $this->assertNotNull($message->last_error);
     }
 
+    public function test_outbox_unsupported_event_is_not_marked_published(): void
+    {
+        [$auction] = $this->auctionWithoutBids();
+        OutboxMessage::query()->delete();
+
+        $message = OutboxMessage::create([
+            'event_id' => (string) Str::ulid(),
+            'topic' => 'auction.events',
+            'event_type' => 'auction.unknown_event',
+            'aggregate_type' => Auction::class,
+            'aggregate_id' => $auction->id,
+            'payload' => ['auction_id' => $auction->id],
+            'status' => OutboxStatus::Pending,
+            'available_at' => Carbon::now()->subMinute(),
+        ]);
+
+        $processed = app(DispatchOutboxMessagesAction::class)->execute(1);
+
+        $this->assertSame(0, $processed);
+        $this->assertSame(OutboxStatus::Pending, $message->refresh()->status);
+        $this->assertStringContainsString('No outbox consumer handled', $message->last_error);
+        $this->assertSame(
+            0,
+            AuctionActivityLog::where('event_type', 'like', 'auction.outbox_consumer.%')
+                ->where('auction_id', $auction->id)
+                ->count()
+        );
+    }
+
     public function test_outbox_consumer_success_marks_message_published(): void
     {
         [$auction] = $this->auctionWithoutBids();
         OutboxMessage::query()->delete();
-        $activityCount = AuctionActivityLog::where('event_type', 'auction.outbox_consumed')
+        $activityCount = AuctionActivityLog::where('event_type', 'auction.outbox_consumer.bid_placed')
             ->where('auction_id', $auction->id)
             ->count();
 
         $message = OutboxMessage::create([
             'event_id' => (string) Str::ulid(),
             'topic' => 'auction.events',
-            'event_type' => 'auction.test',
+            'event_type' => 'auction.bid_accepted',
             'aggregate_type' => Auction::class,
             'aggregate_id' => $auction->id,
             'payload' => ['auction_id' => $auction->id],
@@ -442,7 +471,32 @@ final class AuctionFinancialFlowTest extends TestCase
         $this->assertNotNull($message->published_at);
         $this->assertSame(
             $activityCount + 1,
-            AuctionActivityLog::where('event_type', 'auction.outbox_consumed')->where('auction_id', $auction->id)->count()
+            AuctionActivityLog::where('event_type', 'auction.outbox_consumer.bid_placed')->where('auction_id', $auction->id)->count()
+        );
+    }
+
+    public function test_outbox_consumer_is_idempotent_for_same_event_id(): void
+    {
+        [$auction] = $this->auctionWithoutBids();
+        $eventId = (string) Str::ulid();
+        $event = new AuctionOutboxEvent(
+            eventId: $eventId,
+            topic: 'auction.events',
+            eventType: 'auction.bid_accepted',
+            aggregateType: Auction::class,
+            aggregateId: $auction->id,
+            payload: ['auction_id' => $auction->id],
+        );
+
+        Event::dispatch($event);
+        Event::dispatch($event);
+
+        $this->assertSame(
+            1,
+            AuctionActivityLog::where('auction_id', $auction->id)
+                ->where('event_type', 'auction.outbox_consumer.bid_placed')
+                ->where('metadata->event_id', $eventId)
+                ->count()
         );
     }
 

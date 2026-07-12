@@ -16,7 +16,7 @@
 - استبدال Regex الخانتين في `PlaceBidRequest` بـ`CurrencyDecimalRule` لدعم JOD بثلاث خانات.
 - منع تعليم رسالة Outbox كـPublished إذا لم يوجد consumer/listener فعلي.
 - إضافة retry/dead-letter للـOutbox: الفشل المؤقت يعود إلى `pending` مع `next_retry_at`، وبعد الحد الأقصى ينتقل إلى `dead_letter`.
-- إضافة Outbox consumer داخلي يسجل `auction.outbox_consumed` عند نجاح الاستهلاك.
+- إضافة Outbox consumer داخلي متخصص بقائمة أحداث مدعومة، يسجل `auction.outbox_consumer.*` عند نجاح الاستهلاك ويرفض نشر الأحداث غير المدعومة.
 - إضافة Financial Cancellation Flow ينشئ refund plan للعربونات والمدفوعات الناجحة بشكل idempotent.
 - تنظيف ملفات صور المزاد المرفوعة عند فشل إنشاء سجل قاعدة البيانات أو فشل العملية اللاحقة.
 - تقليل العلاقات المحملة في `PublicAuctionQuery` وإضافة اختبارات خصوصية تمنع تسريب بيانات settlement/financial وبيانات المزايدين للعامة.
@@ -25,7 +25,7 @@
 - استخدام `CreateBidRecordDTO` فعليًا في إنشاء bid، مع camelCase داخل DTO و`toPersistenceArray()` لأسماء قاعدة البيانات.
 - إضافة اختبارات فعلية على SQLite الافتراضي وMySQL فعلي، بما فيها replay/idempotency/constraint tests لمسارات التزامن المطلوبة.
 
-لم يتم الادعاء بأن النظام Production-Ready؛ لأن قائمة القبول الأصلية أكبر من نطاق ما تم إثباته بالكامل في هذه التمريرة، خصوصًا تغطية Outbox consumer المتخصصة لكل نوع event، واختبارات parallel-process حرفية تعمل عمليتين في نفس اللحظة.
+لم يتم الادعاء بأن النظام Production-Ready؛ لأن قائمة القبول الأصلية أكبر من نطاق ما تم إثباته بالكامل في هذه التمريرة، خصوصًا اكتمال side effects الخارجية لكل Outbox event مثل notifications/emails/broadcasts، وأن اختبارات parallel-process الحرفية أضيفت لمسار اعتماد الدفع فقط بينما بقية مسارات التزامن ما زالت replay/idempotency/constraint tests.
 
 ## 2. المشكلات التي تم إصلاحها
 
@@ -298,21 +298,43 @@ auction:run-operations
 auction:reconcile
 ```
 
-تم إصلاح الحالة الأخطر: عدم وجود listener لم يعد يؤدي إلى `Published`. الفشل المؤقت يعيد الرسالة إلى `Pending` مع `next_retry_at` و`last_error`، وبعد بلوغ `auction.outbox.max_attempts` تنتقل إلى `DeadLetter`.
+تم إصلاح الحالة الأخطر: عدم وجود consumer مدعوم لم يعد يؤدي إلى `Published`. الفشل المؤقت يعيد الرسالة إلى `Pending` مع `next_retry_at` و`last_error`، وبعد بلوغ `auction.outbox.max_attempts` تنتقل إلى `DeadLetter`.
 
-تمت إضافة consumer داخلي:
+تمت إضافة consumer داخلي متخصص بقائمة أحداث:
 
 ```text
 App\Listeners\Auction\RecordAuctionOutboxConsumption
 ```
 
-وعند النجاح يسجل:
+وعند النجاح يسجل أثرًا متخصصًا حسب الحدث:
 
 ```text
-auction.outbox_consumed
+auction.outbox_consumer.{consumer}
 ```
 
-ثم يسمح للرسالة بالانتقال إلى `Published`.
+ثم يسمح للرسالة بالانتقال إلى `Published`. أما الأحداث غير المدعومة مثل `auction.unknown_event` فلا تنشر وتعود إلى retry/dead-letter حسب عدد المحاولات.
+
+الأحداث المدعومة حاليًا تشمل:
+
+```text
+auction.status_changed
+auction.finalized
+auction.bid_accepted
+auction.winner_defaulted
+auction.alternative_winner_selected
+auction.seller_handover_confirmed
+auction.dispute_opened
+auction.dispute_resolved
+auction.cancelled
+auction.payment_submitted
+auction.payment_approved
+auction.payment_rejected
+auction.refund_processing
+auction.refund_succeeded
+auction.refund_failed
+auction.winner_receipt_confirmed
+auction.completed
+```
 
 تمت إضافة إعدادات:
 
@@ -321,7 +343,7 @@ auction.outbox.max_attempts
 auction.outbox.retry_delay_seconds
 ```
 
-بقيت مخاطرة: هذا consumer داخلي عام، وليس consumers متخصصة لكل event من القائمة الطويلة مثل notifications/emails/reconciliation triggers.
+بقيت مخاطرة: الـconsumer الحالي داخلي ويسجل أثر استهلاك idempotent للأحداث المدعومة، لكنه ليس بعد تكاملًا خارجيًا كاملًا لكل event مثل notifications/emails/broadcasts/reconciliation triggers.
 
 ## 14.1 Auction Media Cleanup
 
@@ -454,13 +476,16 @@ php artisan migrate --force
   - replayed bid submissions do not create duplicate bid.
   - repeated scheduler finalization creates one settlement.
   - repeated payment approval applies winner payment once.
+  - parallel payment approval processes apply winner payment once.
   - repeated refund confirmation applies refund once.
   - repeated winner default execution does not duplicate reassignment settlement.
 - `AuctionFinancialFlowTest`
   - outbox without consumer is not marked published.
   - outbox failure schedules retry.
   - outbox failure after max attempts moves to dead letter.
+  - outbox unsupported event is not marked published.
   - outbox consumer success marks message published.
+  - outbox consumer is idempotent for same event id.
 - إضافات في `AuctionCoreTest`
   - JOD بثلاث خانات في Place Bid.
   - رفض EGP بثلاث خانات في Place Bid.
@@ -479,10 +504,12 @@ php artisan schedule:list
 php artisan migrate:status
 php artisan migrate --force
 php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php --filter="winner_settlement_overpayment|zero_payment_submission"
+php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php --filter=outbox
 php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php
 php artisan test
 vendor/bin/phpunit --configuration phpunit.mysql.xml
 vendor/bin/phpunit --configuration phpunit.mysql.xml --group mysql-concurrency
+vendor/bin/phpunit --configuration phpunit.mysql.xml --filter=parallel_payment_approval
 vendor/bin/pest
 vendor/bin/pint <modified PHP files only>
 vendor/bin/pint --test <modified files only>
@@ -497,23 +524,33 @@ php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php --filter="wi
 ```
 
 ```text
+php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php --filter=outbox
+5 passed, 19 assertions
+```
+
+```text
 php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php
-25 passed, 119 assertions
+27 passed, 124 assertions
 ```
 
 ```text
 php artisan test
-53 passed, 6 skipped, 177 assertions
+55 passed, 7 skipped, 182 assertions
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml
-49 tests, 178 assertions, OK
+52 tests, 189 assertions, OK
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml --group mysql-concurrency
-6 tests, 14 assertions, OK
+7 tests, 20 assertions, OK
+```
+
+```text
+vendor/bin/phpunit --configuration phpunit.mysql.xml --filter=parallel_payment_approval
+1 test, 6 assertions, OK
 ```
 
 تعذر أو فشل:
@@ -550,7 +587,7 @@ vendor/bin/pint --test
 | `PaymentMethod::create()` / `$paymentMethod->update()` | `CreatePaymentMethodAction.php`, `UpdatePaymentMethodAction.php` | نعم | نُقلت إلى `AuctionPaymentRepository`. |
 | bid metrics داخل transaction | `PlaceBidAction.php` | نعم | أصبح `refreshBidMetrics()` بعد commit. |
 | حفظ deposit/participant داخل مراجعة الدفع | `ReviewPaymentSubmissionAction.php` | نعم | أصبح عبر `AuctionDepositRepository` و`AuctionParticipantRepository`. |
-| `Event::dispatch` ثم `markAsPublished` | `DispatchOutboxMessagesAction.php` | جزئيًا | تم منع Published عند عدم وجود consumer، وأضيف retry/dead-letter وconsumer داخلي عام، لكن consumers المتخصصة لكل event لم تنفذ. |
+| `Event::dispatch` ثم `markAsPublished` | `DispatchOutboxMessagesAction.php` | جزئيًا | تم منع Published عند عدم وجود consumer مدعوم، وأضيف retry/dead-letter وconsumer داخلي متخصص بقائمة أحداث وidempotent. المتبقي هو تكامل side effects خارجي كامل لكل event. |
 | `Storage::disk(...)->delete()` | `SubmitPaymentSubmissionAction.php` | لا | مستخدم كتعويض cleanup عند فشل transaction بعد upload. |
 | Direct creates داخل tests | `AuctionFinancialFlowTest.php`, `AuctionMysqlConcurrencyTest.php` | لا ينطبق | بيانات اختبار فقط. |
 
@@ -563,13 +600,13 @@ vendor/bin/pint --test
 | `terms_accepted_at` داخل participant | لم تعد موجودة. |
 | Regex بخانتين للمزايدات | لم يعد موجودًا في `PlaceBidRequest`. |
 | `provider_reference` كمصدر موثوق نهائي | لم يعد يستخدم كـ`provider_transaction_id` عند الاعتماد؛ بقي كمرجع إيصال اختياري مرسل من المستخدم. |
-| `markAsPublished` بعد `Event::dispatch` | لم يعد يحدث عند عدم وجود consumer؛ مثبت باختبار. |
+| `markAsPublished` بعد `Event::dispatch` | لم يعد يحدث عند عدم وجود consumer مدعوم؛ مثبت باختبارات unsupported/no-consumer. |
 | `Refund Succeeded` غير idempotent | تم إصلاحه واختباره. |
 
 ## 22. المخاطر المتبقية
 
-- تم تنفيذ MySQL tests لكل أسماء مسارات التزامن المطلوبة كاختبارات replay/idempotency/constraint: bids, payment approvals, scheduler finalization, refund confirmations, winner default executions. المتبقي: ليست parallel-process tests حرفية تشغل عاملين مستقلين في نفس اللحظة؛ هي تثبت أثر الحماية بعد إعادة التنفيذ على MySQL.
-- Outbox لم يعد ينشر عند عدم وجود consumer، ويوجد consumer داخلي عام، لكن لا توجد consumers متخصصة كاملة لكل event مطلوب.
+- تم تنفيذ MySQL tests لكل أسماء مسارات التزامن المطلوبة. مسار اعتماد الدفع لديه الآن اختبار parallel-process حرفي يشغل عمليتي PHP مستقلتين على نفس `PaymentSubmission`. المتبقي: bids, scheduler finalization, refund confirmations, winner default executions ما زالت مثبتة باختبارات replay/idempotency/constraint وليست كلها parallel-process حرفية.
+- Outbox لم يعد ينشر عند عدم وجود consumer مدعوم، ويوجد consumer داخلي متخصص بقائمة أحداث ومدعوم باختبار idempotency. المتبقي: لا توجد side effects خارجية كاملة لكل event مثل notifications/emails/broadcasts/reconciliation triggers.
 - Financial Cancellation Flow يدعم العربونات والمدفوعات الناجحة ويثبت idempotency، لكنه لا يزال يحتاج تكامل provider فعلي لتنفيذ التحويلات خارج النظام.
 - Privacy tests الأساسية للعامة موجودة، لكن لا تزال هناك حاجة لتوسيعها لكل endpoint وrole matrix كاملة.
 - Media orphan cleanup مدعوم ومثبت باختبار فشل DB بعد upload.
