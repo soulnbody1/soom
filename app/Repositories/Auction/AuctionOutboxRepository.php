@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Repositories\Auction;
 
 use App\Domain\Auction\Enums\OutboxStatus;
-use App\Models\Auction\Auction;
+use App\DTO\Auction\CreateOutboxMessageDTO;
 use App\Models\Auction\OutboxMessage;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 final class AuctionOutboxRepository
 {
@@ -16,18 +15,9 @@ final class AuctionOutboxRepository
      * Store a new outbox message.
      * Used by AuctionAudit::outbox().
      */
-    public function store(string $eventType, Auction $auction, array $payload): OutboxMessage
+    public function store(CreateOutboxMessageDTO $dto): OutboxMessage
     {
-        return OutboxMessage::create([
-            'event_id' => (string) Str::ulid(),
-            'topic' => 'auction.events',
-            'event_type' => $eventType,
-            'aggregate_type' => Auction::class,
-            'aggregate_id' => $auction->id,
-            'payload' => $payload,
-            'status' => OutboxStatus::Pending,
-            'available_at' => Carbon::now(),
-        ]);
+        return OutboxMessage::create($dto->toPersistenceArray());
     }
 
     /**
@@ -70,6 +60,7 @@ final class AuctionOutboxRepository
             'status' => OutboxStatus::Published,
             'processed_at' => Carbon::now(),
             'published_at' => Carbon::now(),
+            'dead_lettered_at' => null,
             'locked_at' => null,
             'locked_by' => null,
             'last_error' => null,
@@ -81,9 +72,29 @@ final class AuctionOutboxRepository
      */
     public function markAsFailed(OutboxMessage $message, string $error): void
     {
+        $maxAttempts = (int) config('auction.outbox.max_attempts', 3);
+        $retryDelaySeconds = (int) config('auction.outbox.retry_delay_seconds', 60);
+
+        if ($message->attempts >= $maxAttempts) {
+            $message->forceFill([
+                'status' => OutboxStatus::DeadLetter,
+                'failed_at' => Carbon::now(),
+                'dead_lettered_at' => Carbon::now(),
+                'locked_at' => null,
+                'locked_by' => null,
+                'last_error' => $error,
+            ])->save();
+
+            return;
+        }
+
+        $nextRetryAt = Carbon::now()->addSeconds($retryDelaySeconds);
+
         $message->forceFill([
-            'status' => OutboxStatus::Failed,
+            'status' => OutboxStatus::Pending,
             'failed_at' => Carbon::now(),
+            'available_at' => $nextRetryAt,
+            'next_retry_at' => $nextRetryAt,
             'locked_at' => null,
             'locked_by' => null,
             'last_error' => $error,

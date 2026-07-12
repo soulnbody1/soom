@@ -23,9 +23,7 @@ final class PublicAuctionQuery
         'state',
         'city',
         'metric',
-        'currentLeadingBid.bidder',
-        'winningBid.bidder',
-        'settlement',
+        'currentLeadingBid',
     ];
 
     /**

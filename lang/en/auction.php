@@ -73,6 +73,7 @@ return [
         'refund_exceeds_available' => 'Refund amount exceeds available balance.',
         'zero_refund_not_allowed' => 'Refund amount must be greater than zero.',
         'duplicate_provider_refund' => 'Provider refund reference has already been used.',
+        'duplicate_provider_transaction' => 'Provider transaction reference has already been used.',
         'winner_changed' => 'The winner has changed since this operation was initiated.',
         'invalid_decimal_places' => 'Amount has too many decimal places for :currency (max :max).',
         'seller_cannot_set_platform_fees' => 'Platform fees are set by the system.',

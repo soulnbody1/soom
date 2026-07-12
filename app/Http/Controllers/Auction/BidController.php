@@ -24,6 +24,8 @@ final class BidController extends Controller
 
     public function index(AuctionIndexRequest $request, Auction $auction, ListAuctionBidsAction $action): JsonResponse
     {
+        Gate::authorize('view', $auction);
+
         return $this->sendResponse(
             AuctionBidResource::collection($action->execute($auction, $request->perPage())),
             __('auction.messages.auction_bids_fetched')

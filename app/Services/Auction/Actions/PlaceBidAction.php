@@ -7,6 +7,7 @@ namespace App\Services\Auction\Actions;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Domain\Auction\ValueObjects\Money;
+use App\DTO\Auction\CreateBidRecordDTO;
 use App\Models\Auction\AuctionBid;
 use App\Repositories\Auction\AuctionBidRepository;
 use App\Repositories\Auction\AuctionDepositRepository;
@@ -40,7 +41,7 @@ final class PlaceBidAction
         string $idempotencyKey,
         ?string $clientRequestId = null
     ): AuctionBid {
-        return $this->transaction->run(function () use ($auction, $bidderId, $amount, $currency, $idempotencyKey, $clientRequestId): AuctionBid {
+        $bid = $this->transaction->run(function () use ($auction, $bidderId, $amount, $currency, $idempotencyKey, $clientRequestId): AuctionBid {
             $auction = $this->auctions->lockForBidding($auction->id);
 
             $existing = $this->bids->findByIdempotencyKey($auction->id, $bidderId, $idempotencyKey);
@@ -94,19 +95,19 @@ final class PlaceBidAction
             $sequence = $this->bids->nextSequenceNumber($auction->id);
 
             try {
-                $bid = $this->bids->createAcceptedBid([
-                    'auction_id' => $auction->id,
-                    'participant_id' => $participant->id,
-                    'bidder_id' => $bidderId,
-                    'amount_minor' => $bidMoney->minor,
-                    'currency_code' => $bidMoney->currency,
-                    'sequence_number' => $sequence,
-                    'previous_bid_id' => $auction->current_leading_bid_id,
-                    'idempotency_key' => $idempotencyKey,
-                    'client_request_id' => $clientRequestId,
-                    'server_received_at' => $now,
-                    'accepted_at' => $now,
-                ]);
+                $bid = $this->bids->createAcceptedBid(new CreateBidRecordDTO(
+                    auctionId: $auction->id,
+                    participantId: $participant->id,
+                    bidderId: $bidderId,
+                    amountMinor: $bidMoney->minor,
+                    currencyCode: $bidMoney->currency,
+                    sequenceNumber: $sequence,
+                    previousBidId: $auction->current_leading_bid_id,
+                    idempotencyKey: $idempotencyKey,
+                    clientRequestId: $clientRequestId,
+                    serverReceivedAt: $now,
+                    acceptedAt: $now,
+                ));
             } catch (QueryException $e) {
                 if ($e->errorInfo[0] === '23000' && ($e->errorInfo[1] ?? 0) == 1062) {
                     $bid = $this->bids->findByIdempotencyKey($auction->id, $bidderId, $idempotencyKey);
@@ -133,7 +134,6 @@ final class PlaceBidAction
             }
 
             $this->auctions->save($auction);
-            $this->metrics->refreshBidMetrics($auction->id);
             $this->audit->log('auction.bid_accepted', $auction, $bidderId, 'user', [
                 'bid_public_id' => $bid->public_id,
                 'amount_minor' => $bid->amount_minor,
@@ -149,5 +149,9 @@ final class PlaceBidAction
 
             return $bid->load(['auction.currentLeadingBid', 'bidder']);
         });
+
+        $this->metrics->refreshBidMetrics($bid->auction_id);
+
+        return $bid;
     }
 }

@@ -42,4 +42,9 @@ final class AuctionParticipantRepository
             ->where('user_id', $userId)
             ->first();
     }
+
+    public function save(AuctionParticipant $participant): void
+    {
+        $participant->save();
+    }
 }

@@ -6,10 +6,13 @@ namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
+use App\DTO\Auction\CreateSettlementDTO;
 use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionBidRepository;
 use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionRefundRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
@@ -27,6 +30,7 @@ final class FinalizeAuctionAction
         private readonly AuctionBidRepository $bids,
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly AuctionRefundRepository $refunds,
     ) {}
 
     public function execute(Auction $auction): Auction
@@ -75,25 +79,25 @@ final class FinalizeAuctionAction
                 ? SettlementStatus::PaymentPending
                 : SettlementStatus::Paid;
 
-            $settlement = $this->settlements->createSettlement([
-                'auction_id' => $auction->id,
-                'winning_bid_id' => $winningBid->id,
-                'winner_id' => $winningBid->bidder_id,
-                'status' => $settlementStatus,
-                'winning_amount_minor' => $winningBid->amount_minor,
-                'deposit_applied_minor' => $depositApplied,
-                'platform_fee_minor' => $platformFee,
-                'seller_net_amount_minor' => $sellerNet,
-                'amount_due_minor' => $amountDue,
-                'amount_paid_minor' => 0,
-                'remaining_amount_minor' => $amountDue,
-                'currency_code' => $auction->currency_code,
-                'payment_due_at' => $amountDue > 0
+            $settlement = $this->settlements->createSettlement(new CreateSettlementDTO(
+                auctionId: $auction->id,
+                winningBidId: $winningBid->id,
+                winnerId: $winningBid->bidder_id,
+                status: $settlementStatus,
+                winningAmountMinor: $winningBid->amount_minor,
+                depositAppliedMinor: $depositApplied,
+                platformFeeMinor: $platformFee,
+                sellerNetAmountMinor: $sellerNet,
+                amountDueMinor: $amountDue,
+                amountPaidMinor: 0,
+                remainingAmountMinor: $amountDue,
+                currencyCode: $auction->currency_code,
+                paymentDueAt: $amountDue > 0
                     ? $now->addHours($auction->winner_payment_deadline_hours)
                     : null,
-                'handover_due_at' => $handoverDueAt,
-                'paid_at' => $amountDue === 0 ? $now : null,
-            ]);
+                handoverDueAt: $handoverDueAt,
+                paidAt: $amountDue === 0 ? $now : null,
+            ));
 
             if ($winnerDeposit && $depositApplied > 0) {
                 $winnerDeposit->forceFill([
@@ -111,6 +115,22 @@ final class FinalizeAuctionAction
                     'held_amount_minor' => $depositExcess,
                 ]);
                 $this->deposits->save($winnerDeposit);
+
+                $this->refunds->firstOrCreateRefund(
+                    [
+                        'provider' => (string) config('auction.refunds.provider', 'manual'),
+                        'idempotency_key' => "auction:{$auction->id}:winner-deposit-excess:{$winnerDeposit->id}",
+                    ],
+                    [
+                        'auction_id' => $auction->id,
+                        'deposit_id' => $winnerDeposit->id,
+                        'user_id' => $winnerDeposit->user_id,
+                        'status' => RefundTransactionStatus::Pending,
+                        'amount_minor' => $depositExcess,
+                        'currency_code' => $winnerDeposit->currency_code,
+                        'reason' => 'winner deposit exceeds settlement amount',
+                    ]
+                );
             }
 
             $this->auctions->setWinningBid($auction, $winningBid->id);

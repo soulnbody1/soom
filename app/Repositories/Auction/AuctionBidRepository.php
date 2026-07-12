@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Repositories\Auction;
 
+use App\DTO\Auction\CreateBidRecordDTO;
 use App\Models\Auction\AuctionBid;
+use Illuminate\Support\Collection;
 
 final class AuctionBidRepository
 {
@@ -31,9 +33,9 @@ final class AuctionBidRepository
     /**
      * Create a new accepted bid record.
      */
-    public function createAcceptedBid(array $attributes): AuctionBid
+    public function createAcceptedBid(CreateBidRecordDTO $dto): AuctionBid
     {
-        return AuctionBid::create($attributes);
+        return AuctionBid::create($dto->toPersistenceArray());
     }
 
     /**
@@ -61,5 +63,18 @@ final class AuctionBidRepository
             ->orderBy('sequence_number')
             ->lockForUpdate()
             ->first();
+    }
+
+    /**
+     * Lock alternative winner candidates ordered by auction precedence.
+     */
+    public function lockAlternativeWinnerCandidates(int $auctionId, int $defaultedUserId): Collection
+    {
+        return AuctionBid::where('auction_id', $auctionId)
+            ->where('bidder_id', '!=', $defaultedUserId)
+            ->orderByDesc('amount_minor')
+            ->orderBy('sequence_number')
+            ->lockForUpdate()
+            ->get();
     }
 }

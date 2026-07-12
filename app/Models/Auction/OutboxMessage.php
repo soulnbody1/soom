@@ -23,11 +23,13 @@ final class OutboxMessage extends Model
         'status',
         'attempts',
         'available_at',
+        'next_retry_at',
         'locked_at',
         'locked_by',
         'processed_at',
         'failed_at',
         'published_at',
+        'dead_lettered_at',
         'last_error',
     ];
 
@@ -35,9 +37,11 @@ final class OutboxMessage extends Model
         'payload' => 'array',
         'status' => OutboxStatus::class,
         'available_at' => 'immutable_datetime',
+        'next_retry_at' => 'immutable_datetime',
         'locked_at' => 'immutable_datetime',
         'processed_at' => 'immutable_datetime',
         'failed_at' => 'immutable_datetime',
         'published_at' => 'immutable_datetime',
+        'dead_lettered_at' => 'immutable_datetime',
     ];
 }

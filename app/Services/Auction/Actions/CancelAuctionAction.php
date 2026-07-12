@@ -11,8 +11,11 @@ use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\PaymentTransaction;
-use App\Models\Auction\RefundTransaction;
+use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionPaymentRepository;
+use App\Repositories\Auction\AuctionRefundRepository;
 use App\Repositories\Auction\AuctionRepository;
+use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Support\Carbon;
@@ -23,6 +26,10 @@ final class CancelAuctionAction
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
         private readonly AuctionRepository $auctions,
+        private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionPaymentRepository $payments,
+        private readonly AuctionRefundRepository $refunds,
+        private readonly AuctionSettlementRepository $settlements,
     ) {}
 
     public function execute(Auction $auction, int $actorId, string $actorType, string $reason): Auction
@@ -32,12 +39,10 @@ final class CancelAuctionAction
 
             $this->createRefundPlan($auction, $reason);
 
-            $auction->settlement()
-                ->whereNotIn('status', ['completed', 'cancelled'])
-                ->lockForUpdate()
-                ->get()
+            $this->settlements->lockCancellableForAuction($auction->id)
                 ->each(function ($settlement): void {
-                    $settlement->forceFill(['status' => 'cancelled'])->save();
+                    $settlement->forceFill(['status' => 'cancelled']);
+                    $this->settlements->save($settlement);
                 });
 
             return $this->stateMachine->transition(
@@ -54,14 +59,7 @@ final class CancelAuctionAction
     {
         $provider = (string) config('auction.refunds.provider', 'manual');
 
-        AuctionDeposit::where('auction_id', $auction->id)
-            ->whereIn('status', [
-                AuctionDepositStatus::Held->value,
-                AuctionDepositStatus::AppliedToSettlement->value,
-                AuctionDepositStatus::RefundPending->value,
-            ])
-            ->lockForUpdate()
-            ->get()
+        $this->deposits->lockRefundableForCancellation($auction->id)
             ->each(function (AuctionDeposit $deposit) use ($auction, $provider, $reason): void {
                 $amount = max(
                     0,
@@ -74,7 +72,7 @@ final class CancelAuctionAction
                     return;
                 }
 
-                RefundTransaction::firstOrCreate(
+                $this->refunds->firstOrCreateRefund(
                     ['provider' => $provider, 'idempotency_key' => "auction:{$auction->id}:cancel:deposit:{$deposit->id}"],
                     [
                         'auction_id' => $auction->id,
@@ -87,15 +85,13 @@ final class CancelAuctionAction
                     ]
                 );
 
-                $deposit->forceFill(['status' => AuctionDepositStatus::RefundPending])->save();
+                $deposit->forceFill(['status' => AuctionDepositStatus::RefundPending]);
+                $this->deposits->save($deposit);
             });
 
-        PaymentTransaction::where('auction_id', $auction->id)
-            ->where('status', PaymentTransactionStatus::Succeeded->value)
-            ->lockForUpdate()
-            ->get()
+        $this->payments->lockSucceededTransactionsForAuction($auction->id)
             ->each(function (PaymentTransaction $payment) use ($auction, $provider, $reason): void {
-                RefundTransaction::firstOrCreate(
+                $this->refunds->firstOrCreateRefund(
                     ['provider' => $provider, 'idempotency_key' => "auction:{$auction->id}:cancel:payment:{$payment->id}"],
                     [
                         'auction_id' => $auction->id,
@@ -111,7 +107,8 @@ final class CancelAuctionAction
                 $payment->forceFill([
                     'status' => PaymentTransactionStatus::Reversed,
                     'processed_at' => $payment->processed_at ?? Carbon::now(),
-                ])->save();
+                ]);
+                $this->payments->saveTransaction($payment);
             });
     }
 }

@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Tests\Feature\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\Auction\Enums\OutboxStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
 use App\Domain\Auction\ValueObjects\Currency;
 use App\Domain\Auction\ValueObjects\Money;
 use App\DTO\Auction\CreateAuctionInputDTO;
 use App\DTO\Auction\CreateAuctionRecordDTO;
+use App\DTO\Auction\CreateBidRecordDTO;
+use App\DTO\Auction\CreateOutboxMessageDTO;
 use App\DTO\Auction\CreateSettlementDTO;
 use Illuminate\Support\Facades\Validator;
 use Tests\TestCase;
@@ -132,24 +135,79 @@ class AuctionCoreTest extends TestCase
     public function test_settlement_dto_calculates_correctly(): void
     {
         $dto = new CreateSettlementDTO(
-            auction_id: 1,
-            winning_bid_id: 10,
-            winner_id: 5,
+            auctionId: 1,
+            winningBidId: 10,
+            winnerId: 5,
             status: SettlementStatus::PaymentPending,
-            winning_amount_minor: 100000,
-            deposit_applied_minor: 25000,
-            platform_fee_minor: 5000,
-            seller_net_amount_minor: 95000,
-            amount_due_minor: 75000,
-            amount_paid_minor: 0,
-            remaining_amount_minor: 75000,
-            currency_code: 'JOD',
+            winningAmountMinor: 100000,
+            depositAppliedMinor: 25000,
+            platformFeeMinor: 5000,
+            sellerNetAmountMinor: 95000,
+            amountDueMinor: 75000,
+            amountPaidMinor: 0,
+            remainingAmountMinor: 75000,
+            currencyCode: 'JOD',
+            previousSettlementId: 9,
+            winnerReassignmentId: 11,
         );
 
-        $this->assertSame(100000, $dto->winning_amount_minor);
-        $this->assertSame(75000, $dto->amount_due_minor);
-        $this->assertSame(0, $dto->amount_paid_minor);
-        $this->assertSame(75000, $dto->remaining_amount_minor);
+        $array = $dto->toPersistenceArray();
+
+        $this->assertSame(100000, $dto->winningAmountMinor);
+        $this->assertSame(75000, $dto->amountDueMinor);
+        $this->assertSame(0, $dto->amountPaidMinor);
+        $this->assertSame(75000, $dto->remainingAmountMinor);
+        $this->assertSame(9, $array['previous_settlement_id']);
+        $this->assertSame(11, $array['winner_reassignment_id']);
+    }
+
+    public function test_create_bid_record_dto_uses_camel_case_and_persistence_mapping(): void
+    {
+        $now = now();
+        $dto = new CreateBidRecordDTO(
+            auctionId: 1,
+            participantId: 2,
+            bidderId: 3,
+            amountMinor: 100_000,
+            currencyCode: 'JOD',
+            sequenceNumber: 4,
+            previousBidId: null,
+            idempotencyKey: 'bid-key',
+            clientRequestId: 'client-key',
+            serverReceivedAt: $now,
+            acceptedAt: $now,
+        );
+
+        $array = $dto->toPersistenceArray();
+
+        $this->assertSame(1, $dto->auctionId);
+        $this->assertSame(1, $array['auction_id']);
+        $this->assertSame(2, $array['participant_id']);
+        $this->assertSame(100_000, $array['amount_minor']);
+        $this->assertSame('client-key', $array['client_request_id']);
+    }
+
+    public function test_create_outbox_message_dto_uses_camel_case_and_persistence_mapping(): void
+    {
+        $now = now();
+        $dto = new CreateOutboxMessageDTO(
+            eventId: '01ABCDEFGABCDEFGABCDEFG',
+            topic: 'auction.events',
+            eventType: 'auction.test',
+            aggregateType: 'auction',
+            aggregateId: 123,
+            payload: ['auction_id' => 123],
+            status: OutboxStatus::Pending,
+            availableAt: $now,
+        );
+
+        $array = $dto->toPersistenceArray();
+
+        $this->assertSame('auction.test', $dto->eventType);
+        $this->assertSame('01ABCDEFGABCDEFGABCDEFG', $array['event_id']);
+        $this->assertSame('auction.test', $array['event_type']);
+        $this->assertSame(123, $array['aggregate_id']);
+        $this->assertNull($array['next_retry_at']);
     }
 
     // ─── Platform Fee Calculation ────────────────────────────

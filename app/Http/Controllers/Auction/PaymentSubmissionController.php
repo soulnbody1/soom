@@ -40,7 +40,12 @@ final class PaymentSubmissionController extends Controller
         Gate::authorize($data['action'] === 'approve' ? 'approve' : 'reject', $paymentSubmission);
 
         $submission = $data['action'] === 'approve'
-            ? $action->approve($paymentSubmission, Auth::id(), (string) ($data['note'] ?? 'approved'))
+            ? $action->approve(
+                $paymentSubmission,
+                Auth::id(),
+                (string) ($data['note'] ?? 'approved'),
+                (string) ($data['provider_transaction_id'] ?? '')
+            )
             : $action->reject($paymentSubmission, Auth::id(), (string) $data['note']);
 
         return $this->sendResponse(new PaymentSubmissionResource($submission), __('auction.messages.payment_submission_reviewed'));

@@ -6,6 +6,7 @@ namespace App\Repositories\Auction;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Models\Auction\AuctionDeposit;
+use Illuminate\Support\Collection;
 
 final class AuctionDepositRepository
 {
@@ -79,6 +80,18 @@ final class AuctionDepositRepository
             ->where('status', AuctionDepositStatus::Held->value)
             ->when($exceptUserId, fn ($query) => $query->where('user_id', '!=', $exceptUserId))
             ->update(['status' => AuctionDepositStatus::RefundPending->value]);
+    }
+
+    public function lockRefundableForCancellation(int $auctionId): Collection
+    {
+        return AuctionDeposit::where('auction_id', $auctionId)
+            ->whereIn('status', [
+                AuctionDepositStatus::Held->value,
+                AuctionDepositStatus::AppliedToSettlement->value,
+                AuctionDepositStatus::RefundPending->value,
+            ])
+            ->lockForUpdate()
+            ->get();
     }
 
     /**

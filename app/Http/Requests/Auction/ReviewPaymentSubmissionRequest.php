@@ -18,6 +18,7 @@ final class ReviewPaymentSubmissionRequest extends FormRequest
         return [
             'action' => ['required', 'in:approve,reject'],
             'note' => ['nullable', 'required_if:action,reject', 'string', 'max:1000'],
+            'provider_transaction_id' => ['nullable', 'required_if:action,approve', 'string', 'max:160'],
         ];
     }
 }

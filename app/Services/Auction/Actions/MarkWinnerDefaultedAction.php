@@ -9,14 +9,15 @@ use App\Domain\Auction\Enums\AuctionParticipantStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\DTO\Auction\CreateSettlementDTO;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionBid;
-use App\Models\Auction\AuctionWinnerReassignment;
 use App\Repositories\Auction\AuctionBidRepository;
 use App\Repositories\Auction\AuctionDepositRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Repositories\Auction\AuctionTermsRepository;
+use App\Repositories\Auction\AuctionWinnerReassignmentRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -33,6 +34,7 @@ final class MarkWinnerDefaultedAction
         private readonly AuctionBidRepository $bids,
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionTermsRepository $terms,
+        private readonly AuctionWinnerReassignmentRepository $winnerReassignments,
     ) {}
 
     public function execute(Auction $auction, int $adminId, string $reason, bool $reassignToNext = false, bool $overrideDeadline = false): Auction
@@ -92,14 +94,7 @@ final class MarkWinnerDefaultedAction
 
     private function findEligibleAlternativeBid(Auction $auction, int $defaultedUserId): ?AuctionBid
     {
-        $candidates = AuctionBid::where('auction_id', $auction->id)
-            ->where('bidder_id', '!=', $defaultedUserId)
-            ->orderByDesc('amount_minor')
-            ->orderBy('sequence_number')
-            ->lockForUpdate()
-            ->get();
-
-        foreach ($candidates as $candidateBid) {
+        foreach ($this->bids->lockAlternativeWinnerCandidates($auction->id, $defaultedUserId) as $candidateBid) {
             $participant = $candidateBid->participant;
             if (! $participant || $participant->status !== AuctionParticipantStatus::Qualified) {
                 continue;
@@ -136,7 +131,7 @@ final class MarkWinnerDefaultedAction
         $sellerNet = $winningAmount - $platformFee;
         $amountDue = max(0, $winningAmount - $depositApplied);
 
-        $reassignment = AuctionWinnerReassignment::create([
+        $reassignment = $this->winnerReassignments->create([
             'auction_id' => $auction->id,
             'from_bid_id' => $defaultedSettlement->winning_bid_id,
             'to_bid_id' => $newBid->id,
@@ -151,29 +146,29 @@ final class MarkWinnerDefaultedAction
             'created_at' => $now,
         ]);
 
-        $newSettlement = $this->settlements->createSettlement([
-            'auction_id' => $auction->id,
-            'winning_bid_id' => $newBid->id,
-            'winner_id' => $newBid->bidder_id,
-            'status' => $amountDue > 0 ? SettlementStatus::PaymentPending : SettlementStatus::Paid,
-            'previous_settlement_id' => $defaultedSettlement->id,
-            'winner_reassignment_id' => $reassignment->id,
-            'winning_amount_minor' => $winningAmount,
-            'deposit_applied_minor' => $depositApplied,
-            'platform_fee_minor' => $platformFee,
-            'seller_net_amount_minor' => $sellerNet,
-            'amount_due_minor' => $amountDue,
-            'amount_paid_minor' => 0,
-            'remaining_amount_minor' => $amountDue,
-            'currency_code' => $auction->currency_code,
-            'payment_due_at' => $amountDue > 0
+        $newSettlement = $this->settlements->createSettlement(new CreateSettlementDTO(
+            auctionId: $auction->id,
+            winningBidId: $newBid->id,
+            winnerId: $newBid->bidder_id,
+            status: $amountDue > 0 ? SettlementStatus::PaymentPending : SettlementStatus::Paid,
+            winningAmountMinor: $winningAmount,
+            depositAppliedMinor: $depositApplied,
+            platformFeeMinor: $platformFee,
+            sellerNetAmountMinor: $sellerNet,
+            amountDueMinor: $amountDue,
+            amountPaidMinor: 0,
+            remainingAmountMinor: $amountDue,
+            currencyCode: $auction->currency_code,
+            paymentDueAt: $amountDue > 0
                 ? $now->copy()->addHours($auction->winner_payment_deadline_hours)
                 : null,
-            'handover_due_at' => $amountDue === 0
+            handoverDueAt: $amountDue === 0
                 ? $now->copy()->addHours($auction->handover_deadline_hours)
                 : null,
-            'paid_at' => $amountDue === 0 ? $now : null,
-        ]);
+            paidAt: $amountDue === 0 ? $now : null,
+            previousSettlementId: $defaultedSettlement->id,
+            winnerReassignmentId: $reassignment->id,
+        ));
 
         if ($deposit && $depositApplied > 0) {
             $deposit->forceFill([

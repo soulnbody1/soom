@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Services\Auction\Support;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\Auction\Enums\OutboxStatus;
+use App\DTO\Auction\CreateOutboxMessageDTO;
 use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionAuditRepository;
 use App\Repositories\Auction\AuctionOutboxRepository;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 final class AuctionAudit
 {
@@ -54,6 +58,15 @@ final class AuctionAudit
 
     public function outbox(string $eventType, Auction $auction, array $payload): void
     {
-        $this->outboxRepo->store($eventType, $auction, $payload);
+        $this->outboxRepo->store(new CreateOutboxMessageDTO(
+            eventId: (string) Str::ulid(),
+            topic: 'auction.events',
+            eventType: $eventType,
+            aggregateType: Auction::class,
+            aggregateId: $auction->id,
+            payload: $payload,
+            status: OutboxStatus::Pending,
+            availableAt: Carbon::now(),
+        ));
     }
 }

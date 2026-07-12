@@ -7,6 +7,7 @@ namespace App\Repositories\Auction;
 use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
+use Illuminate\Support\Collection;
 
 final class AuctionPaymentRepository
 {
@@ -37,6 +38,18 @@ final class AuctionPaymentRepository
         return PaymentMethod::where('public_id', $publicId)
             ->where('is_active', true)
             ->firstOrFail();
+    }
+
+    public function createPaymentMethod(array $attributes): PaymentMethod
+    {
+        return PaymentMethod::create($attributes);
+    }
+
+    public function updatePaymentMethod(PaymentMethod $paymentMethod, array $attributes): PaymentMethod
+    {
+        $paymentMethod->update($attributes);
+
+        return $paymentMethod->refresh();
     }
 
     /**
@@ -93,6 +106,27 @@ final class AuctionPaymentRepository
     public function firstOrCreateTransaction(array $uniqueAttributes, array $defaults): PaymentTransaction
     {
         return PaymentTransaction::firstOrCreate($uniqueAttributes, $defaults);
+    }
+
+    public function providerTransactionIdExists(string $provider, string $providerTransactionId, ?int $exceptSubmissionId = null): bool
+    {
+        return PaymentTransaction::where('provider', $provider)
+            ->where('provider_transaction_id', $providerTransactionId)
+            ->when($exceptSubmissionId, fn ($query) => $query->where('payment_submission_id', '!=', $exceptSubmissionId))
+            ->exists();
+    }
+
+    public function lockSucceededTransactionsForAuction(int $auctionId): Collection
+    {
+        return PaymentTransaction::where('auction_id', $auctionId)
+            ->where('status', \App\Domain\Auction\Enums\PaymentTransactionStatus::Succeeded->value)
+            ->lockForUpdate()
+            ->get();
+    }
+
+    public function saveTransaction(PaymentTransaction $transaction): void
+    {
+        $transaction->save();
     }
 
     /**

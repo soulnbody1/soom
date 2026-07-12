@@ -22,6 +22,7 @@ Route::prefix('soom')->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(function () {
     Route::get('/my/auctions', [AuctionController::class, 'mine']);
     Route::get('/my/bids', [BidController::class, 'mine']);
+    Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
 
     Route::prefix('auctions')->group(function () {
         Route::post('/', [AuctionController::class, 'store']);

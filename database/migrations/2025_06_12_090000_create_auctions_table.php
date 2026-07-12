@@ -324,6 +324,7 @@ return new class extends Migration
             $table->timestampsTz();
 
             $table->unique(['provider', 'provider_event_id'], 'uq_payment_transaction_provider_event');
+            $table->unique(['provider', 'provider_transaction_id'], 'uniq_provider_txn');
             $table->unique(['purpose', 'idempotency_key'], 'uq_payment_transaction_idempotency');
             $table->index(['auction_id', 'purpose', 'status'], 'idx_payment_transactions_auction');
         });
@@ -418,11 +419,13 @@ return new class extends Migration
             $table->string('status', 20)->default('pending');
             $table->unsignedInteger('attempts')->default(0);
             $table->timestampTz('available_at');
+            $table->timestampTz('next_retry_at')->nullable();
             $table->timestampTz('locked_at')->nullable();
             $table->string('locked_by')->nullable();
             $table->timestampTz('processed_at')->nullable();
             $table->timestampTz('failed_at')->nullable();
             $table->timestampTz('published_at')->nullable();
+            $table->timestampTz('dead_lettered_at')->nullable();
             $table->text('last_error')->nullable();
             $table->timestampsTz();
 

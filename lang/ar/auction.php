@@ -73,6 +73,7 @@ return [
         'refund_exceeds_available' => 'مبلغ الاسترداد يتجاوز الرصيد المتاح.',
         'zero_refund_not_allowed' => 'يجب أن يكون مبلغ الاسترداد أكبر من صفر.',
         'duplicate_provider_refund' => 'مرجع الاسترداد لدى المزود مستخدم مسبقًا.',
+        'duplicate_provider_transaction' => 'مرجع عملية الدفع لدى المزود مستخدم مسبقًا.',
         'winner_changed' => 'تغير الفائز منذ بدء هذه العملية.',
         'invalid_decimal_places' => 'عدد الخانات العشرية يتجاوز الحد المسموح لعملة :currency (الحد الأقصى :max).',
         'seller_cannot_set_platform_fees' => 'رسوم المنصة تحددها المنصة.',

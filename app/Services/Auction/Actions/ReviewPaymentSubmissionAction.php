@@ -13,6 +13,8 @@ use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\PaymentSubmission;
+use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
@@ -27,12 +29,14 @@ final class ReviewPaymentSubmissionAction
         private readonly AuctionStateMachine $stateMachine,
         private readonly AuctionAudit $audit,
         private readonly AuctionPaymentRepository $payments,
+        private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionParticipantRepository $participants,
         private readonly AuctionSettlementRepository $settlements,
     ) {}
 
-    public function approve(PaymentSubmission $submission, int $adminId, string $note = ''): PaymentSubmission
+    public function approve(PaymentSubmission $submission, int $adminId, string $note = '', string $providerTransactionId = ''): PaymentSubmission
     {
-        return $this->transaction->run(function () use ($submission, $adminId, $note): PaymentSubmission {
+        return $this->transaction->run(function () use ($submission, $adminId, $note, $providerTransactionId): PaymentSubmission {
             $submission = $this->payments->lockSubmissionForReview($submission->id);
 
             if ($submission->status !== PaymentSubmissionStatus::PendingReview) {
@@ -40,6 +44,11 @@ final class ReviewPaymentSubmissionAction
             }
 
             $auction = $this->payments->lockSubmissionAuction($submission);
+            $providerTransactionId = $this->trustedProviderTransactionId($submission, $providerTransactionId);
+            if ($this->payments->providerTransactionIdExists('manual', $providerTransactionId, $submission->id)) {
+                throw new AuctionException(__('auction.errors.duplicate_provider_transaction'));
+            }
+
             $submission->forceFill([
                 'status' => PaymentSubmissionStatus::Approved,
                 'reviewed_by' => $adminId,
@@ -61,7 +70,7 @@ final class ReviewPaymentSubmissionAction
                     'amount_minor' => $submission->amount_minor,
                     'currency_code' => $submission->currency_code,
                     'provider' => 'manual',
-                    'provider_transaction_id' => $submission->provider_reference,
+                    'provider_transaction_id' => $providerTransactionId,
                     'processed_at' => Carbon::now(),
                 ]
             );
@@ -72,7 +81,8 @@ final class ReviewPaymentSubmissionAction
                     'status' => AuctionDepositStatus::Held,
                     'held_amount_minor' => $submission->amount_minor,
                     'held_at' => Carbon::now(),
-                ])->save();
+                ]);
+                $this->deposits->save($deposit);
 
                 $this->stateMachine->transition($auction, AuctionStatus::Scheduled, $adminId, 'admin', 'seller deposit approved');
             }
@@ -83,12 +93,16 @@ final class ReviewPaymentSubmissionAction
                     'status' => AuctionDepositStatus::Held,
                     'held_amount_minor' => $submission->amount_minor,
                     'held_at' => Carbon::now(),
-                ])->save();
+                ]);
+                $this->deposits->save($deposit);
 
                 $deposit->participant?->forceFill([
                     'status' => AuctionParticipantStatus::Qualified,
                     'qualified_at' => Carbon::now(),
-                ])->save();
+                ]);
+                if ($deposit->participant) {
+                    $this->participants->save($deposit->participant);
+                }
             }
 
             if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
@@ -154,11 +168,13 @@ final class ReviewPaymentSubmissionAction
             ]);
             $this->payments->save($submission);
 
-            if ($submission->deposit) {
-                $submission->deposit->forceFill([
+            if ($submission->deposit_id) {
+                $deposit = $this->payments->lockSubmissionDeposit($submission);
+                $deposit->forceFill([
                     'status' => AuctionDepositStatus::PendingSubmission,
                     'released_at' => null,
-                ])->save();
+                ]);
+                $this->deposits->save($deposit);
             }
 
             $this->audit->log('auction.payment_rejected', $submission->auction, $adminId, 'admin', [
@@ -168,5 +184,14 @@ final class ReviewPaymentSubmissionAction
 
             return $submission->refresh()->load(['auction', 'deposit']);
         });
+    }
+
+    private function trustedProviderTransactionId(PaymentSubmission $submission, string $providerTransactionId): string
+    {
+        $providerTransactionId = trim($providerTransactionId);
+
+        return $providerTransactionId !== ''
+            ? $providerTransactionId
+            : "manual:submission:{$submission->id}:approved";
     }
 }

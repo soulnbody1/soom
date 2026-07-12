@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Repositories\Auction;
 
+use App\DTO\Auction\CreateSettlementDTO;
 use App\Models\Auction\AuctionSettlement;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 final class AuctionSettlementRepository
 {
@@ -46,8 +48,10 @@ final class AuctionSettlementRepository
      * Create a new settlement record.
      * Used by FinalizeAuctionAction.
      */
-    public function createSettlement(array $attributes): AuctionSettlement
+    public function createSettlement(CreateSettlementDTO $dto): AuctionSettlement
     {
+        $attributes = $dto->toPersistenceArray();
+
         $current = AuctionSettlement::where('auction_id', $attributes['auction_id'])
             ->where('current_marker', 1)
             ->lockForUpdate()
@@ -74,6 +78,14 @@ final class AuctionSettlementRepository
             'amount_paid_minor' => $amountPaid,
             'remaining_amount_minor' => max(0, $amountDue - $amountPaid),
         ]));
+    }
+
+    public function lockCancellableForAuction(int $auctionId): Collection
+    {
+        return AuctionSettlement::where('auction_id', $auctionId)
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->lockForUpdate()
+            ->get();
     }
 
     /**
