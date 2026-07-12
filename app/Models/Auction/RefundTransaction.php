@@ -24,6 +24,8 @@ final class RefundTransaction extends Model
         'user_id',
         'status',
         'amount_minor',
+        'held_refund_amount_minor',
+        'applied_refund_amount_minor',
         'currency_code',
         'reason',
         'provider',

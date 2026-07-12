@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories\Auction;
 
 use App\DTO\Auction\CreateSettlementDTO;
+use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionSettlement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -92,6 +93,15 @@ final class AuctionSettlementRepository
     {
         return AuctionSettlement::where('auction_id', $auctionId)
             ->whereNotIn('status', ['completed', 'cancelled'])
+            ->lockForUpdate()
+            ->get();
+    }
+
+    public function lockForDepositRefund(AuctionDeposit $deposit): Collection
+    {
+        return AuctionSettlement::where('auction_id', $deposit->auction_id)
+            ->where('winner_id', $deposit->user_id)
+            ->where('deposit_applied_minor', '>', 0)
             ->lockForUpdate()
             ->get();
     }

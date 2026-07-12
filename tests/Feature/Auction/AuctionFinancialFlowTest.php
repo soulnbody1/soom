@@ -347,6 +347,7 @@ final class AuctionFinancialFlowTest extends TestCase
             'held_amount_minor' => 10_000,
             'currency_code' => 'JOD',
         ]);
+        $this->successfulDepositPayment($auction, $deposit, $user->id, 10_000);
 
         $action = app(RefundAuctionDepositAction::class);
         $refund = $action->execute($deposit, 'non winner');
@@ -503,7 +504,7 @@ final class AuctionFinancialFlowTest extends TestCase
     public function test_cancellation_does_not_generate_deposit_refund_without_successful_payment(): void
     {
         [$auction] = $this->auctionWithoutBids(AuctionStatus::Scheduled);
-        [$bidder] = $this->qualifiedParticipant($auction, 10_000);
+        [$bidder] = $this->qualifiedParticipant($auction, 10_000, withSuccessfulPayment: false);
         $admin = $this->user('admin');
 
         $action = app(CancelAuctionAction::class);
@@ -699,7 +700,7 @@ final class AuctionFinancialFlowTest extends TestCase
         return [$auction, $winner, $participant, $bid];
     }
 
-    private function qualifiedParticipant(Auction $auction, int $heldDeposit): array
+    private function qualifiedParticipant(Auction $auction, int $heldDeposit, bool $withSuccessfulPayment = true): array
     {
         $user = $this->user();
         $participant = AuctionParticipant::create([
@@ -710,7 +711,7 @@ final class AuctionFinancialFlowTest extends TestCase
             'qualified_at' => Carbon::now()->subDay(),
         ]);
 
-        AuctionDeposit::create([
+        $deposit = AuctionDeposit::create([
             'auction_id' => $auction->id,
             'participant_id' => $participant->id,
             'user_id' => $user->id,
@@ -721,6 +722,9 @@ final class AuctionFinancialFlowTest extends TestCase
             'currency_code' => $auction->currency_code,
             'held_at' => Carbon::now()->subDay(),
         ]);
+        if ($heldDeposit > 0 && $withSuccessfulPayment) {
+            $this->successfulDepositPayment($auction, $deposit, $user->id, $heldDeposit);
+        }
 
         return [$user, $participant];
     }
@@ -820,6 +824,50 @@ final class AuctionFinancialFlowTest extends TestCase
             'provider' => 'manual',
             'provider_transaction_id' => 'cancel-payment-'.uniqid(),
             'idempotency_key' => 'cancel-payment-'.uniqid(),
+            'processed_at' => Carbon::now(),
+        ]);
+    }
+
+    private function successfulDepositPayment(Auction $auction, AuctionDeposit $deposit, int $userId, int $amount): PaymentTransaction
+    {
+        $method = PaymentMethod::create([
+            'name' => 'Deposit payment method',
+            'code' => 'deposit-payment-'.uniqid(),
+            'instructions' => 'Test payment method.',
+            'requires_manual_review' => true,
+            'is_active' => true,
+        ]);
+
+        $submission = PaymentSubmission::create([
+            'auction_id' => $auction->id,
+            'deposit_id' => $deposit->id,
+            'user_id' => $userId,
+            'payment_method_id' => $method->id,
+            'purpose' => PaymentPurpose::BidderDeposit,
+            'status' => PaymentSubmissionStatus::Approved,
+            'amount_minor' => $amount,
+            'currency_code' => $auction->currency_code,
+            'receipt_disk' => 'spaces_private',
+            'receipt_path' => 'deposit-payment.pdf',
+            'receipt_mime_type' => 'application/pdf',
+            'receipt_size_bytes' => 100,
+            'idempotency_key' => 'deposit-payment-'.uniqid(),
+            'submitted_at' => Carbon::now(),
+            'reviewed_at' => Carbon::now(),
+        ]);
+
+        return PaymentTransaction::create([
+            'payment_submission_id' => $submission->id,
+            'auction_id' => $auction->id,
+            'user_id' => $userId,
+            'purpose' => PaymentPurpose::BidderDeposit,
+            'status' => PaymentTransactionStatus::Succeeded,
+            'amount_minor' => $amount,
+            'currency_code' => $auction->currency_code,
+            'provider' => 'manual',
+            'provider_transaction_id' => 'deposit-payment-'.uniqid(),
+            'idempotency_key' => 'deposit-payment-'.uniqid(),
+            'successful_obligation_key' => "deposit:{$deposit->id}",
             'processed_at' => Carbon::now(),
         ]);
     }

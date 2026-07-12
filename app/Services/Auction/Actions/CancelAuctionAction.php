@@ -17,6 +17,7 @@ use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\DepositRefundAllocation;
 
 final class CancelAuctionAction
 {
@@ -35,13 +36,13 @@ final class CancelAuctionAction
         return $this->transaction->run(function () use ($auction, $actorId, $actorType, $reason): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
 
-            $this->createRefundPlan($auction, $reason);
-
             $this->settlements->lockCancellableForAuction($auction->id)
                 ->each(function ($settlement): void {
                     $settlement->forceFill(['status' => 'cancelled']);
                     $this->settlements->save($settlement);
                 });
+
+            $this->createRefundPlan($auction, $reason);
 
             return $this->stateMachine->transition(
                 $auction,
@@ -61,11 +62,6 @@ final class CancelAuctionAction
 
         $this->payments->lockSucceededTransactionsForAuction($auction->id)
             ->each(function (PaymentTransaction $payment) use ($auction, $provider, $reason): void {
-                $existingRefunds = $this->refunds->lockActiveOrSucceededForPayment($payment->id);
-                if ($existingRefunds->isNotEmpty()) {
-                    return;
-                }
-
                 $submission = $payment->submission;
                 $deposit = $submission?->deposit;
                 $settlement = $submission?->settlement;
@@ -75,9 +71,30 @@ final class CancelAuctionAction
                     PaymentPurpose::WinnerSettlement => 'settlement',
                 };
                 $obligationId = $deposit?->id ?? $settlement?->id;
+                $amount = (int) $payment->amount_minor;
+                $heldRefundAmount = 0;
+                $appliedRefundAmount = 0;
 
                 if ($obligationId === null) {
                     return;
+                }
+
+                if ($deposit) {
+                    $depositRefunds = $this->refunds->lockActiveOrSucceededForDeposit($deposit->id);
+                    $allocation = DepositRefundAllocation::calculateRefundableDepositAmount(
+                        $deposit,
+                        (int) $payment->amount_minor,
+                        $depositRefunds,
+                        $this->settlements->lockForDepositRefund($deposit)
+                    );
+
+                    if ($allocation->isEmpty()) {
+                        return;
+                    }
+
+                    $amount = $allocation->totalAmountMinor();
+                    $heldRefundAmount = $allocation->heldAmountMinor;
+                    $appliedRefundAmount = $allocation->appliedAmountMinor;
                 }
 
                 $this->refunds->firstOrCreateRefund(
@@ -90,7 +107,9 @@ final class CancelAuctionAction
                         'obligation_id' => $obligationId,
                         'user_id' => $payment->user_id,
                         'status' => RefundTransactionStatus::Pending,
-                        'amount_minor' => $payment->amount_minor,
+                        'amount_minor' => $amount,
+                        'held_refund_amount_minor' => $heldRefundAmount,
+                        'applied_refund_amount_minor' => $appliedRefundAmount,
                         'currency_code' => $payment->currency_code,
                         'reason' => "auction_cancelled: {$reason}",
                     ]

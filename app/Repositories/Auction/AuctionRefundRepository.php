@@ -39,12 +39,30 @@ final class AuctionRefundRepository
             ->get();
     }
 
+    public function lockActiveOrSucceededForDeposit(int $depositId): Collection
+    {
+        return RefundTransaction::where('deposit_id', $depositId)
+            ->whereIn('status', [
+                RefundTransactionStatus::Pending->value,
+                RefundTransactionStatus::Succeeded->value,
+            ])
+            ->lockForUpdate()
+            ->get();
+    }
+
     public function providerRefundIdExists(string $provider, string $providerRefundId, int $exceptRefundId): bool
     {
         return RefundTransaction::where('provider', $provider)
             ->where('provider_refund_id', $providerRefundId)
             ->whereKeyNot($exceptRefundId)
             ->exists();
+    }
+
+    public function succeededAmountForPayment(int $paymentTransactionId): int
+    {
+        return (int) RefundTransaction::where('payment_transaction_id', $paymentTransactionId)
+            ->where('status', RefundTransactionStatus::Succeeded->value)
+            ->sum('amount_minor');
     }
 
     /**

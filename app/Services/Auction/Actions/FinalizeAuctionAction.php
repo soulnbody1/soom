@@ -12,12 +12,14 @@ use App\DTO\Auction\CreateSettlementDTO;
 use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionBidRepository;
 use App\Repositories\Auction\AuctionDepositRepository;
+use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRefundRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\FinancialObligationKey;
 use Illuminate\Support\Carbon;
 
 final class FinalizeAuctionAction
@@ -29,6 +31,7 @@ final class FinalizeAuctionAction
         private readonly AuctionRepository $auctions,
         private readonly AuctionBidRepository $bids,
         private readonly AuctionDepositRepository $deposits,
+        private readonly AuctionPaymentRepository $payments,
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionRefundRepository $refunds,
     ) {}
@@ -110,27 +113,36 @@ final class FinalizeAuctionAction
             }
 
             if ($depositExcess > 0 && $winnerDeposit) {
-                $winnerDeposit->forceFill([
-                    'status' => AuctionDepositStatus::RefundPending,
-                    'held_amount_minor' => $depositExcess,
-                ]);
-                $this->deposits->save($winnerDeposit);
+                $depositPayment = $this->payments->lockSucceededTransactionForObligation(FinancialObligationKey::forDeposit($winnerDeposit));
 
-                $this->refunds->firstOrCreateRefund(
-                    [
-                        'provider' => (string) config('auction.refunds.provider', 'manual'),
-                        'idempotency_key' => "auction:{$auction->id}:winner-deposit-excess:{$winnerDeposit->id}",
-                    ],
-                    [
-                        'auction_id' => $auction->id,
-                        'deposit_id' => $winnerDeposit->id,
-                        'user_id' => $winnerDeposit->user_id,
-                        'status' => RefundTransactionStatus::Pending,
-                        'amount_minor' => $depositExcess,
-                        'currency_code' => $winnerDeposit->currency_code,
-                        'reason' => 'winner deposit exceeds settlement amount',
-                    ]
-                );
+                if ($depositPayment) {
+                    $winnerDeposit->forceFill([
+                        'status' => AuctionDepositStatus::RefundPending,
+                        'held_amount_minor' => $depositExcess,
+                    ]);
+                    $this->deposits->save($winnerDeposit);
+
+                    $this->refunds->firstOrCreateRefund(
+                        [
+                            'provider' => (string) config('auction.refunds.provider', 'manual'),
+                            'idempotency_key' => "auction:{$auction->id}:winner-deposit-excess:{$winnerDeposit->id}",
+                        ],
+                        [
+                            'auction_id' => $auction->id,
+                            'deposit_id' => $winnerDeposit->id,
+                            'payment_transaction_id' => $depositPayment->id,
+                            'obligation_type' => 'deposit',
+                            'obligation_id' => $winnerDeposit->id,
+                            'user_id' => $winnerDeposit->user_id,
+                            'status' => RefundTransactionStatus::Pending,
+                            'amount_minor' => $depositExcess,
+                            'held_refund_amount_minor' => $depositExcess,
+                            'applied_refund_amount_minor' => 0,
+                            'currency_code' => $winnerDeposit->currency_code,
+                            'reason' => 'winner deposit exceeds settlement amount',
+                        ]
+                    );
+                }
             }
 
             $this->auctions->setWinningBid($auction, $winningBid->id);

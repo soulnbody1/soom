@@ -360,7 +360,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'qualified_at' => Carbon::now()->subDay(),
         ]);
 
-        AuctionDeposit::create([
+        $deposit = AuctionDeposit::create([
             'auction_id' => $auction->id,
             'participant_id' => $participant->id,
             'user_id' => $user->id,
@@ -371,6 +371,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'currency_code' => 'JOD',
             'held_at' => Carbon::now()->subDay(),
         ]);
+        $this->successfulDepositPayment($auction, $deposit, $user->id, $heldDeposit);
 
         return [$user, $participant];
     }
@@ -434,6 +435,51 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'provider_reference' => 'mysql-payment-'.uniqid(),
             'idempotency_key' => 'mysql-payment-'.uniqid(),
             'submitted_at' => Carbon::now(),
+        ]);
+    }
+
+    private function successfulDepositPayment(Auction $auction, AuctionDeposit $deposit, int $userId, int $amount): PaymentTransaction
+    {
+        $method = PaymentMethod::create([
+            'name' => 'MySQL deposit method',
+            'code' => 'mysql-deposit-'.uniqid(),
+            'instructions' => 'Test method.',
+            'requires_manual_review' => true,
+            'is_active' => true,
+        ]);
+
+        $submission = PaymentSubmission::create([
+            'auction_id' => $auction->id,
+            'deposit_id' => $deposit->id,
+            'user_id' => $userId,
+            'payment_method_id' => $method->id,
+            'purpose' => PaymentPurpose::BidderDeposit,
+            'status' => PaymentSubmissionStatus::Approved,
+            'amount_minor' => $amount,
+            'currency_code' => 'JOD',
+            'receipt_disk' => 'spaces_private',
+            'receipt_path' => 'mysql-deposit.pdf',
+            'receipt_mime_type' => 'application/pdf',
+            'receipt_size_bytes' => 100,
+            'provider_reference' => 'mysql-deposit-'.uniqid(),
+            'idempotency_key' => 'mysql-deposit-'.uniqid(),
+            'submitted_at' => Carbon::now(),
+            'reviewed_at' => Carbon::now(),
+        ]);
+
+        return PaymentTransaction::create([
+            'payment_submission_id' => $submission->id,
+            'auction_id' => $auction->id,
+            'user_id' => $userId,
+            'purpose' => PaymentPurpose::BidderDeposit,
+            'status' => 'succeeded',
+            'amount_minor' => $amount,
+            'currency_code' => 'JOD',
+            'provider' => 'manual',
+            'provider_transaction_id' => 'mysql-deposit-'.uniqid(),
+            'idempotency_key' => 'mysql-deposit-'.uniqid(),
+            'successful_obligation_key' => "deposit:{$deposit->id}",
+            'processed_at' => Carbon::now(),
         ]);
     }
 
