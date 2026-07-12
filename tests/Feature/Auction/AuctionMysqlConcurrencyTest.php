@@ -34,6 +34,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -333,10 +334,13 @@ final class AuctionMysqlConcurrencyTest extends TestCase
 
     private function user(string $role = 'user'): User
     {
+        $unique = strtolower((string) Str::ulid());
+        $phoneSuffix = str_pad((string) (abs(crc32($unique)) % 10_000_000), 7, '0', STR_PAD_LEFT);
+
         return User::create([
             'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-            'phone' => '+96278'.fake()->unique()->numerify('#######'),
+            'email' => "auction-mysql-{$unique}@example.test",
+            'phone' => '+96278'.$phoneSuffix,
             'password' => Hash::make('password'),
             'role' => $role,
             'email_verified_at' => Carbon::now(),

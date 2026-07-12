@@ -68,6 +68,7 @@ return [
         'payment_already_processed' => 'This payment has already been processed.',
         'payment_approval_auction_not_active' => 'Payment cannot be approved for a cancelled or rejected auction.',
         'zero_payment_not_allowed' => 'Payment amount must be greater than zero.',
+        'payment_amount_exceeds_remaining' => 'Payment amount exceeds the remaining settlement balance.',
         'stale_settlement_payment' => 'This payment belongs to an old settlement.',
         'unsupported_currency' => 'The currency :code is not supported.',
         'settlement_already_exists' => 'A settlement already exists for this auction.',

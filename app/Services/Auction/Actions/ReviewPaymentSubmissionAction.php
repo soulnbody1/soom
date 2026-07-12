@@ -48,6 +48,32 @@ final class ReviewPaymentSubmissionAction
                 throw new AuctionException(__('auction.errors.payment_approval_auction_not_active'));
             }
 
+            if ($submission->amount_minor <= 0) {
+                throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
+            }
+
+            $settlement = null;
+            if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
+                $settlement = $this->payments->lockSubmissionSettlement($submission);
+
+                if ($settlement->winner_id !== $submission->user_id) {
+                    throw new AuctionException(__('auction.errors.winner_changed'));
+                }
+
+                if (! $settlement->is_current || $settlement->current_marker !== 1) {
+                    throw new AuctionException(__('auction.errors.stale_settlement_payment'));
+                }
+
+                if ($settlement->status === SettlementStatus::Paid) {
+                    throw new AuctionException(__('auction.errors.payment_already_processed'));
+                }
+
+                $remainingBeforePayment = max(0, $settlement->amount_due_minor - $settlement->amount_paid_minor);
+                if ($submission->amount_minor > $remainingBeforePayment) {
+                    throw new AuctionException(__('auction.errors.payment_amount_exceeds_remaining'));
+                }
+            }
+
             $providerTransactionId = $this->trustedProviderTransactionId($submission, $providerTransactionId);
             if ($this->payments->providerTransactionIdExists('manual', $providerTransactionId, $submission->id)) {
                 throw new AuctionException(__('auction.errors.duplicate_provider_transaction'));
@@ -110,21 +136,7 @@ final class ReviewPaymentSubmissionAction
             }
 
             if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
-                $settlement = $this->payments->lockSubmissionSettlement($submission);
-
-                if ($settlement->winner_id !== $submission->user_id) {
-                    throw new AuctionException(__('auction.errors.winner_changed'));
-                }
-
-                if (! $settlement->is_current || $settlement->current_marker !== 1) {
-                    throw new AuctionException(__('auction.errors.stale_settlement_payment'));
-                }
-
-                if ($settlement->status === SettlementStatus::Paid) {
-                    throw new AuctionException(__('auction.errors.payment_already_processed'));
-                }
-
-                $newPaid = min($settlement->amount_due_minor, $settlement->amount_paid_minor + $submission->amount_minor);
+                $newPaid = $settlement->amount_paid_minor + $submission->amount_minor;
                 $remaining = max(0, $settlement->amount_due_minor - $newPaid);
                 $settlement->forceFill([
                     'amount_paid_minor' => $newPaid,

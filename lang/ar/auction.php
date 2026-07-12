@@ -68,6 +68,7 @@ return [
         'payment_already_processed' => 'تمت معالجة هذا الدفع مسبقًا.',
         'payment_approval_auction_not_active' => 'لا يمكن اعتماد الدفع لمزاد ملغي أو مرفوض.',
         'zero_payment_not_allowed' => 'يجب أن يكون مبلغ الدفع أكبر من صفر.',
+        'payment_amount_exceeds_remaining' => 'مبلغ الدفع يتجاوز رصيد التسوية المتبقي.',
         'stale_settlement_payment' => 'هذا الدفع مرتبط بتسوية قديمة.',
         'unsupported_currency' => 'العملة :code غير مدعومة.',
         'settlement_already_exists' => 'يوجد تسوية مسبقة لهذا المزاد.',

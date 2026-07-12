@@ -129,6 +129,82 @@ final class AuctionFinancialFlowTest extends TestCase
         $this->assertSame(100_000, $settlement->remaining_amount_minor);
     }
 
+    public function test_winner_settlement_overpayment_is_rejected_on_approval(): void
+    {
+        [$auction, $winner] = $this->auctionWithBid(100_000, 10_000);
+
+        $auction = app(FinalizeAuctionAction::class)->execute($auction);
+        $settlement = $auction->settlement;
+        $method = PaymentMethodFactory::new()->create();
+        $submission = PaymentSubmission::create([
+            'auction_id' => $auction->id,
+            'settlement_id' => $settlement->id,
+            'user_id' => $winner->id,
+            'payment_method_id' => $method->id,
+            'purpose' => PaymentPurpose::WinnerSettlement,
+            'status' => PaymentSubmissionStatus::PendingReview,
+            'amount_minor' => 90_001,
+            'currency_code' => $auction->currency_code,
+            'receipt_disk' => 'spaces_private',
+            'receipt_path' => 'winner-overpayment.pdf',
+            'receipt_mime_type' => 'application/pdf',
+            'receipt_size_bytes' => 100,
+            'idempotency_key' => 'winner-overpayment-'.Str::ulid(),
+            'submitted_at' => Carbon::now(),
+        ]);
+
+        try {
+            app(ReviewPaymentSubmissionAction::class)->approve($submission, $this->user('admin')->id, 'approved');
+            $this->fail('Overpayment approval should have failed.');
+        } catch (AuctionException $exception) {
+            $this->assertSame(__('auction.errors.payment_amount_exceeds_remaining'), $exception->getMessage());
+        }
+
+        $this->assertSame(PaymentSubmissionStatus::PendingReview, $submission->refresh()->status);
+        $this->assertSame(SettlementStatus::PaymentPending, $settlement->refresh()->status);
+        $this->assertSame(0, $settlement->amount_paid_minor);
+        $this->assertSame(90_000, $settlement->remaining_amount_minor);
+        $this->assertSame(0, PaymentTransaction::where('payment_submission_id', $submission->id)->count());
+    }
+
+    public function test_zero_payment_submission_is_rejected_on_approval(): void
+    {
+        [$auction, $winner] = $this->auctionWithBid(100_000, 10_000);
+
+        $auction = app(FinalizeAuctionAction::class)->execute($auction);
+        $settlement = $auction->settlement;
+        $method = PaymentMethodFactory::new()->create();
+        $submission = PaymentSubmission::create([
+            'auction_id' => $auction->id,
+            'settlement_id' => $settlement->id,
+            'user_id' => $winner->id,
+            'payment_method_id' => $method->id,
+            'purpose' => PaymentPurpose::WinnerSettlement,
+            'status' => PaymentSubmissionStatus::PendingReview,
+            'amount_minor' => 0,
+            'currency_code' => $auction->currency_code,
+            'receipt_disk' => 'spaces_private',
+            'receipt_path' => 'winner-zero-payment.pdf',
+            'receipt_mime_type' => 'application/pdf',
+            'receipt_size_bytes' => 100,
+            'idempotency_key' => 'winner-zero-payment-'.Str::ulid(),
+            'submitted_at' => Carbon::now(),
+        ]);
+
+        try {
+            app(ReviewPaymentSubmissionAction::class)->approve($submission, $this->user('admin')->id, 'approved');
+            $this->fail('Zero payment approval should have failed.');
+        } catch (AuctionException $exception) {
+            $this->assertSame(__('auction.errors.zero_payment_not_allowed'), $exception->getMessage());
+        }
+
+        $this->assertSame(PaymentSubmissionStatus::PendingReview, $submission->refresh()->status);
+        $this->assertSame(SettlementStatus::PaymentPending, $settlement->refresh()->status);
+        $this->assertSame(0, $settlement->amount_paid_minor);
+        $this->assertSame(90_000, $settlement->remaining_amount_minor);
+        $this->assertSame(0, PaymentTransaction::where('payment_submission_id', $submission->id)->count());
+    }
+
     public function test_winner_default_creates_new_current_settlement_for_alternative_winner(): void
     {
         [$auction, $winner, $winnerParticipant, $winnerBid] = $this->auctionWithBid(100_000, 10_000);

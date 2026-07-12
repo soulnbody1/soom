@@ -39,6 +39,8 @@
 - Payment Approval لم يعد يستخدم `provider_reference` المرسل من المستخدم كـ`provider_transaction_id` نهائي؛ الاعتماد يستخدم مرجع أدمن أو مرجع manual داخلي deterministic.
 - Payment Approval يرفض تكرار `provider_transaction_id` على submissions مختلفة، مع قيد `UNIQUE(provider, provider_transaction_id)`.
 - Payment Approval يرفض الاعتماد إذا أصبح المزاد `cancelled` أو `rejected` قبل المراجعة.
+- Payment Approval يرفض اعتماد أي submission بمبلغ صفري أو سلبي قبل إنشاء أي `PaymentTransaction`.
+- Payment Approval يرفض اعتماد دفعة فائز أكبر من `remaining_amount_minor` قبل إنشاء أي `PaymentTransaction`.
 - Refund confirmation أصبحت idempotent ولا تضاعف `refunded_amount_minor`.
 - `PlaceBidRequest` أصبح currency-aware.
 
@@ -165,8 +167,10 @@ refund_all_non_winners_immediately
 
 - Submit يعيد lock للـdeposit/settlement داخل transaction بعد رفع الملف.
 - يمنع payment بمبلغ صفر.
+- Approval يمنع payment بمبلغ صفر أو سلبي حتى إذا وصل submission مصطنع مباشرة إلى المراجعة.
 - Approval يرفض stale settlement إذا لم تعد current.
 - Approval يحدث `amount_paid_minor` و`remaining_amount_minor`.
+- Approval يرفض winner settlement overpayment قبل إنشاء transaction أو تغيير حالة submission.
 - Duplicate approval يبقى idempotent بسبب حالة submission وtransaction idempotency.
 - Duplicate provider transaction id مرفوض قبل إنشاء transaction جديدة، ومدعوم بقيد قاعدة بيانات.
 - Approval يرفض المزادات الملغاة أو المرفوضة قبل إنشاء transaction.
@@ -414,6 +418,7 @@ php artisan migrate --force
 - `lang/en/auction.php`
 - `routes/api/auction.php`
 - `tests/Feature/Auction/AuctionCoreTest.php`
+- `tests/Feature/Auction/AuctionMysqlConcurrencyTest.php`
 
 ## 18. الملفات المحذوفة
 
@@ -426,6 +431,8 @@ php artisan migrate --force
   - full deposit coverage with pending excess refund.
   - exact deposit coverage without excess refund.
   - zero deposit leaves the full winning amount due.
+  - winner settlement overpayment is rejected on approval.
+  - zero payment submission is rejected on approval.
   - alternative winner creates new current settlement.
   - reject then resubmit then approve.
   - approved auction with zero seller deposit goes directly to scheduled.
@@ -471,10 +478,13 @@ php artisan route:list
 php artisan schedule:list
 php artisan migrate:status
 php artisan migrate --force
+php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php --filter="winner_settlement_overpayment|zero_payment_submission"
+php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php
 php artisan test
 vendor/bin/phpunit --configuration phpunit.mysql.xml
 vendor/bin/phpunit --configuration phpunit.mysql.xml --group mysql-concurrency
 vendor/bin/pest
+vendor/bin/pint <modified PHP files only>
 vendor/bin/pint --test <modified files only>
 php -l <modified php files>
 ```
@@ -482,13 +492,23 @@ php -l <modified php files>
 نتائج مهمة:
 
 ```text
+php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php --filter="winner_settlement_overpayment|zero_payment_submission"
+2 passed, 12 assertions
+```
+
+```text
+php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php
+25 passed, 119 assertions
+```
+
+```text
 php artisan test
-51 passed, 6 skipped, 165 assertions
+53 passed, 6 skipped, 177 assertions
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml
-47 tests, 166 assertions, OK
+49 tests, 178 assertions, OK
 ```
 
 ```text
