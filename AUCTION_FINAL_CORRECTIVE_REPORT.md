@@ -25,7 +25,7 @@
 - استخدام `CreateBidRecordDTO` فعليًا في إنشاء bid، مع camelCase داخل DTO و`toPersistenceArray()` لأسماء قاعدة البيانات.
 - إضافة اختبارات فعلية على SQLite الافتراضي وMySQL فعلي، بما فيها replay/idempotency/constraint tests لمسارات التزامن المطلوبة.
 
-لم يتم الادعاء بأن النظام Production-Ready؛ لأن قائمة القبول الأصلية أكبر من نطاق ما تم إثباته بالكامل في هذه التمريرة، خصوصًا اكتمال side effects الخارجية لكل Outbox event مثل notifications/emails/broadcasts، وأن اختبارات parallel-process الحرفية أضيفت لمسار اعتماد الدفع فقط بينما بقية مسارات التزامن ما زالت replay/idempotency/constraint tests.
+لم يتم الادعاء بأن النظام Production-Ready؛ لأن قائمة القبول الأصلية أكبر من نطاق ما تم إثباته بالكامل في هذه التمريرة، خصوصًا اكتمال side effects الخارجية لكل Outbox event مثل notifications/emails/broadcasts، وأن اختبارات parallel-process الحرفية أضيفت لمساري اعتماد الدفع وتأكيد refund فقط بينما بقية مسارات التزامن ما زالت replay/idempotency/constraint tests.
 
 ## 2. المشكلات التي تم إصلاحها
 
@@ -478,6 +478,7 @@ php artisan migrate --force
   - repeated payment approval applies winner payment once.
   - parallel payment approval processes apply winner payment once.
   - repeated refund confirmation applies refund once.
+  - parallel refund confirmation processes apply amount once.
   - repeated winner default execution does not duplicate reassignment settlement.
 - `AuctionFinancialFlowTest`
   - outbox without consumer is not marked published.
@@ -510,6 +511,7 @@ php artisan test
 vendor/bin/phpunit --configuration phpunit.mysql.xml
 vendor/bin/phpunit --configuration phpunit.mysql.xml --group mysql-concurrency
 vendor/bin/phpunit --configuration phpunit.mysql.xml --filter=parallel_payment_approval
+vendor/bin/phpunit --configuration phpunit.mysql.xml --filter=parallel_refund_confirmation
 vendor/bin/pest
 vendor/bin/pint <modified PHP files only>
 vendor/bin/pint --test <modified files only>
@@ -535,21 +537,26 @@ php artisan test tests/Feature/Auction/AuctionFinancialFlowTest.php
 
 ```text
 php artisan test
-55 passed, 7 skipped, 182 assertions
+55 passed, 8 skipped, 182 assertions
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml
-52 tests, 189 assertions, OK
+53 tests, 195 assertions, OK
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml --group mysql-concurrency
-7 tests, 20 assertions, OK
+8 tests, 26 assertions, OK
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml --filter=parallel_payment_approval
+1 test, 6 assertions, OK
+```
+
+```text
+vendor/bin/phpunit --configuration phpunit.mysql.xml --filter=parallel_refund_confirmation
 1 test, 6 assertions, OK
 ```
 
@@ -605,7 +612,7 @@ vendor/bin/pint --test
 
 ## 22. المخاطر المتبقية
 
-- تم تنفيذ MySQL tests لكل أسماء مسارات التزامن المطلوبة. مسار اعتماد الدفع لديه الآن اختبار parallel-process حرفي يشغل عمليتي PHP مستقلتين على نفس `PaymentSubmission`. المتبقي: bids, scheduler finalization, refund confirmations, winner default executions ما زالت مثبتة باختبارات replay/idempotency/constraint وليست كلها parallel-process حرفية.
+- تم تنفيذ MySQL tests لكل أسماء مسارات التزامن المطلوبة. مسارا اعتماد الدفع وتأكيد refund لديهما الآن اختبارات parallel-process حرفية تشغل عمليتي PHP مستقلتين على نفس السجل. المتبقي: bids, scheduler finalization, winner default executions ما زالت مثبتة باختبارات replay/idempotency/constraint وليست كلها parallel-process حرفية.
 - Outbox لم يعد ينشر عند عدم وجود consumer مدعوم، ويوجد consumer داخلي متخصص بقائمة أحداث ومدعوم باختبار idempotency. المتبقي: لا توجد side effects خارجية كاملة لكل event مثل notifications/emails/broadcasts/reconciliation triggers.
 - Financial Cancellation Flow يدعم العربونات والمدفوعات الناجحة ويثبت idempotency، لكنه لا يزال يحتاج تكامل provider فعلي لتنفيذ التحويلات خارج النظام.
 - Privacy tests الأساسية للعامة موجودة، لكن لا تزال هناك حاجة لتوسيعها لكل endpoint وrole matrix كاملة.
