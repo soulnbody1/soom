@@ -41,6 +41,11 @@ final class AuctionDepositRepository
             ->firstOrFail();
     }
 
+    public function lockDepositForPayment(int $auctionId, int $userId, string $type): AuctionDeposit
+    {
+        return $this->lockPaymentDeposit($auctionId, $userId, $type);
+    }
+
     /**
      * Find the winner's deposit for settlement application.
      * Used by FinalizeAuctionAction.

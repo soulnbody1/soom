@@ -34,9 +34,13 @@ final class PaymentSubmission extends Model
         'provider_reference',
         'idempotency_key',
         'reviewed_by',
+        'overridden_by',
         'review_note',
+        'override_reason',
         'submitted_at',
         'reviewed_at',
+        'overridden_at',
+        'original_deadline',
     ];
 
     protected $casts = [
@@ -44,6 +48,8 @@ final class PaymentSubmission extends Model
         'status' => PaymentSubmissionStatus::class,
         'submitted_at' => 'immutable_datetime',
         'reviewed_at' => 'immutable_datetime',
+        'overridden_at' => 'immutable_datetime',
+        'original_deadline' => 'immutable_datetime',
     ];
 
     public function auction(): BelongsTo

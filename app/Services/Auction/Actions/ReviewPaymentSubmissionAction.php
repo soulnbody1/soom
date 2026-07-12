@@ -21,6 +21,7 @@ use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\FinancialObligationKey;
+use App\Services\Auction\Support\PaymentEligibilityRule;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 
@@ -34,11 +35,18 @@ final class ReviewPaymentSubmissionAction
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly PaymentEligibilityRule $eligibility,
     ) {}
 
-    public function approve(PaymentSubmission $submission, int $adminId, string $note = '', string $providerTransactionId = ''): PaymentSubmission
-    {
-        return $this->transaction->run(function () use ($submission, $adminId, $note, $providerTransactionId): PaymentSubmission {
+    public function approve(
+        PaymentSubmission $submission,
+        int $adminId,
+        string $note = '',
+        string $providerTransactionId = '',
+        bool $overrideDeadline = false,
+        string $overrideReason = ''
+    ): PaymentSubmission {
+        return $this->transaction->run(function () use ($submission, $adminId, $note, $providerTransactionId, $overrideDeadline, $overrideReason): PaymentSubmission {
             $submission = $this->payments->lockSubmissionForReview($submission->id);
 
             if ($submission->status !== PaymentSubmissionStatus::PendingReview) {
@@ -46,69 +54,35 @@ final class ReviewPaymentSubmissionAction
             }
 
             $auction = $this->payments->lockSubmissionAuction($submission);
-            if (in_array($auction->status, [AuctionStatus::Cancelled, AuctionStatus::Rejected], true)) {
-                throw new AuctionException(__('auction.errors.payment_approval_auction_not_active'));
-            }
-
-            if ($submission->amount_minor <= 0) {
-                throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
-            }
-
-            if ($submission->currency_code !== $auction->currency_code) {
-                throw new AuctionException(__('auction.errors.unsupported_currency', ['code' => $submission->currency_code]));
-            }
 
             $deposit = null;
+            $participant = null;
             $settlement = null;
             if (in_array($submission->purpose, [PaymentPurpose::SellerDeposit, PaymentPurpose::BidderDeposit], true)) {
                 $deposit = $this->payments->lockSubmissionDeposit($submission);
-
-                if ($deposit->user_id !== $submission->user_id) {
-                    throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
-                }
-
-                if (
-                    ($submission->purpose === PaymentPurpose::SellerDeposit && $deposit->type !== 'seller')
-                    || ($submission->purpose === PaymentPurpose::BidderDeposit && $deposit->type !== 'bidder')
-                ) {
-                    throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
-                }
-
-                if (in_array($deposit->status, [
-                    AuctionDepositStatus::Held,
-                    AuctionDepositStatus::AppliedToSettlement,
-                    AuctionDepositStatus::RefundPending,
-                    AuctionDepositStatus::Refunded,
-                    AuctionDepositStatus::Forfeited,
-                ], true)) {
-                    throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
-                }
-
-                if ($submission->amount_minor > $deposit->required_amount_minor) {
-                    throw new AuctionException(__('auction.errors.payment_amount_exceeds_remaining'));
+                if ($submission->purpose === PaymentPurpose::BidderDeposit) {
+                    $participant = $this->participants->lockParticipant($auction->id, (int) $submission->user_id);
                 }
             }
 
             if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
                 $settlement = $this->payments->lockSubmissionSettlement($submission);
-
-                if ($settlement->winner_id !== $submission->user_id) {
-                    throw new AuctionException(__('auction.errors.winner_changed'));
-                }
-
-                if (! $settlement->is_current || $settlement->current_marker !== 1) {
-                    throw new AuctionException(__('auction.errors.stale_settlement_payment'));
-                }
-
-                if ($settlement->status === SettlementStatus::Paid) {
-                    throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
-                }
-
-                $remainingBeforePayment = max(0, $settlement->amount_due_minor - $settlement->amount_paid_minor);
-                if ($submission->amount_minor > $remainingBeforePayment) {
-                    throw new AuctionException(__('auction.errors.payment_amount_exceeds_remaining'));
+                $currentSettlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
+                if (! $currentSettlement || $currentSettlement->id !== $settlement->id) {
+                    throw new AuctionException(__('auction.errors.payment_target_not_current'));
                 }
             }
+
+            $originalDeadline = $this->eligibility->assertCanApproveSubmission(
+                $auction,
+                $submission,
+                $deposit,
+                $participant,
+                $settlement,
+                $overrideDeadline,
+                $overrideReason,
+                $adminId
+            );
 
             $obligationKey = FinancialObligationKey::forSubmission($submission);
             if ($this->payments->lockSucceededTransactionForObligation($obligationKey)) {
@@ -126,6 +100,14 @@ final class ReviewPaymentSubmissionAction
                 'review_note' => $note,
                 'reviewed_at' => Carbon::now(),
             ]);
+            if ($originalDeadline) {
+                $submission->forceFill([
+                    'overridden_by' => $adminId,
+                    'overridden_at' => Carbon::now(),
+                    'override_reason' => trim($overrideReason),
+                    'original_deadline' => $originalDeadline,
+                ]);
+            }
             $this->payments->save($submission);
 
             try {
@@ -209,6 +191,8 @@ final class ReviewPaymentSubmissionAction
             $this->audit->log('auction.payment_approved', $auction, $adminId, 'admin', [
                 'submission_public_id' => $submission->public_id,
                 'purpose' => $submission->purpose->value,
+                'deadline_overridden' => $originalDeadline !== null,
+                'original_deadline' => $originalDeadline?->toIso8601String(),
             ]);
 
             return $submission->refresh()->load(['auction', 'deposit', 'settlement', 'transaction']);

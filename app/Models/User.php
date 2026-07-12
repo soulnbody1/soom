@@ -7,16 +7,16 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionBid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use SoftDeletes, HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -35,6 +35,7 @@ class User extends Authenticatable
         'city_id',
         'password',
         'role',
+        'auction_permissions',
         'email_verified_at',
         'allow_ad_notifications',
         'fcm_token',
@@ -60,6 +61,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'auction_permissions' => 'array',
         ];
     }
 
@@ -78,11 +80,11 @@ class User extends Authenticatable
         return $this->belongsTo(City::class);
     }
 
-
     public function adReelViews()
     {
         return $this->hasMany(AdReelView::class, 'user_id');
     }
+
     public function favorites()
     {
         return $this->belongsToMany(Ad::class, 'favorites')->withTimestamps();
@@ -109,6 +111,7 @@ class User extends Authenticatable
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');
+
         return $value ? $disk->url($value) : null;
     }
 

@@ -38,13 +38,18 @@ final class PaymentSubmissionController extends Controller
     ): JsonResponse {
         $data = $request->validated();
         Gate::authorize($data['action'] === 'approve' ? 'approve' : 'reject', $paymentSubmission);
+        if ($data['action'] === 'approve' && (bool) ($data['override_deadline'] ?? false)) {
+            Gate::authorize('overrideDeadline', $paymentSubmission);
+        }
 
         $submission = $data['action'] === 'approve'
             ? $action->approve(
                 $paymentSubmission,
                 Auth::id(),
                 (string) ($data['note'] ?? 'approved'),
-                (string) ($data['provider_transaction_id'] ?? '')
+                (string) ($data['provider_transaction_id'] ?? ''),
+                (bool) ($data['override_deadline'] ?? false),
+                (string) ($data['override_reason'] ?? '')
             )
             : $action->reject($paymentSubmission, Auth::id(), (string) $data['note']);
 

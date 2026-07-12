@@ -44,6 +44,14 @@ final class AuctionSettlementRepository
             ->first();
     }
 
+    public function lockCurrentSettlementForPayment(int $auctionId): ?AuctionSettlement
+    {
+        return AuctionSettlement::where('auction_id', $auctionId)
+            ->where('current_marker', 1)
+            ->lockForUpdate()
+            ->first();
+    }
+
     /**
      * Create a new settlement record.
      * Used by FinalizeAuctionAction.

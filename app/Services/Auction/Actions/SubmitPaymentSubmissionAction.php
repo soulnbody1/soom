@@ -18,6 +18,7 @@ use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\FinancialObligationKey;
+use App\Services\Auction\Support\PaymentEligibilityRule;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -32,6 +33,7 @@ final class SubmitPaymentSubmissionAction
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly PaymentEligibilityRule $eligibility,
     ) {}
 
     public function execute(
@@ -57,7 +59,7 @@ final class SubmitPaymentSubmissionAction
         $method = $this->payments->findActivePaymentMethod($paymentMethodPublicId);
 
         $this->transaction->run(function () use ($auction, $userId, $purpose): void {
-            $auction = $this->auctions->lockForStateChange($auction->id);
+            $auction = $this->auctions->lockAuctionForPayment($auction->id);
             $this->target($auction, $userId, $purpose);
         });
 
@@ -65,7 +67,7 @@ final class SubmitPaymentSubmissionAction
 
         try {
             return $this->transaction->run(function () use ($auction, $userId, $purpose, $method, $receipt, $idempotencyKey, $providerReference, $path): PaymentSubmission {
-                $auction = $this->auctions->lockForStateChange($auction->id);
+                $auction = $this->auctions->lockAuctionForPayment($auction->id);
                 [$deposit, $settlement, $amount] = $this->target($auction, $userId, $purpose);
 
                 if ($amount <= 0) {
@@ -133,9 +135,7 @@ final class SubmitPaymentSubmissionAction
     private function target(Auction $auction, int $userId, PaymentPurpose $purpose): array
     {
         if ($purpose === PaymentPurpose::SellerDeposit) {
-            if ($auction->seller_id !== $userId) {
-                throw new AuctionException(__('auction.errors.seller_deposit_only_seller'));
-            }
+            $this->eligibility->assertCanSubmitSellerDeposit($auction, $userId);
 
             $deposit = $this->deposits->firstOrCreateDeposit(
                 ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'seller'],
@@ -146,17 +146,26 @@ final class SubmitPaymentSubmissionAction
                 ]
             );
 
-            $deposit = $this->deposits->lockPaymentDeposit($auction->id, $userId, 'seller');
+            $deposit = $this->deposits->lockDepositForPayment($auction->id, $userId, 'seller');
+            $this->eligibility->assertDepositTarget($auction, $deposit, $userId, 'seller');
+            $this->eligibility->assertPaymentDetails(
+                (int) $auction->seller_deposit_amount_minor,
+                (string) $auction->currency_code,
+                (int) $deposit->required_amount_minor,
+                (string) $deposit->currency_code
+            );
 
             return [$deposit, null, $auction->seller_deposit_amount_minor];
         }
 
         if ($purpose === PaymentPurpose::BidderDeposit) {
-            $participant = $this->participants->findByAuctionAndUser($auction->id, $userId);
+            $participant = $this->participants->lockParticipant($auction->id, $userId);
 
             if (! $participant) {
                 throw new AuctionException(__('auction.errors.registration_required'));
             }
+
+            $this->eligibility->assertCanSubmitBidderDeposit($auction, $participant, $userId);
 
             $deposit = $this->deposits->firstOrCreateDeposit(
                 ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'bidder'],
@@ -168,16 +177,25 @@ final class SubmitPaymentSubmissionAction
                 ]
             );
 
-            $deposit = $this->deposits->lockPaymentDeposit($auction->id, $userId, 'bidder');
+            $deposit = $this->deposits->lockDepositForPayment($auction->id, $userId, 'bidder');
+            $this->eligibility->assertDepositTarget($auction, $deposit, $userId, 'bidder', $participant);
+            $this->eligibility->assertPaymentDetails(
+                (int) $auction->bidder_deposit_amount_minor,
+                (string) $auction->currency_code,
+                (int) $deposit->required_amount_minor,
+                (string) $deposit->currency_code
+            );
 
             return [$deposit, null, $auction->bidder_deposit_amount_minor];
         }
 
-        $settlement = $this->settlements->lockByAuctionAndWinner($auction->id, $userId);
+        $settlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
 
         if (! $settlement) {
             throw new AuctionException(__('auction.errors.settlement_payment_unavailable'));
         }
+
+        $this->eligibility->assertCanSubmitWinnerSettlement($auction, $settlement, $userId);
 
         return [null, $settlement, max(0, (int) ($settlement->remaining_amount_minor ?? ($settlement->amount_due_minor - $settlement->amount_paid_minor)))];
     }

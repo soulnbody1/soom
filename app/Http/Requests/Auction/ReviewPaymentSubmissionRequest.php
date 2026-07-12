@@ -19,6 +19,8 @@ final class ReviewPaymentSubmissionRequest extends FormRequest
             'action' => ['required', 'in:approve,reject'],
             'note' => ['nullable', 'required_if:action,reject', 'string', 'max:1000'],
             'provider_transaction_id' => ['nullable', 'required_if:action,approve', 'string', 'max:160'],
+            'override_deadline' => ['sometimes', 'boolean'],
+            'override_reason' => ['nullable', 'required_if:override_deadline,true', 'string', 'max:1000'],
         ];
     }
 }

@@ -38,4 +38,9 @@ final class PaymentSubmissionPolicy
     {
         return $this->hasAuctionPermission($user, 'auction.payment.approve');
     }
+
+    public function overrideDeadline(User $user, PaymentSubmission $submission): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.payment.override_deadline');
+    }
 }

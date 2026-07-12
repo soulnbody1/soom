@@ -38,6 +38,11 @@ final class AuctionRepository
         return Auction::whereKey($auctionId)->lockForUpdate()->firstOrFail();
     }
 
+    public function lockAuctionForPayment(int $auctionId): Auction
+    {
+        return $this->lockForStateChange($auctionId);
+    }
+
     /**
      * Find auction by public_id without locking.
      */
