@@ -35,6 +35,7 @@ final class FinalizeAuctionAction
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionRefundRepository $refunds,
         private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
+        private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
     ) {}
 
     public function execute(Auction $auction): Auction
@@ -64,6 +65,7 @@ final class FinalizeAuctionAction
             if (! $winningBid || ($auction->reserve_amount_minor !== null && $winningBid->amount_minor < $auction->reserve_amount_minor)) {
                 $auction = $this->stateMachine->transition($auction, AuctionStatus::Unsold, null, 'system', 'reserve not met or no bids');
                 $this->nonWinnerDeposits->execute($auction, 'unsold');
+                $this->sellerDepositDisposition->execute($auction, 'unsold', null, 'system', 'reserve not met or no bids');
 
                 return $auction->refresh();
             }

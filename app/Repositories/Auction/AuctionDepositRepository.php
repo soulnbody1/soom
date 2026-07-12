@@ -46,6 +46,14 @@ final class AuctionDepositRepository
         return $this->lockPaymentDeposit($auctionId, $userId, $type);
     }
 
+    public function lockSellerDepositForAuction(int $auctionId): ?AuctionDeposit
+    {
+        return AuctionDeposit::where('auction_id', $auctionId)
+            ->where('type', 'seller')
+            ->lockForUpdate()
+            ->first();
+    }
+
     /**
      * Find the winner's deposit for settlement application.
      * Used by FinalizeAuctionAction.

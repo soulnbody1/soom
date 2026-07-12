@@ -30,6 +30,7 @@ final class CancelAuctionAction
         private readonly AuctionRefundRepository $refunds,
         private readonly AuctionSettlementRepository $settlements,
         private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
+        private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
     ) {}
 
     public function execute(Auction $auction, int $actorId, string $actorType, string $reason): Auction
@@ -43,6 +44,9 @@ final class CancelAuctionAction
                     $this->settlements->save($settlement);
                 });
 
+            $this->sellerDepositDisposition->execute($auction, 'cancellation', $actorId, $actorType, $reason, [
+                'auction_status_before' => $auction->status,
+            ]);
             $this->createRefundPlan($auction, $reason);
 
             $auction = $this->stateMachine->transition(
@@ -69,6 +73,10 @@ final class CancelAuctionAction
                 $submission = $payment->submission;
                 $deposit = $submission?->deposit;
                 $settlement = $submission?->settlement;
+
+                if ($payment->purpose === PaymentPurpose::SellerDeposit) {
+                    return;
+                }
 
                 $obligationType = match ($payment->purpose) {
                     PaymentPurpose::SellerDeposit, PaymentPurpose::BidderDeposit => 'deposit',

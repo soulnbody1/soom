@@ -26,6 +26,8 @@ final class ReconcileAuctionsAction
             'payment_submissions_pending' => PaymentSubmission::where('status', PaymentSubmissionStatus::PendingReview->value)->count(),
             'deposits_refund_pending' => AuctionDeposit::where('status', AuctionDepositStatus::RefundPending->value)->count(),
             'terminal_non_winner_deposits_held_without_active_need' => $this->terminalHeldNonWinnerDepositCount(),
+            'terminal_seller_deposits_held_without_active_need' => $this->terminalHeldSellerDepositCount(),
+            'seller_deposits_resolved_without_terminal_or_policy_reason' => $this->sellerDepositsResolvedWithoutTerminalReasonCount(),
             'refunds_failed' => RefundTransaction::where('status', RefundTransactionStatus::Failed->value)->count(),
             'outbox_pending' => OutboxMessage::where('status', OutboxStatus::Pending->value)->count(),
         ];
@@ -60,6 +62,48 @@ final class ReconcileAuctionsAction
                 $query->whereNull('current_settlements.id')
                     ->orWhereColumn('current_settlements.winner_id', '!=', 'auction_deposits.user_id');
             })
+            ->count();
+    }
+
+    private function terminalHeldSellerDepositCount(): int
+    {
+        return (int) DB::table('auction_deposits')
+            ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
+            ->where('auction_deposits.type', 'seller')
+            ->where('auction_deposits.status', AuctionDepositStatus::Held->value)
+            ->whereIn('auctions.status', [
+                AuctionStatus::Completed->value,
+                AuctionStatus::Unsold->value,
+                AuctionStatus::Cancelled->value,
+            ])
+            ->where(function ($query): void {
+                $query->whereNull('auction_deposits.hold_reason')
+                    ->orWhereNotIn('auction_deposits.hold_reason', [
+                        'seller_deposit_manual_review',
+                        'seller_deposit_keep_held',
+                    ]);
+            })
+            ->count();
+    }
+
+    private function sellerDepositsResolvedWithoutTerminalReasonCount(): int
+    {
+        return (int) DB::table('auction_deposits')
+            ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
+            ->where('auction_deposits.type', 'seller')
+            ->whereIn('auction_deposits.status', [
+                AuctionDepositStatus::RefundPending->value,
+                AuctionDepositStatus::Refunded->value,
+                AuctionDepositStatus::Forfeited->value,
+            ])
+            ->whereNotIn('auctions.status', [
+                AuctionStatus::Rejected->value,
+                AuctionStatus::Completed->value,
+                AuctionStatus::Unsold->value,
+                AuctionStatus::Cancelled->value,
+                AuctionStatus::Defaulted->value,
+                AuctionStatus::Disputed->value,
+            ])
             ->count();
     }
 }

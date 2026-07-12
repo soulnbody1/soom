@@ -19,6 +19,8 @@ final class ResolveAuctionDisputeRequest extends FormRequest
         return [
             'resolution' => ['required', 'string', Rule::in(['complete', 'resume_handover', 'cancel'])],
             'note' => ['required', 'string', 'max:1000'],
+            'seller_deposit_disposition' => ['nullable', 'string', Rule::in(['refund', 'forfeit', 'partial_forfeit', 'keep_held', 'manual_review', 'no_action'])],
+            'seller_deposit_forfeit_amount_minor' => ['nullable', 'integer', 'min:0'],
         ];
     }
 }

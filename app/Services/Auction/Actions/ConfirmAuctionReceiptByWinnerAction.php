@@ -24,6 +24,7 @@ final class ConfirmAuctionReceiptByWinnerAction
         private readonly AuctionRepository $auctions,
         private readonly AuctionSettlementRepository $settlements,
         private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
+        private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
     ) {}
 
     public function execute(Auction $auction, int $winnerId): Auction
@@ -57,6 +58,7 @@ final class ConfirmAuctionReceiptByWinnerAction
                 ->transition($auction, AuctionStatus::Completed, $winnerId, 'user', __('auction.audit.winner_receipt_confirmed'))
                 ->load('settlement');
             $this->nonWinnerDeposits->execute($auction, 'completed', $winnerId, 'user');
+            $this->sellerDepositDisposition->execute($auction, 'completed', $winnerId, 'user', __('auction.audit.winner_receipt_confirmed'));
 
             return $auction->refresh()->load('settlement');
         });

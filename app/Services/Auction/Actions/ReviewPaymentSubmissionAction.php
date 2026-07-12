@@ -151,6 +151,15 @@ final class ReviewPaymentSubmissionAction
                 $this->deposits->save($deposit);
 
                 $this->stateMachine->transition($auction, AuctionStatus::Scheduled, $adminId, 'admin', 'seller deposit approved');
+                $this->audit->log('auction.seller_deposit_payment_approved', $auction, $adminId, 'admin', [
+                    'deposit_public_id' => $deposit->public_id,
+                    'held_amount_minor' => $deposit->held_amount_minor,
+                    'source_payment_submission_public_id' => $submission->public_id,
+                ]);
+                $this->audit->outbox('auction.seller_deposit_held', $auction, [
+                    'deposit_public_id' => $deposit->public_id,
+                    'held_amount_minor' => $deposit->held_amount_minor,
+                ]);
             }
 
             if ($submission->purpose === PaymentPurpose::BidderDeposit) {

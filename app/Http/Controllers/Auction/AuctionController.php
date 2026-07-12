@@ -248,7 +248,9 @@ final class AuctionController extends Controller
             $auctionDispute,
             Auth::id(),
             (string) $request->validated('resolution'),
-            (string) $request->validated('note')
+            (string) $request->validated('note'),
+            $request->validated('seller_deposit_disposition'),
+            $request->validated('seller_deposit_forfeit_amount_minor')
         );
 
         return $this->sendResponse(new AuctionResource($resolved), __('auction.messages.dispute_resolved'));

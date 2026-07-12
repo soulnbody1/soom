@@ -17,6 +17,7 @@ final class ReviewAuctionAction
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
         private readonly AuctionRepository $auctions,
+        private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
     ) {}
 
     public function approve(Auction $auction, int $adminId, string $reason): Auction
@@ -47,7 +48,10 @@ final class ReviewAuctionAction
         return $this->transaction->run(function () use ($auction, $adminId, $reason): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
 
-            return $this->stateMachine->transition($auction, AuctionStatus::Rejected, $adminId, 'admin', $reason);
+            $auction = $this->stateMachine->transition($auction, AuctionStatus::Rejected, $adminId, 'admin', $reason);
+            $this->sellerDepositDisposition->execute($auction, 'auction_rejected', $adminId, 'admin', $reason);
+
+            return $auction->refresh();
         });
     }
 }

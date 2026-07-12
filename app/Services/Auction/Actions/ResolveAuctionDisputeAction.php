@@ -26,15 +26,23 @@ final class ResolveAuctionDisputeAction
         private readonly AuctionRepository $auctions,
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionDisputeRepository $disputes,
+        private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
     ) {}
 
-    public function execute(Auction $auction, AuctionDispute $dispute, int $adminId, string $resolution, string $note): Auction
-    {
+    public function execute(
+        Auction $auction,
+        AuctionDispute $dispute,
+        int $adminId,
+        string $resolution,
+        string $note,
+        ?string $sellerDepositDisposition = null,
+        ?int $sellerDepositForfeitAmountMinor = null,
+    ): Auction {
         if (trim($note) === '') {
             throw new AuctionException(__('auction.errors.dispute_resolution_note_required'));
         }
 
-        return $this->transaction->run(function () use ($auction, $dispute, $adminId, $resolution, $note): Auction {
+        return $this->transaction->run(function () use ($auction, $dispute, $adminId, $resolution, $note, $sellerDepositDisposition, $sellerDepositForfeitAmountMinor): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
             $dispute = $this->disputes->lockForResolution($dispute->id);
             $settlement = $this->settlements->lockSettlement($auction->id);
@@ -77,7 +85,14 @@ final class ResolveAuctionDisputeAction
                 'resolution' => $resolution,
             ]);
 
-            return $this->stateMachine->transition($auction, $target, $adminId, 'admin', $note)->load('settlement');
+            $auction = $this->stateMachine->transition($auction, $target, $adminId, 'admin', $note)->load('settlement');
+            $this->sellerDepositDisposition->execute($auction, 'dispute_resolution', $adminId, 'admin', $note, [
+                'resolution' => $resolution,
+                'seller_deposit_disposition' => $sellerDepositDisposition,
+                'forfeit_amount_minor' => $sellerDepositForfeitAmountMinor,
+            ]);
+
+            return $auction->refresh()->load('settlement');
         });
     }
 }
