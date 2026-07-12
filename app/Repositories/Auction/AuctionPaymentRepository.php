@@ -144,10 +144,18 @@ final class AuctionPaymentRepository
 
     public function lockSucceededTransactionsForAuction(int $auctionId): Collection
     {
-        return PaymentTransaction::where('auction_id', $auctionId)
+        return PaymentTransaction::with(['submission.deposit', 'submission.settlement'])
+            ->where('auction_id', $auctionId)
             ->where('status', PaymentTransactionStatus::Succeeded->value)
             ->lockForUpdate()
             ->get();
+    }
+
+    public function lockTransactionForRefund(int $paymentTransactionId): PaymentTransaction
+    {
+        return PaymentTransaction::whereKey($paymentTransactionId)
+            ->lockForUpdate()
+            ->firstOrFail();
     }
 
     public function saveTransaction(PaymentTransaction $transaction): void

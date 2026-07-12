@@ -10,6 +10,7 @@ use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class PaymentTransaction extends Model
 {
@@ -53,5 +54,10 @@ final class PaymentTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(RefundTransaction::class);
     }
 }

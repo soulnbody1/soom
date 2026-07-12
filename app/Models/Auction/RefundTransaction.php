@@ -19,6 +19,8 @@ final class RefundTransaction extends Model
         'auction_id',
         'deposit_id',
         'payment_transaction_id',
+        'obligation_type',
+        'obligation_id',
         'user_id',
         'status',
         'amount_minor',
@@ -44,6 +46,11 @@ final class RefundTransaction extends Model
     public function deposit(): BelongsTo
     {
         return $this->belongsTo(AuctionDeposit::class);
+    }
+
+    public function paymentTransaction(): BelongsTo
+    {
+        return $this->belongsTo(PaymentTransaction::class);
     }
 
     public function user(): BelongsTo

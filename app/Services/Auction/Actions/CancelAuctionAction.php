@@ -6,10 +6,9 @@ namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
-use App\Domain\Auction\Enums\PaymentTransactionStatus;
+use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\Auction;
-use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionDepositRepository;
 use App\Repositories\Auction\AuctionPaymentRepository;
@@ -18,7 +17,6 @@ use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
-use Illuminate\Support\Carbon;
 
 final class CancelAuctionAction
 {
@@ -59,43 +57,37 @@ final class CancelAuctionAction
     {
         $provider = (string) config('auction.refunds.provider', 'manual');
 
-        $this->deposits->lockRefundableForCancellation($auction->id)
-            ->each(function (AuctionDeposit $deposit) use ($auction, $provider, $reason): void {
-                $amount = max(
-                    0,
-                    (int) $deposit->held_amount_minor
-                    + (int) $deposit->applied_amount_minor
-                    - (int) $deposit->refunded_amount_minor
-                );
+        $this->deposits->lockRefundableForCancellation($auction->id);
 
-                if ($amount <= 0) {
+        $this->payments->lockSucceededTransactionsForAuction($auction->id)
+            ->each(function (PaymentTransaction $payment) use ($auction, $provider, $reason): void {
+                $existingRefunds = $this->refunds->lockActiveOrSucceededForPayment($payment->id);
+                if ($existingRefunds->isNotEmpty()) {
+                    return;
+                }
+
+                $submission = $payment->submission;
+                $deposit = $submission?->deposit;
+                $settlement = $submission?->settlement;
+
+                $obligationType = match ($payment->purpose) {
+                    PaymentPurpose::SellerDeposit, PaymentPurpose::BidderDeposit => 'deposit',
+                    PaymentPurpose::WinnerSettlement => 'settlement',
+                };
+                $obligationId = $deposit?->id ?? $settlement?->id;
+
+                if ($obligationId === null) {
                     return;
                 }
 
                 $this->refunds->firstOrCreateRefund(
-                    ['provider' => $provider, 'idempotency_key' => "auction:{$auction->id}:cancel:deposit:{$deposit->id}"],
-                    [
-                        'auction_id' => $auction->id,
-                        'deposit_id' => $deposit->id,
-                        'user_id' => $deposit->user_id,
-                        'status' => RefundTransactionStatus::Pending,
-                        'amount_minor' => $amount,
-                        'currency_code' => $deposit->currency_code,
-                        'reason' => "auction_cancelled: {$reason}",
-                    ]
-                );
-
-                $deposit->forceFill(['status' => AuctionDepositStatus::RefundPending]);
-                $this->deposits->save($deposit);
-            });
-
-        $this->payments->lockSucceededTransactionsForAuction($auction->id)
-            ->each(function (PaymentTransaction $payment) use ($auction, $provider, $reason): void {
-                $this->refunds->firstOrCreateRefund(
                     ['provider' => $provider, 'idempotency_key' => "auction:{$auction->id}:cancel:payment:{$payment->id}"],
                     [
                         'auction_id' => $auction->id,
+                        'deposit_id' => $deposit?->id,
                         'payment_transaction_id' => $payment->id,
+                        'obligation_type' => $obligationType,
+                        'obligation_id' => $obligationId,
                         'user_id' => $payment->user_id,
                         'status' => RefundTransactionStatus::Pending,
                         'amount_minor' => $payment->amount_minor,
@@ -104,11 +96,10 @@ final class CancelAuctionAction
                     ]
                 );
 
-                $payment->forceFill([
-                    'status' => PaymentTransactionStatus::Reversed,
-                    'processed_at' => $payment->processed_at ?? Carbon::now(),
-                ]);
-                $this->payments->saveTransaction($payment);
+                if ($deposit && $deposit->status !== AuctionDepositStatus::Refunded) {
+                    $deposit->forceFill(['status' => AuctionDepositStatus::RefundPending]);
+                    $this->deposits->save($deposit);
+                }
             });
     }
 }

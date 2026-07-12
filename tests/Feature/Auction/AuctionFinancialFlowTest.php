@@ -500,7 +500,7 @@ final class AuctionFinancialFlowTest extends TestCase
         );
     }
 
-    public function test_cancellation_generates_deposit_refund_plan_once(): void
+    public function test_cancellation_does_not_generate_deposit_refund_without_successful_payment(): void
     {
         [$auction] = $this->auctionWithoutBids(AuctionStatus::Scheduled);
         [$bidder] = $this->qualifiedParticipant($auction, 10_000);
@@ -511,8 +511,8 @@ final class AuctionFinancialFlowTest extends TestCase
         $action->execute($auction->refresh(), $admin->id, 'admin', 'seller cancelled replay');
 
         $this->assertSame(AuctionStatus::Cancelled, $auction->refresh()->status);
-        $this->assertSame(1, RefundTransaction::where('auction_id', $auction->id)->where('user_id', $bidder->id)->count());
-        $this->assertSame(AuctionDepositStatus::RefundPending, AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail()->status);
+        $this->assertSame(0, RefundTransaction::where('auction_id', $auction->id)->where('user_id', $bidder->id)->count());
+        $this->assertSame(AuctionDepositStatus::Held, AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail()->status);
     }
 
     public function test_cancellation_is_allowed_from_required_lifecycle_states(): void
@@ -553,7 +553,7 @@ final class AuctionFinancialFlowTest extends TestCase
         $action->execute($auction->refresh(), $admin->id, 'admin', 'cancel replay');
 
         $this->assertSame(AuctionStatus::Cancelled, $auction->refresh()->status);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $payment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
         $this->assertSame(1, RefundTransaction::where('payment_transaction_id', $payment->id)->count());
         $this->assertSame(90_000, RefundTransaction::where('payment_transaction_id', $payment->id)->firstOrFail()->amount_minor);
     }

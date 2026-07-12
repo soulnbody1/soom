@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Repositories\Auction;
 
+use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\RefundTransaction;
+use Illuminate\Support\Collection;
 
 final class AuctionRefundRepository
 {
@@ -24,6 +26,17 @@ final class AuctionRefundRepository
     public function lockForConfirmation(int $refundId): RefundTransaction
     {
         return RefundTransaction::whereKey($refundId)->lockForUpdate()->firstOrFail();
+    }
+
+    public function lockActiveOrSucceededForPayment(int $paymentTransactionId): Collection
+    {
+        return RefundTransaction::where('payment_transaction_id', $paymentTransactionId)
+            ->whereIn('status', [
+                RefundTransactionStatus::Pending->value,
+                RefundTransactionStatus::Succeeded->value,
+            ])
+            ->lockForUpdate()
+            ->get();
     }
 
     public function providerRefundIdExists(string $provider, string $providerRefundId, int $exceptRefundId): bool
