@@ -243,6 +243,21 @@ final class AuctionFinancialFlowTest extends TestCase
         $review->approve($second, $admin->id, 'approved', $providerTransactionId);
     }
 
+    public function test_payment_approval_is_rejected_after_auction_cancelled(): void
+    {
+        [$auction, $seller] = $this->auctionWithoutBids(AuctionStatus::AwaitingSellerDeposit);
+        $method = PaymentMethodFactory::new()->create();
+        $admin = $this->user('admin');
+        $submission = $this->pendingSellerDepositSubmission($auction, $seller->id, $method->id);
+
+        app(CancelAuctionAction::class)->execute($auction, $admin->id, 'admin', 'cancel before payment approval');
+
+        $this->expectException(AuctionException::class);
+        $this->expectExceptionMessage(__('auction.errors.payment_approval_auction_not_active'));
+
+        app(ReviewPaymentSubmissionAction::class)->approve($submission, $admin->id, 'approved');
+    }
+
     public function test_refund_confirmation_is_idempotent(): void
     {
         [$auction, $user, $participant] = $this->auctionWithoutBids();

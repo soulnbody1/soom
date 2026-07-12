@@ -66,6 +66,7 @@ return [
         'dispute_resolution_invalid' => 'قرار حل النزاع غير صالح.',
         'active_configuration_required' => 'يجب وجود إعدادات منصة نشطة.',
         'payment_already_processed' => 'تمت معالجة هذا الدفع مسبقًا.',
+        'payment_approval_auction_not_active' => 'لا يمكن اعتماد الدفع لمزاد ملغي أو مرفوض.',
         'zero_payment_not_allowed' => 'يجب أن يكون مبلغ الدفع أكبر من صفر.',
         'stale_settlement_payment' => 'هذا الدفع مرتبط بتسوية قديمة.',
         'unsupported_currency' => 'العملة :code غير مدعومة.',

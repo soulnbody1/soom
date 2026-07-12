@@ -44,6 +44,10 @@ final class ReviewPaymentSubmissionAction
             }
 
             $auction = $this->payments->lockSubmissionAuction($submission);
+            if (in_array($auction->status, [AuctionStatus::Cancelled, AuctionStatus::Rejected], true)) {
+                throw new AuctionException(__('auction.errors.payment_approval_auction_not_active'));
+            }
+
             $providerTransactionId = $this->trustedProviderTransactionId($submission, $providerTransactionId);
             if ($this->payments->providerTransactionIdExists('manual', $providerTransactionId, $submission->id)) {
                 throw new AuctionException(__('auction.errors.duplicate_provider_transaction'));

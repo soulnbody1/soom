@@ -66,6 +66,7 @@ return [
         'dispute_resolution_invalid' => 'Dispute resolution is invalid.',
         'active_configuration_required' => 'An active platform configuration is required.',
         'payment_already_processed' => 'This payment has already been processed.',
+        'payment_approval_auction_not_active' => 'Payment cannot be approved for a cancelled or rejected auction.',
         'zero_payment_not_allowed' => 'Payment amount must be greater than zero.',
         'stale_settlement_payment' => 'This payment belongs to an old settlement.',
         'unsupported_currency' => 'The currency :code is not supported.',

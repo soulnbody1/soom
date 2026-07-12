@@ -38,6 +38,7 @@
 - Submit Payment أصبح يعيد lock وفحص الهدف داخل transaction بعد رفع الملف، مع cleanup عند الفشل.
 - Payment Approval لم يعد يستخدم `provider_reference` المرسل من المستخدم كـ`provider_transaction_id` نهائي؛ الاعتماد يستخدم مرجع أدمن أو مرجع manual داخلي deterministic.
 - Payment Approval يرفض تكرار `provider_transaction_id` على submissions مختلفة، مع قيد `UNIQUE(provider, provider_transaction_id)`.
+- Payment Approval يرفض الاعتماد إذا أصبح المزاد `cancelled` أو `rejected` قبل المراجعة.
 - Refund confirmation أصبحت idempotent ولا تضاعف `refunded_amount_minor`.
 - `PlaceBidRequest` أصبح currency-aware.
 
@@ -168,6 +169,7 @@ refund_all_non_winners_immediately
 - Approval يحدث `amount_paid_minor` و`remaining_amount_minor`.
 - Duplicate approval يبقى idempotent بسبب حالة submission وtransaction idempotency.
 - Duplicate provider transaction id مرفوض قبل إنشاء transaction جديدة، ومدعوم بقيد قاعدة بيانات.
+- Approval يرفض المزادات الملغاة أو المرفوضة قبل إنشاء transaction.
 
 ## 9. Refund Lifecycle
 
@@ -429,6 +431,7 @@ php artisan migrate --force
   - approved auction with zero seller deposit goes directly to scheduled.
   - approved auction with required seller deposit waits for deposit.
   - duplicate provider transaction id is rejected for different submissions.
+  - payment approval is rejected after auction cancelled.
   - refund confirmation idempotency.
   - cancellation generates deposit refund plan once.
   - cancellation is allowed from Draft, PendingReview, AwaitingSellerDeposit, Scheduled, Live, Ended, PaymentPending, and HandoverPending.
@@ -480,12 +483,12 @@ php -l <modified php files>
 
 ```text
 php artisan test
-50 passed, 6 skipped, 163 assertions
+51 passed, 6 skipped, 165 assertions
 ```
 
 ```text
 vendor/bin/phpunit --configuration phpunit.mysql.xml
-46 tests, 164 assertions, OK
+47 tests, 166 assertions, OK
 ```
 
 ```text
