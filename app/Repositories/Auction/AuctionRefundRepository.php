@@ -6,6 +6,8 @@ namespace App\Repositories\Auction;
 
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\RefundTransaction;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class AuctionRefundRepository
@@ -33,6 +35,7 @@ final class AuctionRefundRepository
         return RefundTransaction::where('payment_transaction_id', $paymentTransactionId)
             ->whereIn('status', [
                 RefundTransactionStatus::Pending->value,
+                RefundTransactionStatus::Processing->value,
                 RefundTransactionStatus::Succeeded->value,
             ])
             ->lockForUpdate()
@@ -44,6 +47,7 @@ final class AuctionRefundRepository
         return RefundTransaction::where('deposit_id', $depositId)
             ->whereIn('status', [
                 RefundTransactionStatus::Pending->value,
+                RefundTransactionStatus::Processing->value,
                 RefundTransactionStatus::Succeeded->value,
             ])
             ->lockForUpdate()
@@ -63,6 +67,28 @@ final class AuctionRefundRepository
         return (int) RefundTransaction::where('payment_transaction_id', $paymentTransactionId)
             ->where('status', RefundTransactionStatus::Succeeded->value)
             ->sum('amount_minor');
+    }
+
+    public function dueForProcessingQuery(): Builder
+    {
+        $now = Carbon::now();
+
+        return RefundTransaction::query()
+            ->where(function (Builder $query) use ($now): void {
+                $query->where('status', RefundTransactionStatus::Pending->value)
+                    ->orWhere(function (Builder $query) use ($now): void {
+                        $query->where('status', RefundTransactionStatus::Failed->value)
+                            ->where(function (Builder $query) use ($now): void {
+                                $query->whereNull('next_retry_at')
+                                    ->orWhere('next_retry_at', '<=', $now);
+                            });
+                    })
+                    ->orWhere(function (Builder $query) use ($now): void {
+                        $query->where('status', RefundTransactionStatus::Processing->value)
+                            ->where('lease_expires_at', '<=', $now);
+                    });
+            })
+            ->orderBy('id');
     }
 
     /**

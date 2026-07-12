@@ -30,14 +30,37 @@ final class RefundTransaction extends Model
         'reason',
         'provider',
         'provider_refund_id',
+        'provider_response',
         'idempotency_key',
+        'attempt_count',
         'failure_reason',
+        'last_error',
+        'next_retry_at',
+        'processing_started_at',
+        'processing_token',
+        'lease_expires_at',
+        'manual_confirmed_by',
+        'manual_confirmed_at',
+        'manual_confirmation_reason',
         'processed_at',
+        'succeeded_at',
+        'failed_at',
+        'cancelled_at',
+        'cancelled_by',
+        'cancellation_reason',
     ];
 
     protected $casts = [
         'status' => RefundTransactionStatus::class,
+        'provider_response' => 'array',
+        'next_retry_at' => 'immutable_datetime',
+        'processing_started_at' => 'immutable_datetime',
+        'lease_expires_at' => 'immutable_datetime',
+        'manual_confirmed_at' => 'immutable_datetime',
         'processed_at' => 'immutable_datetime',
+        'succeeded_at' => 'immutable_datetime',
+        'failed_at' => 'immutable_datetime',
+        'cancelled_at' => 'immutable_datetime',
     ];
 
     public function auction(): BelongsTo
@@ -58,5 +81,15 @@ final class RefundTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function manualConfirmer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manual_confirmed_by');
+    }
+
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }

@@ -91,7 +91,10 @@ final readonly class DepositRefundAllocation
     {
         return (int) $refunds
             ->reject(fn (RefundTransaction $refund): bool => $exceptRefundId !== null && $refund->id === $exceptRefundId)
-            ->filter(fn (RefundTransaction $refund): bool => $refund->status === RefundTransactionStatus::Pending)
+            ->filter(fn (RefundTransaction $refund): bool => in_array($refund->status, [
+                RefundTransactionStatus::Pending,
+                RefundTransactionStatus::Processing,
+            ], true))
             ->sum(fn (RefundTransaction $refund): int => (int) ($refund->{$column} ?? 0));
     }
 }

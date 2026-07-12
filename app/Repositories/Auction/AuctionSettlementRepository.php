@@ -53,6 +53,13 @@ final class AuctionSettlementRepository
             ->first();
     }
 
+    public function lockById(int $settlementId): AuctionSettlement
+    {
+        return AuctionSettlement::whereKey($settlementId)
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
     /**
      * Create a new settlement record.
      * Used by FinalizeAuctionAction.

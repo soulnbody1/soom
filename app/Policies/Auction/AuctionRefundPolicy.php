@@ -16,4 +16,14 @@ final class AuctionRefundPolicy
     {
         return $this->hasAuctionPermission($user, 'auction.refund.execute');
     }
+
+    public function confirmManual(User $user, RefundTransaction $refund): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.refunds.confirm_manual');
+    }
+
+    public function cancel(User $user, RefundTransaction $refund): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.refunds.cancel');
+    }
 }

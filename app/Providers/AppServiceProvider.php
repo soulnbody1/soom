@@ -14,6 +14,8 @@ use App\Policies\Auction\AuctionPolicy;
 use App\Policies\Auction\AuctionRefundPolicy;
 use App\Policies\Auction\AuctionSettlementPolicy;
 use App\Policies\Auction\PaymentSubmissionPolicy;
+use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
+use App\Services\Auction\Refunds\ManualReviewRefundProcessor;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -27,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(AuctionRefundProcessorInterface::class, ManualReviewRefundProcessor::class);
     }
 
     /**
