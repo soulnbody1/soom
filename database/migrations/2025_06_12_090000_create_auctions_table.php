@@ -41,6 +41,7 @@ return new class extends Migration
             $table->foreignId('state_id')->nullable()->constrained('states')->nullOnDelete();
             $table->foreignId('city_id')->nullable()->constrained('cities')->nullOnDelete();
             $table->foreignId('terms_version_id')->nullable()->constrained('auction_terms_versions')->nullOnDelete();
+            $table->foreignId('configuration_version_id')->nullable();
             $table->char('currency_code', 3);
             $table->string('title');
             $table->text('description');
@@ -72,10 +73,18 @@ return new class extends Migration
             $table->timestampTz('ended_at')->nullable();
             $table->timestampTz('finalized_at')->nullable();
             $table->timestampTz('cancelled_at')->nullable();
+            $table->string('cancellation_operation_key')->nullable();
+            $table->string('cancellation_trigger', 80)->nullable();
+            $table->string('cancellation_reason_code', 120)->nullable();
+            $table->text('cancellation_reason_text')->nullable();
+            $table->string('cancellation_liability', 80)->nullable();
+            $table->timestampTz('financial_cancellation_completed_at')->nullable();
+            $table->boolean('financial_cancellation_manual_review_required')->default(false);
             $table->timestampTz('completed_at')->nullable();
             $table->timestampsTz();
             $table->softDeletesTz();
 
+            $table->unique('cancellation_operation_key', 'uq_auction_cancellation_operation');
             $table->index(['status', 'starts_at'], 'idx_auctions_status_starts');
             $table->index(['status', 'ends_at'], 'idx_auctions_status_ends');
             $table->index(['category_id', 'status', 'ends_at'], 'idx_auctions_category_status_ends');
@@ -148,12 +157,17 @@ return new class extends Migration
             $table->timestampTz('submitted_at')->nullable();
             $table->timestampTz('held_at')->nullable();
             $table->timestampTz('released_at')->nullable();
+            $table->string('hold_reason', 80)->nullable();
+            $table->timestampTz('hold_expires_at')->nullable();
+            $table->json('hold_metadata')->nullable();
             $table->timestampsTz();
 
             $table->unique(['auction_id', 'user_id', 'type'], 'uq_auction_deposit_user_type');
             $table->unique(['auction_id', 'user_id', 'type', 'idempotency_key'], 'uq_auction_deposit_idempotency');
             $table->index(['auction_id', 'status'], 'idx_auction_deposits_status');
             $table->index(['user_id', 'status'], 'idx_auction_deposits_user_status');
+            $table->index(['auction_id', 'user_id', 'type', 'status'], 'idx_deposits_auction_user_type');
+            $table->index(['auction_id', 'hold_reason'], 'idx_deposits_hold_reason');
         });
 
         Schema::create('payment_submissions', function (Blueprint $table) {
@@ -175,14 +189,19 @@ return new class extends Migration
             $table->string('provider_reference')->nullable();
             $table->string('idempotency_key')->nullable();
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('overridden_by')->nullable()->constrained('users')->nullOnDelete();
             $table->text('review_note')->nullable();
+            $table->text('override_reason')->nullable();
             $table->timestampTz('submitted_at');
             $table->timestampTz('reviewed_at')->nullable();
+            $table->timestampTz('overridden_at')->nullable();
+            $table->timestampTz('original_deadline')->nullable();
             $table->timestampsTz();
 
             $table->unique(['auction_id', 'user_id', 'purpose', 'idempotency_key'], 'uq_payment_submission_idempotency');
             $table->index(['auction_id', 'purpose', 'status'], 'idx_payment_submissions_auction_status');
             $table->index(['user_id', 'status'], 'idx_payment_submissions_user_status');
+            $table->index(['status', 'created_at'], 'idx_submissions_status_created');
         });
 
         Schema::create('auction_bids', function (Blueprint $table) {
@@ -204,6 +223,8 @@ return new class extends Migration
             $table->unique(['auction_id', 'sequence_number'], 'uq_auction_bid_sequence');
             $table->unique(['auction_id', 'bidder_id', 'idempotency_key'], 'uq_auction_bid_idempotency');
             $table->index(['auction_id', 'amount_minor', 'sequence_number'], 'idx_auction_bids_rank');
+            $table->index(['auction_id', 'amount_minor', 'id'], 'idx_bids_auction_amount');
+            $table->index(['auction_id', 'bidder_id'], 'idx_bids_auction_bidder');
             $table->index(['bidder_id', 'accepted_at'], 'idx_auction_bids_bidder');
         });
 
@@ -246,12 +267,23 @@ return new class extends Migration
             $table->timestampTz('buyer_receipt_confirmed_at')->nullable();
             $table->timestampTz('handover_completed_at')->nullable();
             $table->timestampTz('completed_at')->nullable();
+            $table->timestampTz('defaulted_at')->nullable();
+            $table->text('default_reason')->nullable();
+            $table->foreignId('overridden_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestampTz('overridden_at')->nullable();
+            $table->text('override_reason')->nullable();
+            $table->timestampTz('original_payment_due_at')->nullable();
+            $table->timestampTz('cancelled_at')->nullable();
+            $table->foreignId('cancelled_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('cancel_reason')->nullable();
             $table->timestampsTz();
 
             $table->unique(['auction_id', 'sequence_number'], 'uq_auction_settlement_sequence');
             $table->unique(['auction_id', 'current_marker'], 'uq_auction_settlement_current');
             $table->unique('winning_bid_id', 'uq_auction_settlement_bid');
             $table->index(['winner_id', 'status'], 'idx_auction_settlement_winner_status');
+            $table->index(['auction_id', 'status'], 'idx_settlements_auction_status');
+            $table->index(['auction_id', 'winner_id', 'current_marker'], 'idx_settlements_current_winner');
         });
 
         Schema::create('auction_configuration_versions', function (Blueprint $table) {
@@ -263,6 +295,13 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestampTz('published_at')->nullable();
             $table->timestampsTz();
+        });
+
+        Schema::table('auctions', function (Blueprint $table) {
+            $table->foreign('configuration_version_id', 'fk_auctions_configuration_version')
+                ->references('id')
+                ->on('auction_configuration_versions')
+                ->nullOnDelete();
         });
 
         Schema::create('auction_disputes', function (Blueprint $table) {
@@ -290,11 +329,14 @@ return new class extends Migration
             $table->foreignId('to_bid_id')->nullable()->constrained('auction_bids')->restrictOnDelete();
             $table->foreignId('from_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->foreignId('to_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('previous_settlement_id')->nullable()->constrained('auction_settlements')->nullOnDelete();
+            $table->foreignId('new_settlement_id')->nullable()->constrained('auction_settlements')->nullOnDelete();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->string('reason');
             $table->json('metadata')->nullable();
             $table->timestampTz('created_at')->useCurrent();
 
+            $table->unique(['auction_id', 'from_user_id', 'previous_settlement_id'], 'uq_winner_reassignment_default');
             $table->index(['auction_id', 'created_at'], 'idx_winner_reassignments_auction');
         });
 
@@ -338,22 +380,46 @@ return new class extends Migration
             $table->foreignId('auction_id')->constrained('auctions')->restrictOnDelete();
             $table->foreignId('deposit_id')->nullable()->constrained('auction_deposits')->restrictOnDelete();
             $table->foreignId('payment_transaction_id')->nullable()->constrained('payment_transactions')->restrictOnDelete();
+            $table->string('obligation_type', 40)->nullable();
+            $table->unsignedBigInteger('obligation_id')->nullable();
             $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->string('status', 40)->default('pending');
             $table->unsignedBigInteger('amount_minor');
+            $table->unsignedBigInteger('held_refund_amount_minor')->default(0);
+            $table->unsignedBigInteger('applied_refund_amount_minor')->default(0);
             $table->char('currency_code', 3);
             $table->string('reason');
             $table->string('provider')->default('manual');
             $table->string('provider_refund_id')->nullable();
+            $table->json('provider_response')->nullable();
+            $table->foreignId('manual_confirmed_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestampTz('manual_confirmed_at')->nullable();
+            $table->text('manual_confirmation_reason')->nullable();
             $table->string('idempotency_key');
+            $table->unsignedInteger('attempt_count')->default(0);
             $table->text('failure_reason')->nullable();
+            $table->text('last_error')->nullable();
+            $table->timestampTz('next_retry_at')->nullable();
+            $table->timestampTz('processing_started_at')->nullable();
+            $table->string('processing_token', 80)->nullable();
+            $table->timestampTz('lease_expires_at')->nullable();
             $table->timestampTz('processed_at')->nullable();
+            $table->timestampTz('succeeded_at')->nullable();
+            $table->timestampTz('failed_at')->nullable();
+            $table->timestampTz('cancelled_at')->nullable();
+            $table->foreignId('cancelled_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('cancellation_reason')->nullable();
             $table->timestampsTz();
 
             $table->unique(['provider', 'idempotency_key'], 'uq_refund_idempotency');
             $table->unique(['provider', 'provider_refund_id'], 'uq_refund_provider_refund_id');
+            $table->index('payment_transaction_id', 'idx_refund_source_payment_transaction');
+            $table->index(['obligation_type', 'obligation_id'], 'idx_refund_obligation');
             $table->index(['auction_id', 'status'], 'idx_refunds_auction_status');
             $table->index(['user_id', 'status'], 'idx_refunds_user_status');
+            $table->index(['status', 'created_at'], 'idx_refunds_status_created');
+            $table->index(['status', 'next_retry_at', 'lease_expires_at'], 'idx_refunds_lifecycle_due');
+            $table->index('processing_token', 'idx_refunds_processing_token');
         });
 
         Schema::create('auction_status_history', function (Blueprint $table) {
@@ -455,12 +521,12 @@ return new class extends Migration
         }
         Schema::dropIfExists('auction_winner_reassignments');
         Schema::dropIfExists('auction_disputes');
-        Schema::dropIfExists('auction_configuration_versions');
         Schema::dropIfExists('auction_settlements');
         if (DB::connection()->getDriverName() !== 'sqlite') {
             Schema::table('auctions', function (Blueprint $table) {
                 $table->dropForeign('fk_auctions_current_bid');
                 $table->dropForeign('fk_auctions_winning_bid');
+                $table->dropForeign('fk_auctions_configuration_version');
             });
         }
         Schema::dropIfExists('auction_bids');
@@ -470,6 +536,7 @@ return new class extends Migration
         Schema::dropIfExists('auction_participants');
         Schema::dropIfExists('auction_media');
         Schema::dropIfExists('auctions');
+        Schema::dropIfExists('auction_configuration_versions');
         Schema::dropIfExists('auction_terms_versions');
         Schema::dropIfExists('payment_methods');
     }

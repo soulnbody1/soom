@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Auction\Support;
 
 use App\Domain\Auction\Exceptions\AuctionConfigurationSnapshotIncompleteException;
-use App\Domain\Auction\ValueObjects\Currency;
 use App\Models\Auction\AuctionTermsVersion;
 
 final class AuctionConfigurationSnapshotValidator
@@ -49,15 +48,6 @@ final class AuctionConfigurationSnapshotValidator
             if (! array_key_exists($key, $data) || $data[$key] === null || $data[$key] === '') {
                 $errors[] = "{$key}: required";
             }
-        }
-
-        try {
-            $currency = Currency::fromCode((string) ($data['currency_code'] ?? ''));
-            if ((int) ($data['currency_minor_unit'] ?? -1) !== $currency->exponent()) {
-                $errors[] = 'currency_minor_unit: does not match currency_code';
-            }
-        } catch (\Throwable) {
-            $errors[] = 'currency_code: unsupported';
         }
 
         foreach ($this->nonNegativeIntegerKeys() as $key) {
@@ -113,7 +103,6 @@ final class AuctionConfigurationSnapshotValidator
             'auction_id',
             'source_configuration_version_id',
             'currency_code',
-            'currency_minor_unit',
             'minimum_bid_increment_minor',
             'auto_extend_window_seconds',
             'auto_extend_duration_seconds',
@@ -121,24 +110,14 @@ final class AuctionConfigurationSnapshotValidator
             'seller_deposit_required_minor',
             'seller_deposit_policy',
             'bidder_deposit_required_minor',
-            'bidder_deposit_payment_deadline_policy',
             'non_winner_deposit_hold_policy',
-            'alternative_candidate_hold_policy',
             'alternative_candidate_limit',
             'winner_payment_deadline_minutes',
             'handover_deadline_minutes',
             'platform_fee_type',
             'platform_fee_value',
             'platform_fee_min_minor',
-            'deposit_application_policy',
             'winner_default_deposit_policy',
-            'winner_default_forfeit_type',
-            'winner_default_forfeit_value',
-            'alternative_winner_selection_policy',
-            'maximum_reassignments',
-            'cancellation_policies',
-            'refund_processing_mode',
-            'required_acceptance_scope',
         ];
     }
 
@@ -153,8 +132,6 @@ final class AuctionConfigurationSnapshotValidator
             'bidder_deposit_required_minor',
             'platform_fee_value',
             'platform_fee_min_minor',
-            'winner_default_forfeit_value',
-            'maximum_reassignments',
         ];
     }
 

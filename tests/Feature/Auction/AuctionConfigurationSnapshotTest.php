@@ -223,8 +223,6 @@ final class AuctionConfigurationSnapshotTest extends TestCase
             'handover_deadline_hours' => 72,
             'non_winner_deposit_policy' => 'hold_top_n_bidders_until_winner_payment',
             'non_winner_deposit_hold_count' => 1,
-            'bidder_deposit_payment_deadline_policy' => 'auction_end',
-            'deposit_application_policy' => 'apply_bidder_deposit_to_winning_amount',
             'winner_default_deposit_policy' => [
                 'disposition' => 'full_forfeit',
                 'forfeit_amount_minor' => 0,
