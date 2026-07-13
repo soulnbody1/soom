@@ -6,11 +6,15 @@ namespace App\Http\Resources\Auction;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Gate;
 
 final class PaymentSubmissionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $canReviewPayments = $user && Gate::forUser($user)->allows('viewAny', \App\Models\Auction\PaymentSubmission::class);
+
         return [
             'id' => $this->public_id,
             'auction_id' => $this->whenLoaded('auction', fn () => $this->auction->public_id),
@@ -25,8 +29,20 @@ final class PaymentSubmissionResource extends JsonResource
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'reviewed_at' => $this->reviewed_at?->toIso8601String(),
             'review_note' => $this->when(
-                $request->user()?->role === 'admin' || $request->user()?->id === $this->user_id,
+                $canReviewPayments || $user?->id === $this->user_id,
                 $this->review_note
+            ),
+            'provider_reference' => $this->when($canReviewPayments, $this->provider_reference),
+            'transaction' => $this->when(
+                $canReviewPayments && $this->relationLoaded('transaction') && $this->transaction,
+                fn () => [
+                    'id' => $this->transaction->public_id,
+                    'status' => $this->transaction->status->value,
+                    'amount' => MoneyResource::make($this->transaction->amount_minor, $this->transaction->currency_code),
+                    'provider' => $this->transaction->provider,
+                    'provider_transaction_id' => $this->transaction->provider_transaction_id,
+                    'processed_at' => $this->transaction->processed_at?->toIso8601String(),
+                ]
             ),
         ];
     }

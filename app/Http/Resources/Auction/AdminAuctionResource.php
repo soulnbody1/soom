@@ -4,15 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Auction;
 
+use App\Models\Auction\PaymentSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 
 
 final class AdminAuctionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return [
+        $user = $request->user();
+        $canReviewPayments = $user && Gate::forUser($user)->allows('viewAny', PaymentSubmission::class);
+        $canManageSettlement = $user
+            && $this->relationLoaded('settlement')
+            && $this->settlement
+            && Gate::forUser($user)->allows('override', $this->settlement);
+        $canResolveDisputes = $user && Gate::forUser($user)->allows('resolveDispute', $this->resource);
+
+        $data = [
             'id' => $this->public_id,
             'internal_id' => $this->id,
             'seller_id' => $this->seller_id,
@@ -26,13 +37,6 @@ final class AdminAuctionResource extends JsonResource
                 ? MoneyResource::make($this->reserve_amount_minor, $this->currency_code)
                 : null,
             'minimum_bid_increment' => MoneyResource::make($this->minimum_bid_increment_minor, $this->currency_code),
-            'seller_deposit_amount' => MoneyResource::make($this->seller_deposit_amount_minor, $this->currency_code),
-            'bidder_deposit_amount' => MoneyResource::make($this->bidder_deposit_amount_minor, $this->currency_code),
-            'platform_fee' => [
-                'type' => $this->platform_fee_type,
-                'basis_points' => $this->platform_fee_basis_points,
-                'fixed' => MoneyResource::make($this->platform_fee_fixed_minor, $this->currency_code),
-            ],
             'current_amount' => MoneyResource::make(
                 $this->relationLoaded('currentLeadingBid')
                     ? ($this->currentLeadingBid?->amount_minor ?? $this->starting_amount_minor)
@@ -62,13 +66,24 @@ final class AdminAuctionResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'media' => AuctionMediaResource::collection($this->whenLoaded('media')),
-            'category' => $this->whenLoaded('category'),
-            'country' => $this->whenLoaded('country'),
-            'state' => $this->whenLoaded('state'),
-            'city' => $this->whenLoaded('city'),
+            'category' => $this->whenLoaded('category', fn () => [
+                'id' => $this->category->id,
+                'name' => $this->category->name,
+            ]),
+            'country' => $this->whenLoaded('country', fn () => [
+                'id' => $this->country->id,
+                'name' => $this->country->name,
+            ]),
+            'state' => $this->whenLoaded('state', fn () => $this->state ? [
+                'id' => $this->state->id,
+                'name' => $this->state->name,
+            ] : null),
+            'city' => $this->whenLoaded('city', fn () => $this->city ? [
+                'id' => $this->city->id,
+                'name' => $this->city->name,
+            ] : null),
             'leading_bid' => new AuctionBidResource($this->whenLoaded('currentLeadingBid')),
             'winning_bid' => new AuctionBidResource($this->whenLoaded('winningBid')),
-            'settlement' => new AuctionSettlementResource($this->whenLoaded('settlement')),
             'metrics' => $this->whenLoaded('metric', fn () => [
                 'views_count' => $this->metric?->views_count ?? 0,
                 'unique_views_count' => $this->metric?->unique_views_count ?? 0,
@@ -79,5 +94,79 @@ final class AdminAuctionResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
+
+        if ($canReviewPayments) {
+            $data['deposits'] = AuctionDepositResource::collection($this->whenLoaded('deposits'));
+            $data['payment_submissions'] = PaymentSubmissionResource::collection($this->paymentSubmissions());
+            $refunds = $this->refunds($user);
+            if ($refunds !== []) {
+                $data['refunds'] = $refunds;
+            }
+        }
+
+        if ($canManageSettlement) {
+            $data['financial_details'] = [
+                'seller_deposit_amount' => MoneyResource::make($this->seller_deposit_amount_minor, $this->currency_code),
+                'bidder_deposit_amount' => MoneyResource::make($this->bidder_deposit_amount_minor, $this->currency_code),
+                'platform_fee' => [
+                    'type' => $this->platform_fee_type,
+                    'basis_points' => $this->platform_fee_basis_points,
+                    'fixed' => MoneyResource::make($this->platform_fee_fixed_minor, $this->currency_code),
+                ],
+                'settlement' => new AuctionSettlementResource($this->settlement),
+            ];
+        }
+
+        if ($canResolveDisputes) {
+            $data['disputes'] = $this->whenLoaded('disputes', fn () => $this->disputes->map(fn ($dispute): array => [
+                'id' => $dispute->public_id,
+                'status' => $dispute->status,
+                'opened_by' => $dispute->opened_by,
+                'resolution_note' => $dispute->resolution_note,
+                'resolved_at' => $dispute->resolved_at?->toIso8601String(),
+            ])->values());
+        }
+
+        return $data;
+    }
+
+    private function paymentSubmissions(): Collection
+    {
+        if (! $this->relationLoaded('deposits')) {
+            return collect();
+        }
+
+        return $this->deposits
+            ->filter(fn ($deposit): bool => $deposit->relationLoaded('paymentSubmissions'))
+            ->flatMap(fn ($deposit): Collection => $deposit->paymentSubmissions);
+    }
+
+    private function refunds(?object $user): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        return $this->paymentSubmissions()
+            ->filter(fn ($submission): bool => $submission->relationLoaded('transaction') && $submission->transaction?->relationLoaded('refunds'))
+            ->flatMap(fn ($submission): Collection => $submission->transaction->refunds)
+            ->filter(fn ($refund): bool => Gate::forUser($user)->allows('execute', $refund)
+                || Gate::forUser($user)->allows('confirmManual', $refund)
+                || Gate::forUser($user)->allows('cancel', $refund))
+            ->map(fn ($refund): array => [
+                'id' => $refund->public_id,
+                'status' => $refund->status->value,
+                'amount' => MoneyResource::make($refund->amount_minor, $refund->currency_code),
+                'provider' => $refund->provider,
+                'provider_refund_id' => $refund->provider_refund_id,
+                'attempt_count' => $refund->attempt_count,
+                'failure_reason' => $refund->failure_reason,
+                'processed_at' => $refund->processed_at?->toIso8601String(),
+                'succeeded_at' => $refund->succeeded_at?->toIso8601String(),
+                'failed_at' => $refund->failed_at?->toIso8601String(),
+                'cancelled_at' => $refund->cancelled_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
     }
 }

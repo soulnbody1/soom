@@ -18,12 +18,12 @@ use App\Http\Requests\Auction\ReviewAuctionRequest;
 use App\Http\Requests\Auction\StoreAuctionRequest;
 use App\Http\Resources\Auction\AdminAuctionResource;
 use App\Http\Resources\Auction\AuctionParticipantResource;
-use App\Http\Resources\Auction\AuctionResource;
+use App\Http\Resources\Auction\MyAuctionResource;
 use App\Http\Resources\Auction\PaymentSubmissionResource;
 use App\Http\Resources\Auction\PublicAuctionResource;
-use App\Http\Resources\Auction\SellerAuctionResource;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
+use App\Models\Auction\PaymentSubmission;
 use App\Services\Auction\Actions\AcceptAuctionTermsAction;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\ConfirmAuctionHandoverBySellerAction;
@@ -86,11 +86,17 @@ final class AuctionController extends Controller
         $loaded = $action->execute($auction);
         $user = $request->user();
 
-        $resource = match (true) {
-            $user?->role === 'admin' => new AdminAuctionResource($loaded),
-            $user?->id === $auction->seller_id => new SellerAuctionResource($loaded),
-            default => new PublicAuctionResource($loaded),
-        };
+        if ($user && Gate::forUser($user)->allows('viewAny', Auction::class)) {
+            $this->loadAdminAuctionRelations($loaded, $user);
+            $resource = new AdminAuctionResource($loaded);
+        } elseif ($user) {
+            $this->loadMyAuctionRelations($loaded, $user->id);
+            $resource = $this->hasMyAuctionData($loaded, $user->id)
+                ? new MyAuctionResource($loaded)
+                : new PublicAuctionResource($loaded);
+        } else {
+            $resource = new PublicAuctionResource($loaded);
+        }
 
         return $this->sendResponse($resource, __('auction.messages.auction_fetched'));
     }
@@ -102,7 +108,9 @@ final class AuctionController extends Controller
         $input = CreateAuctionInputDTO::fromValidated($request->validated());
         $auction = $action->execute($input, Auth::id());
 
-        return $this->sendResponse(new SellerAuctionResource($auction), __('auction.messages.auction_created'), 201);
+        $this->loadMyAuctionRelations($auction, Auth::id());
+
+        return $this->sendResponse(new MyAuctionResource($auction), __('auction.messages.auction_created'), 201);
     }
 
     public function submitForReview(Auction $auction, SubmitAuctionForReviewAction $action): JsonResponse
@@ -110,10 +118,7 @@ final class AuctionController extends Controller
         try {
             Gate::authorize('submitForReview', $auction);
 
-            return $this->sendResponse(
-                new AuctionResource($action->execute($auction, Auth::id())),
-                __('auction.messages.auction_submitted')
-            );
+            return $this->auctionResponse($action->execute($auction, Auth::id()), __('auction.messages.auction_submitted'));
         } catch (AuctionException $exception) {
             return $this->sendError($exception->getMessage(), 422);
         }
@@ -128,7 +133,7 @@ final class AuctionController extends Controller
             ? $action->approve($auction, Auth::id(), $data['reason'])
             : $action->reject($auction, Auth::id(), $data['reason']);
 
-        return $this->sendResponse(new AuctionResource($reviewed), __('auction.messages.auction_reviewed'));
+        return $this->auctionResponse($reviewed, __('auction.messages.auction_reviewed'));
     }
 
     public function cancel(CancelAuctionRequest $request, Auction $auction, CancelAuctionAction $action): JsonResponse
@@ -145,7 +150,7 @@ final class AuctionController extends Controller
             $request->liability()
         );
 
-        return $this->sendResponse(new AuctionResource($cancelled), __('auction.messages.auction_cancelled'));
+        return $this->auctionResponse($cancelled, __('auction.messages.auction_cancelled'));
     }
 
     public function register(Auction $auction, RegisterParticipantAction $action): JsonResponse
@@ -203,8 +208,8 @@ final class AuctionController extends Controller
         try {
             Gate::authorize('confirmSellerHandover', $auction);
 
-            return $this->sendResponse(
-                new AuctionResource($action->execute($auction, Auth::id())->load('settlement')),
+            return $this->auctionResponse(
+                $action->execute($auction, Auth::id()),
                 __('auction.messages.seller_handover_confirmed')
             );
         } catch (AuctionException $exception) {
@@ -217,8 +222,8 @@ final class AuctionController extends Controller
         try {
             Gate::authorize('confirmWinnerReceipt', $auction);
 
-            return $this->sendResponse(
-                new AuctionResource($action->execute($auction, Auth::id())->load('settlement')),
+            return $this->auctionResponse(
+                $action->execute($auction, Auth::id()),
                 __('auction.messages.winner_receipt_confirmed')
             );
         } catch (AuctionException $exception) {
@@ -256,7 +261,7 @@ final class AuctionController extends Controller
             $request->validated('seller_deposit_forfeit_amount_minor')
         );
 
-        return $this->sendResponse(new AuctionResource($resolved), __('auction.messages.dispute_resolved'));
+        return $this->auctionResponse($resolved, __('auction.messages.dispute_resolved'));
     }
 
     public function markWinnerDefaulted(
@@ -275,16 +280,13 @@ final class AuctionController extends Controller
             (string) ($request->validated('override_reason') ?? '')
         );
 
-        return $this->sendResponse(
-            new AuctionResource($updated->load('settlement')),
-            __('auction.messages.winner_default_processed')
-        );
+        return $this->auctionResponse($updated, __('auction.messages.winner_default_processed'));
     }
 
     public function mine(AuctionIndexRequest $request, ListSellerAuctionsAction $action): JsonResponse
     {
         return $this->sendResponse(
-            SellerAuctionResource::collection($action->execute(Auth::id(), $request->perPage())),
+            MyAuctionResource::collection($action->execute(Auth::id(), $request->perPage())),
             __('auction.messages.seller_auctions_fetched')
         );
     }
@@ -311,5 +313,88 @@ final class AuctionController extends Controller
         } catch (AuctionException $exception) {
             return $this->sendError($exception->getMessage(), 422);
         }
+    }
+
+    private function auctionResponse(Auction $auction, string $message, int $status = 200): JsonResponse
+    {
+        $auction->load([
+            'media',
+            'category',
+            'country',
+            'state',
+            'city',
+            'metric',
+            'currentLeadingBid',
+        ]);
+
+        $user = request()->user();
+
+        if ($user && Gate::forUser($user)->allows('viewAny', Auction::class)) {
+            $this->loadAdminAuctionRelations($auction, $user);
+
+            return $this->sendResponse(new AdminAuctionResource($auction), $message, $status);
+        }
+
+        if ($user) {
+            $this->loadMyAuctionRelations($auction, $user->id);
+
+            return $this->sendResponse(new MyAuctionResource($auction), $message, $status);
+        }
+
+        return $this->sendResponse(new PublicAuctionResource($auction), $message, $status);
+    }
+
+    private function loadMyAuctionRelations(Auction $auction, int $userId): void
+    {
+        $isSeller = $auction->seller_id === $userId;
+
+        $auction->load([
+            'bids' => fn ($query) => $query
+                ->where('bidder_id', $userId)
+                ->orderBy('sequence_number'),
+            'deposits' => fn ($query) => $query
+                ->where('user_id', $userId)
+                ->with([
+                    'paymentSubmissions.paymentMethod',
+                    'paymentSubmissions.transaction.refunds' => fn ($refunds) => $refunds->where('user_id', $userId),
+                ]),
+            'sellerDeposit' => fn ($query) => $query
+                ->when(! $isSeller, fn ($sellerDeposit) => $sellerDeposit->whereRaw('1 = 0'))
+                ->with([
+                    'paymentSubmissions.paymentMethod',
+                    'paymentSubmissions.transaction.refunds' => fn ($refunds) => $refunds->where('user_id', $userId),
+                ]),
+            'settlement' => fn ($query) => $isSeller
+                ? $query
+                : $query->where('winner_id', $userId),
+        ]);
+    }
+
+    private function loadAdminAuctionRelations(Auction $auction, object $user): void
+    {
+        $relations = [
+            'seller',
+            'winningBid',
+            'settlement',
+        ];
+
+        if (Gate::forUser($user)->allows('viewAny', PaymentSubmission::class)) {
+            $relations[] = 'deposits.paymentSubmissions.paymentMethod';
+            $relations[] = 'deposits.paymentSubmissions.transaction.refunds';
+        }
+
+        if (Gate::forUser($user)->allows('resolveDispute', $auction)) {
+            $relations[] = 'disputes';
+        }
+
+        $auction->load($relations);
+    }
+
+    private function hasMyAuctionData(Auction $auction, int $userId): bool
+    {
+        return $auction->seller_id === $userId
+            || ($auction->relationLoaded('bids') && $auction->bids->isNotEmpty())
+            || ($auction->relationLoaded('deposits') && $auction->deposits->isNotEmpty())
+            || ($auction->relationLoaded('settlement') && $auction->settlement?->winner_id === $userId);
     }
 }

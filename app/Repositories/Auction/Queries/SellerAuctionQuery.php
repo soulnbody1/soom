@@ -14,6 +14,8 @@ final class SellerAuctionQuery
         'metric',
         'currentLeadingBid',
         'settlement',
+        'sellerDeposit.paymentSubmissions.paymentMethod',
+        'sellerDeposit.paymentSubmissions.transaction.refunds',
     ];
 
     /**
