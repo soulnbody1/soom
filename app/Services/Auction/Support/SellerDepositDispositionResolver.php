@@ -12,6 +12,10 @@ use App\Models\Auction\AuctionDeposit;
 
 final class SellerDepositDispositionResolver
 {
+    public function __construct(
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+    ) {}
+
     public function resolve(
         Auction $auction,
         string $trigger,
@@ -136,12 +140,9 @@ final class SellerDepositDispositionResolver
 
     private function configuredDisposition(Auction $auction, string $policyKey): ?string
     {
-        $configuration = $auction->configurationVersion?->configuration ?? [];
-        $snapshotPolicy = $configuration['seller_deposit_policy'] ?? [];
+        $snapshot = $this->snapshotReader->forAuction($auction);
 
-        return $snapshotPolicy[$policyKey]
-            ?? $configuration["seller_deposit_{$policyKey}_disposition"]
-            ?? config("auction.seller_deposit_policy.{$policyKey}");
+        return $snapshot->sellerDepositDisposition($policyKey);
     }
 
     private function defaultDisposition(string $policyKey): SellerDepositDisposition
@@ -167,14 +168,11 @@ final class SellerDepositDispositionResolver
 
     private function partialForfeitAmount(Auction $auction, string $policyKey, array $context): int
     {
-        $configuration = $auction->configurationVersion?->configuration ?? [];
-        $snapshotPolicy = $configuration['seller_deposit_policy'] ?? [];
+        $snapshot = $this->snapshotReader->forAuction($auction);
 
         return (int) (
             $context['forfeit_amount_minor']
-            ?? $snapshotPolicy["{$policyKey}_forfeit_amount_minor"]
-            ?? $configuration["seller_deposit_{$policyKey}_forfeit_amount_minor"]
-            ?? config("auction.seller_deposit_policy.{$policyKey}_forfeit_amount_minor", 0)
+            ?? $snapshot->sellerDepositForfeitAmount($policyKey)
         );
     }
 

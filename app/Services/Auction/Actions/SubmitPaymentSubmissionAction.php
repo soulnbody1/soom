@@ -16,6 +16,7 @@ use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
+use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\FinancialObligationKey;
 use App\Services\Auction\Support\PaymentEligibilityRule;
@@ -34,6 +35,7 @@ final class SubmitPaymentSubmissionAction
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionSettlementRepository $settlements,
         private readonly PaymentEligibilityRule $eligibility,
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
     ) {}
 
     public function execute(
@@ -93,7 +95,7 @@ final class SubmitPaymentSubmissionAction
                         'payment_method_id' => $method->id,
                         'status' => PaymentSubmissionStatus::PendingReview,
                         'amount_minor' => $amount,
-                        'currency_code' => $auction->currency_code,
+                        'currency_code' => $this->snapshotReader->forAuction($auction)->currency_code,
                         'receipt_disk' => 'spaces_private',
                         'receipt_path' => $path,
                         'receipt_mime_type' => (string) $receipt->getMimeType(),
@@ -134,6 +136,8 @@ final class SubmitPaymentSubmissionAction
 
     private function target(Auction $auction, int $userId, PaymentPurpose $purpose): array
     {
+        $snapshot = $this->snapshotReader->forAuction($auction);
+
         if ($purpose === PaymentPurpose::SellerDeposit) {
             $this->eligibility->assertCanSubmitSellerDeposit($auction, $userId);
 
@@ -141,21 +145,21 @@ final class SubmitPaymentSubmissionAction
                 ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'seller'],
                 [
                     'status' => AuctionDepositStatus::PendingSubmission,
-                    'required_amount_minor' => $auction->seller_deposit_amount_minor,
-                    'currency_code' => $auction->currency_code,
+                    'required_amount_minor' => (int) $snapshot->seller_deposit_required_minor,
+                    'currency_code' => $snapshot->currency_code,
                 ]
             );
 
             $deposit = $this->deposits->lockDepositForPayment($auction->id, $userId, 'seller');
             $this->eligibility->assertDepositTarget($auction, $deposit, $userId, 'seller');
             $this->eligibility->assertPaymentDetails(
-                (int) $auction->seller_deposit_amount_minor,
-                (string) $auction->currency_code,
+                (int) $snapshot->seller_deposit_required_minor,
+                $snapshot->currency_code,
                 (int) $deposit->required_amount_minor,
                 (string) $deposit->currency_code
             );
 
-            return [$deposit, null, $auction->seller_deposit_amount_minor];
+            return [$deposit, null, (int) $snapshot->seller_deposit_required_minor];
         }
 
         if ($purpose === PaymentPurpose::BidderDeposit) {
@@ -172,21 +176,21 @@ final class SubmitPaymentSubmissionAction
                 [
                     'participant_id' => $participant->id,
                     'status' => AuctionDepositStatus::PendingSubmission,
-                    'required_amount_minor' => $auction->bidder_deposit_amount_minor,
-                    'currency_code' => $auction->currency_code,
+                    'required_amount_minor' => (int) $snapshot->bidder_deposit_required_minor,
+                    'currency_code' => $snapshot->currency_code,
                 ]
             );
 
             $deposit = $this->deposits->lockDepositForPayment($auction->id, $userId, 'bidder');
             $this->eligibility->assertDepositTarget($auction, $deposit, $userId, 'bidder', $participant);
             $this->eligibility->assertPaymentDetails(
-                (int) $auction->bidder_deposit_amount_minor,
-                (string) $auction->currency_code,
+                (int) $snapshot->bidder_deposit_required_minor,
+                $snapshot->currency_code,
                 (int) $deposit->required_amount_minor,
                 (string) $deposit->currency_code
             );
 
-            return [$deposit, null, $auction->bidder_deposit_amount_minor];
+            return [$deposit, null, (int) $snapshot->bidder_deposit_required_minor];
         }
 
         $settlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);

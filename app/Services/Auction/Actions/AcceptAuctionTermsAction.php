@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Actions;
 
-use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
-use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\AuctionTermsAcceptance;
 use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
+use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Support\Carbon;
 
@@ -24,6 +23,7 @@ final class AcceptAuctionTermsAction
         private readonly AuctionRepository $auctions,
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionTermsRepository $terms,
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
     ) {}
 
     public function execute(Auction $auction, int $userId, ?string $ipAddress, ?string $userAgent): AuctionTermsAcceptance
@@ -36,7 +36,9 @@ final class AcceptAuctionTermsAction
                 throw new AuctionException(__('auction.errors.terms_registration_required'));
             }
 
-            if (! $auction->terms_version_id) {
+            $snapshot = $this->snapshotReader->forAuction($auction);
+
+            if (! $snapshot->terms_version_id) {
                 throw new AuctionException(__('auction.errors.terms_missing'));
             }
 
@@ -44,7 +46,7 @@ final class AcceptAuctionTermsAction
                 [
                     'auction_id' => $auction->id,
                     'user_id' => $userId,
-                    'terms_version_id' => $auction->terms_version_id,
+                    'terms_version_id' => $snapshot->terms_version_id,
                 ],
                 [
                     'participant_id' => $participant->id,
@@ -55,7 +57,7 @@ final class AcceptAuctionTermsAction
             );
 
             $this->audit->log('auction.terms_accepted', $auction, $userId, 'user', [
-                'terms_version_id' => $auction->terms_version_id,
+                'terms_version_id' => $snapshot->terms_version_id,
             ]);
 
             return $acceptance->refresh();

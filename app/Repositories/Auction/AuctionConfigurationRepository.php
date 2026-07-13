@@ -20,6 +20,7 @@ final class AuctionConfigurationRepository
 
         $config = AuctionConfigurationVersion::where('is_active', true)
             ->where('published_at', '<=', $now)
+            ->lockForUpdate()
             ->orderByDesc('version_number')
             ->first();
 

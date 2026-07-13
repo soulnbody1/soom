@@ -92,6 +92,15 @@ final class Auction extends Model
         'longitude' => 'decimal:7',
     ];
 
+    protected static function booted(): void
+    {
+        self::updating(function (Auction $auction): void {
+            if ($auction->isDirty('configuration_version_id') && $auction->getOriginal('configuration_version_id') !== null) {
+                throw new \App\Domain\Auction\Exceptions\AuctionConfigurationSnapshotImmutableException;
+            }
+        });
+    }
+
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');
@@ -125,6 +134,11 @@ final class Auction extends Model
     public function configurationVersion(): BelongsTo
     {
         return $this->belongsTo(AuctionConfigurationVersion::class, 'configuration_version_id');
+    }
+
+    public function configurationSnapshot(): HasOne
+    {
+        return $this->hasOne(AuctionConfigurationSnapshot::class);
     }
 
     public function media(): HasMany

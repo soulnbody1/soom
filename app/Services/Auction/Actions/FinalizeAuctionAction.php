@@ -17,6 +17,7 @@ use App\Repositories\Auction\AuctionRefundRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
+use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\FinancialObligationKey;
@@ -36,12 +37,14 @@ final class FinalizeAuctionAction
         private readonly AuctionRefundRepository $refunds,
         private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
         private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
     ) {}
 
     public function execute(Auction $auction): Auction
     {
         return $this->transaction->run(function () use ($auction): Auction {
             $auction = $this->auctions->lockForFinalization($auction->id);
+            $snapshot = $this->snapshotReader->forAuction($auction);
             $now = Carbon::now();
 
             if ($auction->status === AuctionStatus::Live) {
@@ -75,11 +78,11 @@ final class FinalizeAuctionAction
             $depositHeld = $winnerDeposit?->held_amount_minor ?? 0;
             $depositApplied = min($depositHeld, $winningBid->amount_minor);
             $depositExcess = max(0, $depositHeld - $depositApplied);
-            $platformFee = $this->platformFee($auction, $winningBid->amount_minor);
+            $platformFee = $snapshot->platformFeeFor($winningBid->amount_minor);
             $sellerNet = max(0, $winningBid->amount_minor - $platformFee);
             $amountDue = $winningBid->amount_minor - $depositApplied;
             $handoverDueAt = $amountDue === 0
-                ? $now->copy()->addHours($auction->handover_deadline_hours)
+                ? $now->copy()->addMinutes((int) $snapshot->handover_deadline_minutes)
                 : null;
 
             $settlementStatus = $amountDue > 0
@@ -98,9 +101,9 @@ final class FinalizeAuctionAction
                 amountDueMinor: $amountDue,
                 amountPaidMinor: 0,
                 remainingAmountMinor: $amountDue,
-                currencyCode: $auction->currency_code,
+                currencyCode: $snapshot->currency_code,
                 paymentDueAt: $amountDue > 0
-                    ? $now->addHours($auction->winner_payment_deadline_hours)
+                    ? $now->copy()->addMinutes((int) $snapshot->winner_payment_deadline_minutes)
                     : null,
                 handoverDueAt: $handoverDueAt,
                 paidAt: $amountDue === 0 ? $now : null,
@@ -167,14 +170,5 @@ final class FinalizeAuctionAction
 
             return $auction->refresh()->load('settlement');
         });
-    }
-
-    private function platformFee(Auction $auction, int $winningAmount): int
-    {
-        if ($auction->platform_fee_type === 'fixed') {
-            return min($winningAmount, $auction->platform_fee_fixed_minor);
-        }
-
-        return intdiv($winningAmount * $auction->platform_fee_basis_points, 10_000);
     }
 }

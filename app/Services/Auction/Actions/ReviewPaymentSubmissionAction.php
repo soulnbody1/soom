@@ -18,6 +18,7 @@ use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
+use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\FinancialObligationKey;
@@ -37,6 +38,7 @@ final class ReviewPaymentSubmissionAction
         private readonly AuctionSettlementRepository $settlements,
         private readonly PaymentEligibilityRule $eligibility,
         private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
     ) {}
 
     public function approve(
@@ -55,6 +57,7 @@ final class ReviewPaymentSubmissionAction
             }
 
             $auction = $this->payments->lockSubmissionAuction($submission);
+            $snapshot = $this->snapshotReader->forAuction($auction);
 
             $deposit = null;
             $participant = null;
@@ -188,7 +191,7 @@ final class ReviewPaymentSubmissionAction
                     'status' => $newPaid >= $settlement->amount_due_minor ? SettlementStatus::Paid : SettlementStatus::PaymentPending,
                     'paid_at' => $newPaid >= $settlement->amount_due_minor ? Carbon::now() : $settlement->paid_at,
                     'handover_due_at' => $newPaid >= $settlement->amount_due_minor
-                        ? Carbon::now()->addHours($auction->handover_deadline_hours)
+                        ? Carbon::now()->addMinutes((int) $snapshot->handover_deadline_minutes)
                         : $settlement->handover_due_at,
                 ]);
                 $this->settlements->save($settlement);

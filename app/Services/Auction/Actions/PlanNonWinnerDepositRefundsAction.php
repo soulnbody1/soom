@@ -18,6 +18,7 @@ use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
+use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\DepositRefundAllocation;
 use App\Services\Auction\Support\FinancialObligationKey;
@@ -38,6 +39,7 @@ final class PlanNonWinnerDepositRefundsAction
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionTermsRepository $terms,
         private readonly RefundAuctionDepositAction $refundDeposit,
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
     ) {}
 
     /**
@@ -51,13 +53,13 @@ final class PlanNonWinnerDepositRefundsAction
         array $excludedUserIds = [],
     ): array {
         return $this->transaction->run(function () use ($auction, $trigger, $actorId, $actorType, $excludedUserIds): array {
-            $auction = $this->auctions->lockForStateChange($auction->id)->loadMissing(['configurationVersion', 'winningBid']);
+            $auction = $this->auctions->lockForStateChange($auction->id)->loadMissing(['winningBid']);
+            $snapshot = $this->snapshotReader->forAuction($auction);
             $currentSettlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
             $currentWinnerIds = $this->currentWinnerIds($auction, $currentSettlement?->winner_id);
             $deposits = $this->deposits->lockBidderDepositsForAuction($auction->id);
             $depositByUser = $deposits->keyBy('user_id');
-            $policy = $this->policy($auction);
-            $holdDecisions = $this->holdDecisions($auction, $trigger, $policy, $depositByUser, $currentWinnerIds, $excludedUserIds);
+            $holdDecisions = $this->holdDecisions($auction, $trigger, $snapshot, $depositByUser, $currentWinnerIds, $excludedUserIds);
             $dispositions = [];
 
             foreach ($deposits as $deposit) {
@@ -115,7 +117,7 @@ final class PlanNonWinnerDepositRefundsAction
     private function holdDecisions(
         Auction $auction,
         string $trigger,
-        string $policy,
+        \App\Models\Auction\AuctionConfigurationSnapshot $snapshot,
         Collection $depositByUser,
         array $currentWinnerIds,
         array $excludedUserIds,
@@ -124,12 +126,12 @@ final class PlanNonWinnerDepositRefundsAction
             return [];
         }
 
-        if ($policy === 'refund_all_non_winners_immediately') {
+        if ($snapshot->non_winner_deposit_hold_policy === 'refund_all_non_winners_immediately') {
             return [];
         }
 
-        $limit = $policy === 'hold_top_n_bidders_until_winner_payment'
-            ? $this->topCandidateLimit($auction, $trigger)
+        $limit = $snapshot->non_winner_deposit_hold_policy === 'hold_top_n_bidders_until_winner_payment'
+            ? $this->topCandidateLimit($snapshot, $trigger)
             : PHP_INT_MAX;
 
         if ($limit <= 0) {
@@ -165,7 +167,7 @@ final class PlanNonWinnerDepositRefundsAction
             $decisions[$userId] = new DepositHoldDecisionDTO(
                 userId: $userId,
                 candidateRank: $rank,
-                policy: $policy,
+                policy: $snapshot->non_winner_deposit_hold_policy,
                 releaseTrigger: 'winner_payment_or_alternative_need_ended',
             );
         }
@@ -183,7 +185,8 @@ final class PlanNonWinnerDepositRefundsAction
             return false;
         }
 
-        if ($auction->terms_version_id && ! $this->terms->hasAcceptedTerms($auction->id, $deposit->user_id, $auction->terms_version_id)) {
+        $snapshot = $this->snapshotReader->forAuction($auction);
+        if ($snapshot->terms_version_id && ! $this->terms->hasAcceptedTerms($auction->id, $deposit->user_id, (int) $snapshot->terms_version_id)) {
             return false;
         }
 
@@ -302,23 +305,9 @@ final class PlanNonWinnerDepositRefundsAction
         return true;
     }
 
-    private function policy(Auction $auction): string
+    private function topCandidateLimit(\App\Models\Auction\AuctionConfigurationSnapshot $snapshot, string $trigger): int
     {
-        return (string) (
-            $auction->configurationVersion?->configuration['non_winner_deposit_policy']
-            ?? config('auction.non_winner_deposit_policy', 'hold_all_eligible_bidders_until_winner_payment')
-        );
-    }
-
-    private function topCandidateLimit(Auction $auction, string $trigger): int
-    {
-        $configuration = $auction->configurationVersion?->configuration ?? [];
-        $limit = (int) (
-            $configuration['non_winner_deposit_hold_count']
-            ?? $configuration['hold_top_n_bidders']
-            ?? $configuration['alternative_winner_candidate_count']
-            ?? config('auction.non_winner_deposit_hold_count', 1)
-        );
+        $limit = (int) $snapshot->alternative_candidate_limit;
 
         return $trigger === 'alternative_selected'
             ? max(0, $limit - 1)

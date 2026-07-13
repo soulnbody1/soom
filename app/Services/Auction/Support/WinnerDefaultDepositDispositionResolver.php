@@ -11,6 +11,10 @@ use App\Models\Auction\AuctionDeposit;
 
 final class WinnerDefaultDepositDispositionResolver
 {
+    public function __construct(
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+    ) {}
+
     public function resolve(Auction $auction, ?AuctionDeposit $deposit, string $reason, array $context = []): WinnerDefaultDepositDispositionDTO
     {
         if (! $deposit || ((int) $deposit->held_amount_minor + (int) $deposit->applied_amount_minor) <= 0) {
@@ -41,26 +45,14 @@ final class WinnerDefaultDepositDispositionResolver
 
     private function configuredDisposition(Auction $auction): string
     {
-        $configuration = $auction->configurationVersion?->configuration ?? [];
-        $snapshotPolicy = $configuration['winner_default_deposit_policy'] ?? [];
-
-        return (string) (
-            $snapshotPolicy['disposition']
-            ?? $configuration['winner_default_deposit_disposition']
-            ?? config('auction.winner_default_deposit_policy.disposition', 'full_forfeit')
-        );
+        return $this->snapshotReader->forAuction($auction)->winnerDefaultDepositDisposition();
     }
 
     private function partialForfeitAmount(Auction $auction, array $context): int
     {
-        $configuration = $auction->configurationVersion?->configuration ?? [];
-        $snapshotPolicy = $configuration['winner_default_deposit_policy'] ?? [];
-
         return (int) (
             $context['forfeit_amount_minor']
-            ?? $snapshotPolicy['forfeit_amount_minor']
-            ?? $configuration['winner_default_deposit_forfeit_amount_minor']
-            ?? config('auction.winner_default_deposit_policy.forfeit_amount_minor', 0)
+            ?? $this->snapshotReader->forAuction($auction)->winnerDefaultDepositForfeitAmount()
         );
     }
 

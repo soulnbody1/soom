@@ -1,0 +1,165 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Auction\Support;
+
+use App\Domain\Auction\Exceptions\AuctionConfigurationSnapshotIncompleteException;
+use App\Domain\Auction\ValueObjects\Currency;
+use App\Models\Auction\AuctionTermsVersion;
+
+final class AuctionConfigurationSnapshotValidator
+{
+    private const SELLER_POLICY_KEYS = [
+        'auction_rejected',
+        'unsold',
+        'completed',
+        'seller_cancellation_before_start',
+        'seller_cancellation_after_start',
+        'admin_cancellation_platform_fault',
+        'admin_cancellation_seller_fault',
+        'admin_cancellation_neutral',
+        'admin_cancellation_fraud_or_compliance',
+        'system_cancellation_platform_fault',
+        'system_cancellation_seller_fault',
+        'system_cancellation_neutral',
+        'winner_default',
+        'seller_breach',
+        'dispute_complete',
+        'dispute_cancel',
+        'dispute_resume_handover',
+    ];
+
+    private const DISPOSITIONS = ['refund', 'forfeit', 'partial_forfeit', 'keep_held', 'manual_review', 'no_action'];
+
+    public function assertValid(array $data): void
+    {
+        $errors = $this->validate($data);
+
+        if ($errors !== []) {
+            throw new AuctionConfigurationSnapshotIncompleteException($errors);
+        }
+    }
+
+    public function validate(array $data): array
+    {
+        $errors = [];
+
+        foreach ($this->requiredKeys() as $key) {
+            if (! array_key_exists($key, $data) || $data[$key] === null || $data[$key] === '') {
+                $errors[] = "{$key}: required";
+            }
+        }
+
+        try {
+            $currency = Currency::fromCode((string) ($data['currency_code'] ?? ''));
+            if ((int) ($data['currency_minor_unit'] ?? -1) !== $currency->exponent()) {
+                $errors[] = 'currency_minor_unit: does not match currency_code';
+            }
+        } catch (\Throwable) {
+            $errors[] = 'currency_code: unsupported';
+        }
+
+        foreach ($this->nonNegativeIntegerKeys() as $key) {
+            if (! $this->isIntegerLike($data[$key] ?? null) || (int) $data[$key] < 0) {
+                $errors[] = "{$key}: must be a non-negative integer";
+            }
+        }
+
+        foreach (['winner_payment_deadline_minutes', 'handover_deadline_minutes', 'alternative_candidate_limit'] as $key) {
+            if (! $this->isIntegerLike($data[$key] ?? null) || (int) $data[$key] <= 0) {
+                $errors[] = "{$key}: must be positive";
+            }
+        }
+
+        if (($data['platform_fee_type'] ?? null) === 'percentage') {
+            $basisPoints = (int) ($data['platform_fee_value'] ?? -1);
+            if ($basisPoints < 0 || $basisPoints > 10_000) {
+                $errors[] = 'platform_fee_value: percentage must be between 0 and 10000 basis points';
+            }
+        } elseif (($data['platform_fee_type'] ?? null) !== 'fixed') {
+            $errors[] = 'platform_fee_type: unknown';
+        }
+
+        if (($data['platform_fee_max_minor'] ?? null) !== null && (int) $data['platform_fee_min_minor'] > (int) $data['platform_fee_max_minor']) {
+            $errors[] = 'platform_fee_min_minor: cannot be greater than max';
+        }
+
+        $sellerPolicy = (array) ($data['seller_deposit_policy'] ?? []);
+        foreach (self::SELLER_POLICY_KEYS as $key) {
+            if (! isset($sellerPolicy[$key]) || ! in_array($sellerPolicy[$key], self::DISPOSITIONS, true)) {
+                $errors[] = "seller_deposit_policy.{$key}: unknown";
+            }
+        }
+
+        $winnerPolicy = (array) ($data['winner_default_deposit_policy'] ?? []);
+        if (! isset($winnerPolicy['disposition']) || ! in_array($winnerPolicy['disposition'], ['full_forfeit', 'partial_forfeit', 'refund', 'manual_review', 'no_action'], true)) {
+            $errors[] = 'winner_default_deposit_policy.disposition: unknown';
+        }
+        if (($winnerPolicy['forfeit_amount_minor'] ?? 0) < 0) {
+            $errors[] = 'winner_default_deposit_policy.forfeit_amount_minor: must be non-negative';
+        }
+
+        if (($data['terms_version_id'] ?? null) && ! AuctionTermsVersion::whereKey($data['terms_version_id'])->exists()) {
+            $errors[] = 'terms_version_id: not found';
+        }
+
+        return $errors;
+    }
+
+    private function requiredKeys(): array
+    {
+        return [
+            'auction_id',
+            'source_configuration_version_id',
+            'currency_code',
+            'currency_minor_unit',
+            'minimum_bid_increment_minor',
+            'auto_extend_window_seconds',
+            'auto_extend_duration_seconds',
+            'maximum_extensions',
+            'seller_deposit_required_minor',
+            'seller_deposit_policy',
+            'bidder_deposit_required_minor',
+            'bidder_deposit_payment_deadline_policy',
+            'non_winner_deposit_hold_policy',
+            'alternative_candidate_hold_policy',
+            'alternative_candidate_limit',
+            'winner_payment_deadline_minutes',
+            'handover_deadline_minutes',
+            'platform_fee_type',
+            'platform_fee_value',
+            'platform_fee_min_minor',
+            'deposit_application_policy',
+            'winner_default_deposit_policy',
+            'winner_default_forfeit_type',
+            'winner_default_forfeit_value',
+            'alternative_winner_selection_policy',
+            'maximum_reassignments',
+            'cancellation_policies',
+            'refund_processing_mode',
+            'required_acceptance_scope',
+        ];
+    }
+
+    private function nonNegativeIntegerKeys(): array
+    {
+        return [
+            'minimum_bid_increment_minor',
+            'auto_extend_window_seconds',
+            'auto_extend_duration_seconds',
+            'maximum_extensions',
+            'seller_deposit_required_minor',
+            'bidder_deposit_required_minor',
+            'platform_fee_value',
+            'platform_fee_min_minor',
+            'winner_default_forfeit_value',
+            'maximum_reassignments',
+        ];
+    }
+
+    private function isIntegerLike(mixed $value): bool
+    {
+        return is_int($value) || (is_string($value) && preg_match('/^-?\d+$/', $value) === 1);
+    }
+}

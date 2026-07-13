@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Auction;
 
+use App\Domain\Auction\Exceptions\AuctionConfigurationVersionInUseException;
 use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -30,9 +31,34 @@ final class AuctionConfigurationVersion extends Model
         'published_at' => 'immutable_datetime',
     ];
 
+    protected static function booted(): void
+    {
+        self::updating(function (AuctionConfigurationVersion $version): void {
+            if (! $version->isUsed()) {
+                return;
+            }
+
+            throw new AuctionConfigurationVersionInUseException;
+        });
+
+        self::deleting(function (AuctionConfigurationVersion $version): void {
+            if ($version->isUsed()) {
+                throw new AuctionConfigurationVersionInUseException;
+            }
+        });
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function isUsed(): bool
+    {
+        return AuctionConfigurationSnapshot::where('source_configuration_version_id', $this->id)->exists()
+            || Auction::where('configuration_version_id', $this->id)
+                ->whereNotIn('status', ['draft', 'pending_review', 'rejected'])
+                ->exists();
     }
 
     public function getSellerDepositMinorAttribute(): int

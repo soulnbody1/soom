@@ -111,6 +111,10 @@ return [
         'invalid_decimal_places' => 'عدد الخانات العشرية يتجاوز الحد المسموح لعملة :currency (الحد الأقصى :max).',
         'seller_cannot_set_platform_fees' => 'رسوم المنصة تحددها المنصة.',
         'zero_deposit_not_required' => 'التأمين غير مطلوب لهذا المزاد.',
+        'configuration_snapshot_missing' => 'Snapshot إعدادات المزاد غير موجودة لهذا المزاد.',
+        'configuration_snapshot_incomplete' => 'Snapshot إعدادات المزاد غير مكتملة أو غير صالحة.',
+        'configuration_snapshot_immutable' => 'Snapshot إعدادات المزاد ثابتة ولا يمكن تعديلها.',
+        'configuration_version_in_use' => 'نسخة إعدادات المزاد مستخدمة ولا يمكن تعديلها أو حذفها.',
     ],
     'audit' => [
         'cancelled_by_actor' => 'تم الإلغاء بواسطة المستخدم',

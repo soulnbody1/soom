@@ -15,6 +15,7 @@ use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
+use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Database\QueryException;
@@ -31,6 +32,7 @@ final class PlaceBidAction
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionTermsRepository $terms,
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
     ) {}
 
     public function execute(
@@ -43,6 +45,7 @@ final class PlaceBidAction
     ): AuctionBid {
         $bid = $this->transaction->run(function () use ($auction, $bidderId, $amount, $currency, $idempotencyKey, $clientRequestId): AuctionBid {
             $auction = $this->auctions->lockForBidding($auction->id);
+            $snapshot = $this->snapshotReader->forAuction($auction);
 
             $existing = $this->bids->findByIdempotencyKey($auction->id, $bidderId, $idempotencyKey);
             if ($existing) {
@@ -69,24 +72,24 @@ final class PlaceBidAction
                 throw AuctionException::bidRejected(__('auction.errors.bidder_not_qualified'));
             }
 
-            if (! $this->terms->hasAcceptedTerms($auction->id, $bidderId, $auction->terms_version_id)) {
+            if (! $snapshot->terms_version_id || ! $this->terms->hasAcceptedTerms($auction->id, $bidderId, (int) $snapshot->terms_version_id)) {
                 throw AuctionException::bidRejected(__('auction.errors.terms_required_before_bidding'));
             }
 
             $deposit = $this->deposits->lockBidderDeposit($participant->id);
-            if (! $deposit || $deposit->status !== \App\Domain\Auction\Enums\AuctionDepositStatus::Held || $deposit->held_amount_minor < $auction->bidder_deposit_amount_minor) {
+            if (! $deposit || $deposit->status !== \App\Domain\Auction\Enums\AuctionDepositStatus::Held || $deposit->held_amount_minor < (int) $snapshot->bidder_deposit_required_minor) {
                 throw AuctionException::bidRejected(__('auction.errors.bidder_deposit_required'));
             }
 
             $bidMoney = Money::fromDecimalString($amount, strtoupper($currency));
-            if ($bidMoney->currency !== $auction->currency_code) {
+            if ($bidMoney->currency !== $snapshot->currency_code) {
                 throw AuctionException::bidRejected(__('auction.errors.bid_currency_mismatch'));
             }
 
             $currentAmount = $auction->currentLeadingBid?->amount_minor ?? 0;
             $minimum = $currentAmount === 0
                 ? $auction->starting_amount_minor
-                : $currentAmount + $auction->minimum_bid_increment_minor;
+                : $currentAmount + (int) $snapshot->minimum_bid_increment_minor;
 
             if ($bidMoney->minor < $minimum) {
                 throw AuctionException::bidRejected(__('auction.errors.bid_below_minimum'));
@@ -123,11 +126,12 @@ final class PlaceBidAction
             $secondsRemaining = $now->diffInSeconds($auction->ends_at, false);
             if (
                 $secondsRemaining > 0
-                && $secondsRemaining <= $auction->extension_window_seconds
-                && $auction->extension_count < $auction->maximum_extension_count
+                && $snapshot->auto_extend_enabled
+                && $secondsRemaining <= (int) $snapshot->auto_extend_window_seconds
+                && $auction->extension_count < (int) $snapshot->maximum_extensions
             ) {
                 $auction->forceFill([
-                    'ends_at' => $auction->ends_at->addSeconds($auction->extension_duration_seconds),
+                    'ends_at' => $auction->ends_at->addSeconds((int) $snapshot->auto_extend_duration_seconds),
                     'extension_count' => $auction->extension_count + 1,
                     'last_extended_at' => $now,
                 ]);

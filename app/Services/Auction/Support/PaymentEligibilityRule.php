@@ -38,6 +38,10 @@ final class PaymentEligibilityRule
         AuctionDepositStatus::Forfeited,
     ];
 
+    public function __construct(
+        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+    ) {}
+
     public function assertCanSubmitSellerDeposit(Auction $auction, int $userId): void
     {
         if ($auction->status !== AuctionStatus::AwaitingSellerDeposit) {
@@ -48,7 +52,7 @@ final class PaymentEligibilityRule
             throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
         }
 
-        if ((int) $auction->seller_deposit_amount_minor <= 0) {
+        if ((int) $this->snapshotReader->forAuction($auction)->seller_deposit_required_minor <= 0) {
             throw new AuctionException(__('auction.errors.zero_deposit_not_required'));
         }
     }
@@ -66,7 +70,7 @@ final class PaymentEligibilityRule
             throw new AuctionException(__('auction.errors.participant_not_eligible'));
         }
 
-        if ((int) $auction->bidder_deposit_amount_minor <= 0) {
+        if ((int) $this->snapshotReader->forAuction($auction)->bidder_deposit_required_minor <= 0) {
             throw new AuctionException(__('auction.errors.zero_deposit_not_required'));
         }
     }
@@ -129,7 +133,7 @@ final class PaymentEligibilityRule
             throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
         }
 
-        if ($deposit->currency_code !== $auction->currency_code) {
+        if ($deposit->currency_code !== $this->snapshotReader->forAuction($auction)->currency_code) {
             throw new AuctionException(__('auction.errors.payment_currency_mismatch'));
         }
 
@@ -191,7 +195,7 @@ final class PaymentEligibilityRule
             throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
         }
 
-        if ($settlement->currency_code !== $auction->currency_code) {
+        if ($settlement->currency_code !== $this->snapshotReader->forAuction($auction)->currency_code) {
             throw new AuctionException(__('auction.errors.payment_currency_mismatch'));
         }
     }
