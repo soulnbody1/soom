@@ -21,7 +21,6 @@ return [
 
     'refunds' => [
         'provider' => env('AUCTION_REFUND_PROVIDER', 'manual'),
-        'auto_succeed_manual_refunds' => false,
         'lease_seconds' => (int) env('AUCTION_REFUND_LEASE_SECONDS', 300),
         'max_attempts' => (int) env('AUCTION_REFUND_MAX_ATTEMPTS', 5),
         'backoff_seconds' => array_map('intval', explode(',', env('AUCTION_REFUND_BACKOFF_SECONDS', '60,300,900,3600'))),

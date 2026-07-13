@@ -30,8 +30,8 @@ use App\Models\Auction\PaymentTransaction;
 use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
-use App\Notifications\AuctionOutboxNotification;
 use App\Models\User;
+use App\Notifications\AuctionOutboxNotification;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\DispatchOutboxMessagesAction;
 use App\Services\Auction\Actions\FinalizeAuctionAction;
@@ -42,6 +42,7 @@ use App\Services\Auction\Actions\ReviewPaymentSubmissionAction;
 use App\Services\Auction\Actions\SubmitPaymentSubmissionAction;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionMediaService;
+use App\Services\Auction\Support\AuctionStateMachine;
 use Database\Factories\Auction\PaymentMethodFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -454,6 +455,43 @@ final class AuctionFinancialFlowTest extends TestCase
         ]);
 
         $this->assertSame(0, OutboxMessage::where('aggregate_id', $auction->id)->count());
+    }
+
+    public function test_state_transition_to_unnotifiable_status_does_not_create_outbox_message(): void
+    {
+        [$auction] = $this->auctionWithoutBids(AuctionStatus::Ended);
+        OutboxMessage::query()->delete();
+
+        $machine = app(AuctionStateMachine::class);
+
+        // Ended -> SettlementPending -> PaymentPending: none of these have a
+        // status_changed notification handler, so no outbox message may be queued.
+        $auction = $machine->transition($auction, AuctionStatus::SettlementPending, null, 'system');
+        $auction = $machine->transition($auction, AuctionStatus::PaymentPending, null, 'system');
+        $auction = $machine->transition($auction, AuctionStatus::Cancelled, null, 'system');
+
+        $this->assertSame(0, OutboxMessage::where('aggregate_id', $auction->id)->count());
+
+        // The transitions are still recorded in the status history for every step.
+        $this->assertSame(
+            3,
+            \App\Models\Auction\AuctionStatusHistory::where('auction_id', $auction->id)->count()
+        );
+    }
+
+    public function test_state_transition_to_notifiable_status_creates_outbox_message(): void
+    {
+        [$auction] = $this->auctionWithoutBids(AuctionStatus::Scheduled);
+        OutboxMessage::query()->delete();
+
+        app(AuctionStateMachine::class)->transition($auction, AuctionStatus::Live, null, 'system');
+
+        $this->assertSame(
+            1,
+            OutboxMessage::where('aggregate_id', $auction->id)
+                ->where('event_type', 'auction.status_changed')
+                ->count()
+        );
     }
 
     public function test_outbox_consumer_success_marks_message_processed_and_sends_notification(): void

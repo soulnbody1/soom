@@ -32,14 +32,6 @@ final class AuctionConfigurationRepository
     }
 
     /**
-     * Find configuration by public_id.
-     */
-    public function findByPublicId(string $publicId): ?AuctionConfigurationVersion
-    {
-        return AuctionConfigurationVersion::where('public_id', $publicId)->first();
-    }
-
-    /**
      * Create a new configuration version.
      */
     public function create(array $attributes): AuctionConfigurationVersion

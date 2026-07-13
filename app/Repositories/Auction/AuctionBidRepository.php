@@ -52,20 +52,6 @@ final class AuctionBidRepository
     }
 
     /**
-     * Get the next highest bid excluding a specific bid (for winner reassignment).
-     * Used by MarkWinnerDefaultedAction.
-     */
-    public function lockNextHighestBidExcluding(int $auctionId, int $excludeBidId): ?AuctionBid
-    {
-        return AuctionBid::where('auction_id', $auctionId)
-            ->where('id', '!=', $excludeBidId)
-            ->orderByDesc('amount_minor')
-            ->orderBy('sequence_number')
-            ->lockForUpdate()
-            ->first();
-    }
-
-    /**
      * Lock alternative winner candidates ordered by auction precedence.
      */
     public function lockAlternativeWinnerCandidates(int $auctionId, int $defaultedUserId): Collection

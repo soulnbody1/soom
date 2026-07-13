@@ -82,19 +82,6 @@ final class AuctionDepositRepository
             ->first();
     }
 
-    /**
-     * Mark all held bidder deposits (except winner's) as refund pending.
-     * Used by FinalizeAuctionAction.
-     */
-    public function markNonWinnerDepositsRefundPending(int $auctionId, ?int $exceptUserId): int
-    {
-        return AuctionDeposit::where('auction_id', $auctionId)
-            ->where('type', 'bidder')
-            ->where('status', AuctionDepositStatus::Held->value)
-            ->when($exceptUserId, fn ($query) => $query->where('user_id', '!=', $exceptUserId))
-            ->update(['status' => AuctionDepositStatus::RefundPending->value]);
-    }
-
     public function lockBidderDepositsForAuction(int $auctionId): Collection
     {
         return AuctionDeposit::with(['participant', 'auction'])
@@ -109,18 +96,6 @@ final class AuctionDepositRepository
                 AuctionDepositStatus::Rejected->value,
             ])
             ->orderBy('id')
-            ->lockForUpdate()
-            ->get();
-    }
-
-    public function lockRefundableForCancellation(int $auctionId): Collection
-    {
-        return AuctionDeposit::where('auction_id', $auctionId)
-            ->whereIn('status', [
-                AuctionDepositStatus::Held->value,
-                AuctionDepositStatus::AppliedToSettlement->value,
-                AuctionDepositStatus::RefundPending->value,
-            ])
             ->lockForUpdate()
             ->get();
     }

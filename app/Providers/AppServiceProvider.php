@@ -37,7 +37,5 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuctionDeposit::class, AuctionDepositPolicy::class);
         Gate::policy(AuctionSettlement::class, AuctionSettlementPolicy::class);
         Gate::policy(RefundTransaction::class, AuctionRefundPolicy::class);
-
-        require base_path('routes/channels.php');
     }
 }

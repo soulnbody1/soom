@@ -76,6 +76,15 @@ final class AuctionStateMachine
         ],
     ];
 
+    /**
+     * Status transitions that have a real `auction.status_changed` notification handler.
+     */
+    private const NOTIFIABLE_STATUSES = [
+        AuctionStatus::Scheduled,
+        AuctionStatus::Live,
+        AuctionStatus::Ended,
+    ];
+
     public function __construct(private readonly AuctionAudit $audit) {}
 
     public function transition(
@@ -115,12 +124,15 @@ final class AuctionStateMachine
 
         $auction->forceFill($attributes)->save();
         $this->audit->statusChanged($auction, $from, $to, $actorId, $actorType, $reason, $metadata);
-        $this->audit->outbox('auction.status_changed', $auction, [
-            'auction_public_id' => $auction->public_id,
-            'from' => $from->value,
-            'to' => $to->value,
-            'reason' => $reason,
-        ]);
+
+        if (in_array($to, self::NOTIFIABLE_STATUSES, true)) {
+            $this->audit->outbox('auction.status_changed', $auction, [
+                'auction_public_id' => $auction->public_id,
+                'from' => $from->value,
+                'to' => $to->value,
+                'reason' => $reason,
+            ]);
+        }
 
         return $auction->refresh();
     }

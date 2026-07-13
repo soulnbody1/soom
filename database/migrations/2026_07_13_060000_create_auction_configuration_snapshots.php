@@ -29,7 +29,7 @@ return new class extends Migration
                 $table->unsignedInteger('winner_payment_deadline_minutes');
                 $table->unsignedInteger('handover_deadline_minutes');
                 $table->string('platform_fee_type', 20);
-                $table->unsignedInteger('platform_fee_value');
+                $table->unsignedBigInteger('platform_fee_value');
                 $table->unsignedBigInteger('platform_fee_min_minor')->default(0);
                 $table->unsignedBigInteger('platform_fee_max_minor')->nullable();
                 $table->json('winner_default_deposit_policy');
@@ -66,7 +66,7 @@ return new class extends Migration
         $statements = [
             'ALTER TABLE auction_configuration_snapshots ADD CONSTRAINT chk_snapshot_platform_fee CHECK (platform_fee_type IN (\'percentage\', \'fixed\'))',
             'ALTER TABLE auction_configuration_snapshots ADD CONSTRAINT chk_snapshot_deadlines CHECK (winner_payment_deadline_minutes > 0 AND handover_deadline_minutes > 0)',
-            'ALTER TABLE auction_configuration_snapshots ADD CONSTRAINT chk_snapshot_candidate_limit CHECK (alternative_candidate_limit > 0)',
+            'ALTER TABLE auction_configuration_snapshots ADD CONSTRAINT chk_snapshot_candidate_limit CHECK (NOT alternative_winner_enabled OR alternative_candidate_limit > 0)',
         ];
 
         foreach ($statements as $statement) {

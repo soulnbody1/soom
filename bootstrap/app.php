@@ -3,7 +3,6 @@
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Middleware\ApiMaintenanceMode;
 use App\Http\Middleware\RoleMiddleware;
-use App\Providers\BroadcastServiceProvider;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -22,9 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         app('router')->aliasMiddleware('api_maintenance', ApiMaintenanceMode::class);
 
         //
-    })->withProviders([
-        BroadcastServiceProvider::class,
-    ])
+    })
     ->withBroadcasting(
         __DIR__.'/../routes/channels.php',
         ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum']],

@@ -67,7 +67,9 @@
         "test": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
-        ]
+        ],
+        "test:auction": "@php artisan test tests/Feature/Auction tests/Unit/Auction",
+        "test:auction:mysql": "@php artisan test --configuration=phpunit.mysql.xml"
     },
     "extra": {
         "laravel": {

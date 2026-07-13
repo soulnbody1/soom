@@ -15,6 +15,7 @@ use App\DTO\Auction\CreateAuctionRecordDTO;
 use App\DTO\Auction\CreateBidRecordDTO;
 use App\DTO\Auction\CreateOutboxMessageDTO;
 use App\DTO\Auction\CreateSettlementDTO;
+use App\Http\Requests\Auction\StoreAuctionRequest;
 use Illuminate\Support\Facades\Validator;
 use Tests\TestCase;
 
@@ -264,6 +265,40 @@ class AuctionCoreTest extends TestCase
         });
 
         $this->assertFalse($failed);
+    }
+
+    public function test_store_auction_rejects_reserve_below_starting(): void
+    {
+        $data = [
+            'currency_code' => 'JOD',
+            'starting_amount' => '100.000',
+            'reserve_amount' => '50.000',
+        ];
+
+        $request = StoreAuctionRequest::create('/', 'POST', $data);
+        $request->setContainer(app());
+
+        $validator = Validator::make($data, $request->rules());
+        $request->withValidator($validator);
+
+        $this->assertTrue($validator->errors()->has('reserve_amount'));
+    }
+
+    public function test_store_auction_accepts_reserve_at_or_above_starting(): void
+    {
+        $data = [
+            'currency_code' => 'JOD',
+            'starting_amount' => '100.000',
+            'reserve_amount' => '100.000',
+        ];
+
+        $request = StoreAuctionRequest::create('/', 'POST', $data);
+        $request->setContainer(app());
+
+        $validator = Validator::make($data, $request->rules());
+        $request->withValidator($validator);
+
+        $this->assertFalse($validator->errors()->has('reserve_amount'));
     }
 
     public function test_place_bid_currency_validation_supports_jod_three_decimals(): void

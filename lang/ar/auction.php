@@ -144,4 +144,7 @@ return [
         'defaulted' => 'متعثر',
         'disputed' => 'متنازع عليه',
     ],
+    'validation' => [
+        'reserve_below_starting' => 'لا يمكن أن يكون سعر الاحتياطي أقل من سعر البداية.',
+    ],
 ];

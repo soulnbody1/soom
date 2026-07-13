@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
+use App\Domain\Auction\ValueObjects\Money;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class StoreAuctionRequest extends FormRequest
@@ -33,5 +35,30 @@ final class StoreAuctionRequest extends FormRequest
             'media' => ['nullable', 'array', 'max:12'],
             'media.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            // Skip if the underlying amount/currency fields already failed their rules.
+            if ($validator->errors()->hasAny(['currency_code', 'starting_amount', 'reserve_amount'])) {
+                return;
+            }
+
+            if ($this->input('reserve_amount') === null) {
+                return;
+            }
+
+            $currency = (string) $this->input('currency_code');
+            $starting = Money::fromDecimalString((string) $this->input('starting_amount'), $currency);
+            $reserve = Money::fromDecimalString((string) $this->input('reserve_amount'), $currency);
+
+            if ($reserve->minor < $starting->minor) {
+                $validator->errors()->add(
+                    'reserve_amount',
+                    __('auction.validation.reserve_below_starting'),
+                );
+            }
+        });
     }
 }

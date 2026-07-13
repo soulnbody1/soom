@@ -56,10 +56,17 @@ final class AuctionConfigurationSnapshotValidator
             }
         }
 
-        foreach (['winner_payment_deadline_minutes', 'handover_deadline_minutes', 'alternative_candidate_limit'] as $key) {
+        foreach (['winner_payment_deadline_minutes', 'handover_deadline_minutes'] as $key) {
             if (! $this->isIntegerLike($data[$key] ?? null) || (int) $data[$key] <= 0) {
                 $errors[] = "{$key}: must be positive";
             }
+        }
+
+        $candidateLimit = $data['alternative_candidate_limit'] ?? null;
+        if (! $this->isIntegerLike($candidateLimit) || (int) $candidateLimit < 0) {
+            $errors[] = 'alternative_candidate_limit: must be a non-negative integer';
+        } elseif (! empty($data['alternative_winner_enabled']) && (int) $candidateLimit <= 0) {
+            $errors[] = 'alternative_candidate_limit: must be positive when alternative winner is enabled';
         }
 
         if (($data['platform_fee_type'] ?? null) === 'percentage') {

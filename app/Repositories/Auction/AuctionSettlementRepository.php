@@ -24,27 +24,6 @@ final class AuctionSettlementRepository
             ->firstOrFail();
     }
 
-    /**
-     * Find settlement by auction and winner (without lock).
-     * Used by SubmitPaymentSubmissionAction.
-     */
-    public function findByAuctionAndWinner(int $auctionId, int $winnerId): ?AuctionSettlement
-    {
-        return AuctionSettlement::where('auction_id', $auctionId)
-            ->where('winner_id', $winnerId)
-            ->where('current_marker', 1)
-            ->first();
-    }
-
-    public function lockByAuctionAndWinner(int $auctionId, int $winnerId): ?AuctionSettlement
-    {
-        return AuctionSettlement::where('auction_id', $auctionId)
-            ->where('winner_id', $winnerId)
-            ->where('current_marker', 1)
-            ->lockForUpdate()
-            ->first();
-    }
-
     public function lockCurrentSettlementForPayment(int $auctionId): ?AuctionSettlement
     {
         return AuctionSettlement::where('auction_id', $auctionId)
@@ -129,14 +108,6 @@ final class AuctionSettlementRepository
             'superseded_at' => $settlement->superseded_at ?? $now,
         ]);
         $this->save($settlement);
-    }
-
-    public function lockCancellableForAuction(int $auctionId): Collection
-    {
-        return AuctionSettlement::where('auction_id', $auctionId)
-            ->whereNotIn('status', ['completed', 'cancelled'])
-            ->lockForUpdate()
-            ->get();
     }
 
     public function lockForDepositRefund(AuctionDeposit $deposit): Collection

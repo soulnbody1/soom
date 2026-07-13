@@ -132,4 +132,7 @@ return [
         'defaulted' => 'Defaulted',
         'disputed' => 'Disputed',
     ],
+    'validation' => [
+        'reserve_below_starting' => 'The reserve amount cannot be lower than the starting amount.',
+    ],
 ];
