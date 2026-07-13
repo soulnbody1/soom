@@ -32,7 +32,7 @@ Operational checklist:
 - Run a queue worker for auction jobs: `php artisan queue:work --tries=3`.
 - Configure private payment receipt storage with the `spaces_private` disk. Payment receipt uploads use private object storage and authorized temporary URLs.
 - Review manual payment submissions through `api/admin/auctions/payment-submissions/{paymentSubmission}/review`; payment methods are addressed by public ULID, not database IDs.
-- Process outbox messages through the scheduled `auction:run-operations` command. Outbox rows are leased before dispatch and publish `App\Events\Auction\AuctionOutboxEvent`.
+- Process outbox messages through the scheduled outbox job. Outbox rows are leased before notifications are sent.
 - Exercise the hot bid path with k6: `k6 run load-tests/auction-hot-bid.js -e BASE_URL=http://127.0.0.1:8000 -e AUCTION_ID=<public-id> -e AUTH_TOKEN=<token>`.
 
 ## Learning Laravel

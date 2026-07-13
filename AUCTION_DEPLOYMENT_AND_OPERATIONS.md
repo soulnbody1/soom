@@ -2,7 +2,7 @@
 
 ## Scheduler
 
-Registered in `app/Console/Kernel.php`:
+Registered in `routes/console.php`:
 
 - `auction:run-operations` every minute with `withoutOverlapping`.
 - `auction:reconcile` every fifteen minutes with `withoutOverlapping`.
@@ -15,7 +15,6 @@ Jobs:
 - `FinalizeExpiredAuctionsJob`
 - `RefundPendingAuctionDepositsJob`
 - `DispatchAuctionOutboxJob`
-- `ReconcileAuctionsJob`
 
 Use Redis queue workers in production and configure failed job monitoring.
 
