@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs\Auction;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
+use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\AuctionDeposit;
 use App\Services\Auction\Actions\RefundAuctionDepositAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,9 +20,14 @@ final class RefundPendingAuctionDepositsJob implements ShouldQueue
     public function handle(RefundAuctionDepositAction $refund): void
     {
         AuctionDeposit::where('status', AuctionDepositStatus::RefundPending->value)
-            ->orderBy('id')
-            ->limit(100)
-            ->get()
-            ->each(fn (AuctionDeposit $deposit) => $refund->execute($deposit, 'auction settlement refund'));
+            ->lazyById(100)
+            ->take(100)
+            ->each(function (AuctionDeposit $deposit) use ($refund): void {
+                try {
+                    $refund->execute($deposit, 'auction settlement refund');
+                } catch (AuctionException) {
+                    // Another worker may have already refunded or made it ineligible.
+                }
+            });
     }
 }

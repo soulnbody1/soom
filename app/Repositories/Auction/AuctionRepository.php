@@ -7,7 +7,7 @@ namespace App\Repositories\Auction;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\DTO\Auction\CreateAuctionRecordDTO;
 use App\Models\Auction\Auction;
-use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 
 final class AuctionRepository
 {
@@ -90,31 +90,31 @@ final class AuctionRepository
      * Find approved auctions that are due to start (past scheduled start time, status = Scheduled).
      * Used by StartDueAuctionsAction.
      */
-    public function findDueForStart(): Collection
+    public function findDueForStart(): LazyCollection
     {
         return Auction::where('status', AuctionStatus::Scheduled->value)
             ->whereNotNull('starts_at')
             ->where('starts_at', '<=', now())
-            ->get();
+            ->lazyById(100);
     }
 
     /**
      * Find live auctions past their scheduled end time.
      * Used by FinalizeExpiredAuctionsJob.
      */
-    public function findExpiredLiveAuctions(): Collection
+    public function findExpiredLiveAuctions(): LazyCollection
     {
         return Auction::where('status', AuctionStatus::Live->value)
             ->whereNotNull('ends_at')
             ->where('ends_at', '<=', now())
-            ->get();
+            ->lazyById(100);
     }
 
     /**
      * Find auctions needing deposit refunds after finalization.
      * Used by RefundPendingAuctionDepositsJob.
      */
-    public function findAuctionsNeedingDepositRefund(): Collection
+    public function findAuctionsNeedingDepositRefund(): LazyCollection
     {
         return Auction::whereIn('status', [
             AuctionStatus::Unsold->value,
@@ -125,7 +125,7 @@ final class AuctionRepository
             ->whereHas('deposits', function ($query): void {
                 $query->where('status', 'refund_pending');
             })
-            ->get();
+            ->lazyById(100);
     }
 
     /**
