@@ -9,6 +9,7 @@ use App\Domain\Auction\Exceptions\AuctionException;
 use App\DTO\Auction\CreateAuctionInputDTO;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AuctionIndexRequest;
+use App\Http\Requests\Auction\CancelAuctionRequest;
 use App\Http\Requests\Auction\MarkWinnerDefaultedRequest;
 use App\Http\Requests\Auction\OpenAuctionDisputeRequest;
 use App\Http\Requests\Auction\PaymentSubmissionRequest;
@@ -130,7 +131,7 @@ final class AuctionController extends Controller
         return $this->sendResponse(new AuctionResource($reviewed), __('auction.messages.auction_reviewed'));
     }
 
-    public function cancel(Request $request, Auction $auction, CancelAuctionAction $action): JsonResponse
+    public function cancel(CancelAuctionRequest $request, Auction $auction, CancelAuctionAction $action): JsonResponse
     {
         $actor = $request->user();
         Gate::authorize('cancel', $auction);
@@ -139,7 +140,9 @@ final class AuctionController extends Controller
             $auction,
             $actor->id,
             $actor->role === 'admin' ? 'admin' : 'user',
-            (string) $request->input('reason', __('auction.audit.cancelled_by_actor'))
+            $request->reasonText(),
+            $request->reasonCode(),
+            $request->liability()
         );
 
         return $this->sendResponse(new AuctionResource($cancelled), __('auction.messages.auction_cancelled'));

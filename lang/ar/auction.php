@@ -34,6 +34,8 @@ return [
     'errors' => [
         'auction_not_found' => 'المزاد غير موجود.',
         'forbidden' => 'غير مصرح.',
+        'cancellation_reason_required' => 'سبب إلغاء المزاد مطلوب.',
+        'auction_cancellation_not_allowed' => 'لا يمكن إلغاء المزاد في حالته الحالية.',
         'settlement_must_be_paid' => 'يجب سداد التسوية قبل التسليم.',
         'seller_handover_required' => 'يجب تأكيد التسليم من البائع قبل تأكيد استلام الفائز.',
         'receipt_url_unavailable' => 'رابط الإيصال غير متاح.',

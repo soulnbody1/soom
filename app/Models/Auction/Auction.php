@@ -64,6 +64,13 @@ final class Auction extends Model
         'ended_at',
         'finalized_at',
         'cancelled_at',
+        'cancellation_operation_key',
+        'cancellation_trigger',
+        'cancellation_reason_code',
+        'cancellation_reason_text',
+        'cancellation_liability',
+        'financial_cancellation_completed_at',
+        'financial_cancellation_manual_review_required',
         'completed_at',
     ];
 
@@ -78,6 +85,8 @@ final class Auction extends Model
         'ended_at' => 'immutable_datetime',
         'finalized_at' => 'immutable_datetime',
         'cancelled_at' => 'immutable_datetime',
+        'financial_cancellation_completed_at' => 'immutable_datetime',
+        'financial_cancellation_manual_review_required' => 'boolean',
         'completed_at' => 'immutable_datetime',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',

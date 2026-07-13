@@ -5,6 +5,8 @@ return [
         'auction.review',
         'auction.approve',
         'auction.cancel',
+        'auction.cancel.admin',
+        'auction.cancel.compliance',
         'auction.payment.review',
         'auction.payment.approve',
         'auction.refund.execute',

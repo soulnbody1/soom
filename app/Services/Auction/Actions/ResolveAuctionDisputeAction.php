@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Actions;
 
+use App\Domain\Auction\Enums\AuctionCancellationTrigger;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\DTO\Auction\AuctionCancellationContextDTO;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Repositories\Auction\AuctionDisputeRepository;
@@ -27,6 +29,7 @@ final class ResolveAuctionDisputeAction
         private readonly AuctionSettlementRepository $settlements,
         private readonly AuctionDisputeRepository $disputes,
         private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
+        private readonly CancelAuctionFinanciallyAction $financialCancellation,
     ) {}
 
     public function execute(
@@ -42,6 +45,17 @@ final class ResolveAuctionDisputeAction
             throw new AuctionException(__('auction.errors.dispute_resolution_note_required'));
         }
 
+        if ($resolution === 'cancel') {
+            return $this->resolveWithCancellation(
+                $auction,
+                $dispute,
+                $adminId,
+                $note,
+                $sellerDepositDisposition,
+                $sellerDepositForfeitAmountMinor
+            );
+        }
+
         return $this->transaction->run(function () use ($auction, $dispute, $adminId, $resolution, $note, $sellerDepositDisposition, $sellerDepositForfeitAmountMinor): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
             $dispute = $this->disputes->lockForResolution($dispute->id);
@@ -54,14 +68,12 @@ final class ResolveAuctionDisputeAction
             $target = match ($resolution) {
                 'complete' => AuctionStatus::Completed,
                 'resume_handover' => AuctionStatus::HandoverPending,
-                'cancel' => AuctionStatus::Cancelled,
                 default => throw new AuctionException(__('auction.errors.dispute_resolution_invalid')),
             };
 
             $settlementStatus = match ($target) {
                 AuctionStatus::Completed => SettlementStatus::Completed,
                 AuctionStatus::HandoverPending => SettlementStatus::HandoverPending,
-                AuctionStatus::Cancelled => SettlementStatus::Cancelled,
                 default => $settlement->status,
             };
 
@@ -94,5 +106,63 @@ final class ResolveAuctionDisputeAction
 
             return $auction->refresh()->load('settlement');
         });
+    }
+
+    private function resolveWithCancellation(
+        Auction $auction,
+        AuctionDispute $dispute,
+        int $adminId,
+        string $note,
+        ?string $sellerDepositDisposition,
+        ?int $sellerDepositForfeitAmountMinor,
+    ): Auction {
+        return $this->transaction->run(function () use ($auction, $dispute, $adminId, $note, $sellerDepositDisposition, $sellerDepositForfeitAmountMinor): Auction {
+            $dispute = $this->disputes->lockForResolution($dispute->id);
+
+            if ($dispute->auction_id !== $auction->id || $dispute->status !== 'open') {
+                throw new AuctionException(__('auction.errors.dispute_not_available'));
+            }
+
+            $cancelled = $this->financialCancellation->execute(new AuctionCancellationContextDTO(
+                auctionId: $auction->id,
+                trigger: AuctionCancellationTrigger::DisputeResolved,
+                actorId: $adminId,
+                actorType: 'admin',
+                reasonCode: 'dispute_cancel',
+                reasonText: $note,
+                liability: $this->liabilityFromDisposition($sellerDepositDisposition),
+                disputeId: $dispute->id,
+                requestedAt: Carbon::now(),
+                metadata: [
+                    'resolution' => 'cancel',
+                    'seller_deposit_disposition' => $sellerDepositDisposition,
+                    'forfeit_amount_minor' => $sellerDepositForfeitAmountMinor,
+                ],
+            ));
+
+            $dispute->forceFill([
+                'status' => 'resolved',
+                'resolved_by' => $adminId,
+                'resolution_note' => $note,
+                'resolved_at' => Carbon::now(),
+            ]);
+            $this->disputes->save($dispute);
+
+            $this->audit->log('auction.dispute_resolved', $cancelled, $adminId, 'admin', [
+                'dispute_public_id' => $dispute->public_id,
+                'resolution' => 'cancel',
+            ]);
+
+            return $cancelled->refresh()->load('settlement');
+        });
+    }
+
+    private function liabilityFromDisposition(?string $sellerDepositDisposition): string
+    {
+        return match ($sellerDepositDisposition) {
+            'forfeit', 'partial_forfeit' => 'seller',
+            'manual_review' => 'manual_review',
+            default => 'neutral',
+        };
     }
 }

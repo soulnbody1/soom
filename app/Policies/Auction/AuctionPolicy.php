@@ -47,12 +47,24 @@ final class AuctionPolicy
 
     public function cancel(User $user, Auction $auction): bool
     {
-        if ($this->hasAuctionPermission($user, 'auction.cancel')) {
+        if ($this->hasAuctionPermission($user, 'auction.cancel.admin')
+            || $this->hasAuctionPermission($user, 'auction.cancel.compliance')
+            || $this->hasAuctionPermission($user, 'auction.cancel')) {
             return true;
         }
 
         return $user->id === $auction->seller_id
-            && in_array($auction->status, [AuctionStatus::Draft, AuctionStatus::PendingReview, AuctionStatus::Rejected], true);
+            && in_array($auction->status, [
+                AuctionStatus::Draft,
+                AuctionStatus::PendingReview,
+                AuctionStatus::Rejected,
+                AuctionStatus::AwaitingSellerDeposit,
+                AuctionStatus::Scheduled,
+                AuctionStatus::Live,
+                AuctionStatus::Ended,
+                AuctionStatus::SettlementPending,
+                AuctionStatus::PaymentPending,
+            ], true);
     }
 
     public function register(User $user, Auction $auction): bool

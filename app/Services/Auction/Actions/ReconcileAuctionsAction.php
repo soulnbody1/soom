@@ -28,6 +28,12 @@ final class ReconcileAuctionsAction
             'terminal_non_winner_deposits_held_without_active_need' => $this->terminalHeldNonWinnerDepositCount(),
             'terminal_seller_deposits_held_without_active_need' => $this->terminalHeldSellerDepositCount(),
             'seller_deposits_resolved_without_terminal_or_policy_reason' => $this->sellerDepositsResolvedWithoutTerminalReasonCount(),
+            'cancelled_auctions_financially_unbalanced' => $this->cancelledAuctionsFinanciallyUnbalancedCount(),
+            'cancelled_current_settlements_active' => $this->cancelledCurrentSettlementsActiveCount(),
+            'cancelled_pending_payment_submissions' => $this->cancelledPendingPaymentSubmissionsCount(),
+            'cancelled_successful_payments_without_refund_or_disposition' => $this->cancelledSuccessfulPaymentsWithoutRefundOrDispositionCount(),
+            'cancelled_bidder_deposits_held' => $this->cancelledBidderDepositsHeldCount(),
+            'cancelled_seller_deposits_without_disposition' => $this->cancelledSellerDepositsWithoutDispositionCount(),
             'refunds_failed' => RefundTransaction::where('status', RefundTransactionStatus::Failed->value)->count(),
             'outbox_pending' => OutboxMessage::where('status', OutboxStatus::Pending->value)->count(),
         ];
@@ -104,6 +110,96 @@ final class ReconcileAuctionsAction
                 AuctionStatus::Defaulted->value,
                 AuctionStatus::Disputed->value,
             ])
+            ->count();
+    }
+
+    private function cancelledAuctionsFinanciallyUnbalancedCount(): int
+    {
+        return $this->cancelledCurrentSettlementsActiveCount()
+            + $this->cancelledPendingPaymentSubmissionsCount()
+            + $this->cancelledSuccessfulPaymentsWithoutRefundOrDispositionCount()
+            + $this->cancelledBidderDepositsHeldCount()
+            + $this->cancelledSellerDepositsWithoutDispositionCount();
+    }
+
+    private function cancelledCurrentSettlementsActiveCount(): int
+    {
+        return (int) DB::table('auction_settlements')
+            ->join('auctions', 'auctions.id', '=', 'auction_settlements.auction_id')
+            ->where('auctions.status', AuctionStatus::Cancelled->value)
+            ->where('auction_settlements.current_marker', 1)
+            ->count();
+    }
+
+    private function cancelledPendingPaymentSubmissionsCount(): int
+    {
+        return (int) DB::table('payment_submissions')
+            ->join('auctions', 'auctions.id', '=', 'payment_submissions.auction_id')
+            ->where('auctions.status', AuctionStatus::Cancelled->value)
+            ->where('payment_submissions.status', PaymentSubmissionStatus::PendingReview->value)
+            ->count();
+    }
+
+    private function cancelledSuccessfulPaymentsWithoutRefundOrDispositionCount(): int
+    {
+        return (int) DB::table('payment_transactions')
+            ->join('auctions', 'auctions.id', '=', 'payment_transactions.auction_id')
+            ->join('payment_submissions', 'payment_submissions.id', '=', 'payment_transactions.payment_submission_id')
+            ->leftJoin('auction_deposits', 'auction_deposits.id', '=', 'payment_submissions.deposit_id')
+            ->leftJoin('refund_transactions', function ($join): void {
+                $join->on('refund_transactions.payment_transaction_id', '=', 'payment_transactions.id')
+                    ->whereIn('refund_transactions.status', [
+                        RefundTransactionStatus::Pending->value,
+                        RefundTransactionStatus::Processing->value,
+                        RefundTransactionStatus::Succeeded->value,
+                    ]);
+            })
+            ->where('auctions.status', AuctionStatus::Cancelled->value)
+            ->where('payment_transactions.status', 'succeeded')
+            ->whereNull('refund_transactions.id')
+            ->where(function ($query): void {
+                $query->whereNull('auction_deposits.id')
+                    ->orWhere(function ($query): void {
+                        $query->where('auction_deposits.status', '!=', AuctionDepositStatus::Forfeited->value)
+                            ->where(function ($query): void {
+                                $query->whereNull('auction_deposits.hold_reason')
+                                    ->orWhereNotIn('auction_deposits.hold_reason', [
+                                        'seller_deposit_manual_review',
+                                        'seller_deposit_keep_held',
+                                    ]);
+                            });
+                    });
+            })
+            ->count();
+    }
+
+    private function cancelledBidderDepositsHeldCount(): int
+    {
+        return (int) DB::table('auction_deposits')
+            ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
+            ->where('auctions.status', AuctionStatus::Cancelled->value)
+            ->where('auction_deposits.type', 'bidder')
+            ->where('auction_deposits.status', AuctionDepositStatus::Held->value)
+            ->count();
+    }
+
+    private function cancelledSellerDepositsWithoutDispositionCount(): int
+    {
+        return (int) DB::table('auction_deposits')
+            ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
+            ->where('auctions.status', AuctionStatus::Cancelled->value)
+            ->where('auction_deposits.type', 'seller')
+            ->where(function ($query): void {
+                $query->where(function ($query): void {
+                    $query->where('auction_deposits.status', AuctionDepositStatus::Held->value)
+                        ->whereNull('auction_deposits.hold_reason');
+                })->orWhere(function ($query): void {
+                    $query->whereIn('auction_deposits.status', [
+                        AuctionDepositStatus::PendingSubmission->value,
+                        AuctionDepositStatus::PendingReview->value,
+                    ]);
+                });
+            })
             ->count();
     }
 }

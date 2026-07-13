@@ -115,6 +115,22 @@ final class AuctionSettlementRepository
         $this->save($settlement);
     }
 
+    public function closeAsCancelled(AuctionSettlement $settlement, string $reason, ?int $actorId = null): void
+    {
+        $now = Carbon::now();
+
+        $settlement->forceFill([
+            'is_current' => false,
+            'current_marker' => null,
+            'status' => \App\Domain\Auction\Enums\SettlementStatus::Cancelled,
+            'cancelled_at' => $settlement->cancelled_at ?? $now,
+            'cancelled_by' => $settlement->cancelled_by ?? $actorId,
+            'cancel_reason' => $settlement->cancel_reason ?? $reason,
+            'superseded_at' => $settlement->superseded_at ?? $now,
+        ]);
+        $this->save($settlement);
+    }
+
     public function lockCancellableForAuction(int $auctionId): Collection
     {
         return AuctionSettlement::where('auction_id', $auctionId)

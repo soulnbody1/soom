@@ -126,14 +126,14 @@ Covered:
 
 ```text
 php artisan test --filter=NonWinnerDeposit
-Result: PASS - 11 passed, 1 MySQL-only skipped on default non-MySQL connection.
+Result: PASS - 11 passed, 1 MySQL-only skipped on default non-MySQL connection, 52 assertions.
 ```
 
 ## 16. MySQL Concurrency Test Results
 
 ```text
 php artisan test --configuration=phpunit.mysql.xml --filter=NonWinnerDeposit
-Result: PASS - 12 passed, 60 assertions.
+Result: PASS - 12 passed, 62 assertions.
 Note: Laravel warned that --configuration cannot be used more than once, but the MySQL test suite executed and passed.
 ```
 
@@ -141,21 +141,28 @@ Note: Laravel warned that --configuration cannot be used more than once, but the
 
 ```text
 composer dump-autoload
-composer dump-autoload
 php artisan optimize:clear
 php artisan migrate:status
 php artisan test --filter=NonWinnerDeposit
 php artisan test --configuration=phpunit.mysql.xml --filter=NonWinnerDeposit
 vendor/bin/pint --test
-vendor/bin/pint --test <modified files>
-vendor/bin/pint app/Services/Auction/Actions/FinalizeAuctionAction.php app/Services/Auction/Actions/PlanNonWinnerDepositRefundsAction.php
-php -l <each modified PHP file>
+vendor/bin/pint --test app/Services/Auction/Actions/PlanNonWinnerDepositRefundsAction.php app/DTO/Auction/DepositHoldDecisionDTO.php app/DTO/Auction/NonWinnerDepositDispositionDTO.php tests/Feature/Auction/NonWinnerDepositReleaseTest.php tests/Feature/Auction/NonWinnerDepositReleaseMysqlTest.php
+php -l app/Services/Auction/Actions/PlanNonWinnerDepositRefundsAction.php
+php -l tests/Feature/Auction/NonWinnerDepositReleaseTest.php
+php -l tests/Feature/Auction/NonWinnerDepositReleaseMysqlTest.php
+php -l app/DTO/Auction/DepositHoldDecisionDTO.php
+php -l app/DTO/Auction/NonWinnerDepositDispositionDTO.php
+php -l app/Services/Auction/Actions/FinalizeAuctionAction.php
+php -l app/Services/Auction/Actions/ReviewPaymentSubmissionAction.php
+php -l app/Services/Auction/Actions/MarkWinnerDefaultedAction.php
+php -l app/Services/Auction/Actions/ConfirmAuctionReceiptByWinnerAction.php
+php -l app/Services/Auction/Actions/ReconcileAuctionsAction.php
 ```
 
 ## 18. Checks That Could Not Fully Run
 
-- `composer dump-autoload` timed out twice, once at 120 seconds and once at 240 seconds, both while printing `Generating optimized autoload files`.
-- Full `vendor/bin/pint --test` failed because the repository already has many unrelated style issues. Pint on modified files passed after formatting the two touched files that needed it.
+- Full `vendor/bin/pint --test` failed because the repository currently has broad pre-existing style issues outside TASK 07: 151 style issues across 414 files.
+- Scoped Pint for TASK 07 files passed.
 
 ## 19. Deferred Risks
 

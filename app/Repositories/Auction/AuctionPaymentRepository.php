@@ -87,6 +87,14 @@ final class AuctionPaymentRepository
             ->get();
     }
 
+    public function lockPendingReviewSubmissionsForAuction(int $auctionId): Collection
+    {
+        return PaymentSubmission::where('auction_id', $auctionId)
+            ->where('status', PaymentSubmissionStatus::PendingReview->value)
+            ->lockForUpdate()
+            ->get();
+    }
+
     /**
      * Lock a payment submission for review.
      * Used by ReviewPaymentSubmissionAction.
