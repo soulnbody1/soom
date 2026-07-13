@@ -5,6 +5,7 @@ use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
 use App\Http\Controllers\Auction\PaymentMethodController;
 use App\Http\Controllers\Auction\PaymentSubmissionController;
+use App\Http\Controllers\Auction\RefundController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auctions')->group(function () {
@@ -45,6 +46,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/terms', [AuctionTermsController::class, 'store']);
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
+    Route::get('/refunds', [RefundController::class, 'index']);
+    Route::post('/refunds/{refund}/confirm', [RefundController::class, 'confirm']);
+    Route::post('/refunds/{refund}/cancel', [RefundController::class, 'cancel']);
     Route::post('/{auction}/review', [AuctionController::class, 'review']);
     Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
     Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);

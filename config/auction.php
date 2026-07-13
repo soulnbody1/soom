@@ -10,6 +10,7 @@ return [
         'auction.payment.review',
         'auction.payment.approve',
         'auction.refund.execute',
+        'auction.refunds.manage',
         'auction.refunds.confirm_manual',
         'auction.refunds.cancel',
         'auction.settlement.override',

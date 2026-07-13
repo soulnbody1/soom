@@ -12,6 +12,13 @@ final class AuctionRefundPolicy
 {
     use ChecksAuctionPermissions;
 
+    public function viewAny(User $user): bool
+    {
+        return $this->canManageRefunds($user)
+            || $this->hasAuctionPermission($user, 'auction.refunds.confirm_manual')
+            || $this->hasAuctionPermission($user, 'auction.refunds.cancel');
+    }
+
     public function execute(User $user, RefundTransaction $refund): bool
     {
         return $this->hasAuctionPermission($user, 'auction.refund.execute');
@@ -19,11 +26,18 @@ final class AuctionRefundPolicy
 
     public function confirmManual(User $user, RefundTransaction $refund): bool
     {
-        return $this->hasAuctionPermission($user, 'auction.refunds.confirm_manual');
+        return $this->canManageRefunds($user)
+            || $this->hasAuctionPermission($user, 'auction.refunds.confirm_manual');
     }
 
     public function cancel(User $user, RefundTransaction $refund): bool
     {
-        return $this->hasAuctionPermission($user, 'auction.refunds.cancel');
+        return $this->canManageRefunds($user)
+            || $this->hasAuctionPermission($user, 'auction.refunds.cancel');
+    }
+
+    private function canManageRefunds(User $user): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.refunds.manage');
     }
 }

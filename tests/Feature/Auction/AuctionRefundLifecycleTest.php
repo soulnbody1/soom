@@ -219,6 +219,85 @@ final class AuctionRefundLifecycleTest extends TestCase
         app(ConfirmAuctionRefundManuallyAction::class)->execute($second, $admin, 'same-provider-ref', 'paid externally');
     }
 
+    public function test_admin_refund_index_lists_safe_fields_and_denies_unpermitted_admin(): void
+    {
+        [$refund] = $this->plannedRefund();
+        $admin = $this->user('admin');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/auctions/refunds?status=pending&per_page=10')
+            ->assertOk()
+            ->assertJsonFragment(['public_id' => $refund->public_id]);
+
+        $this->assertStringNotContainsString('provider_response', $response->getContent());
+
+        config(['auction.admin_permissions' => []]);
+
+        $this->actingAs($this->user('admin'), 'sanctum')
+            ->getJson('/api/admin/auctions/refunds')
+            ->assertForbidden();
+    }
+
+    public function test_manual_refund_confirm_endpoint_is_idempotent(): void
+    {
+        [$refund, $deposit] = $this->plannedRefund();
+        $refund->forceFill(['status' => RefundTransactionStatus::ManualReview])->save();
+        $admin = $this->user('admin');
+        $payload = [
+            'confirmation_reference' => 'manual-api-ref-1',
+            'reason' => 'bank transfer completed',
+        ];
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/auctions/refunds/{$refund->public_id}/confirm", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.status', RefundTransactionStatus::Succeeded->value);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/auctions/refunds/{$refund->public_id}/confirm", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.status', RefundTransactionStatus::Succeeded->value);
+
+        $this->assertSame(10_000, $deposit->refresh()->refunded_amount_minor);
+        $this->assertSame(0, $deposit->held_amount_minor);
+    }
+
+    public function test_cancel_refund_endpoint_restores_deposit_and_allows_new_refund(): void
+    {
+        [$refund, $deposit] = $this->plannedRefund();
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/auctions/refunds/{$refund->public_id}/cancel", [
+                'reason' => 'duplicate refund plan',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', RefundTransactionStatus::Cancelled->value);
+
+        $this->assertSame(AuctionDepositStatus::Held, $deposit->refresh()->status);
+
+        $newRefund = app(RefundAuctionDepositAction::class)->execute($deposit->refresh(), 'retry after cancellation');
+
+        $this->assertNotSame($refund->id, $newRefund->id);
+        $this->assertSame(RefundTransactionStatus::Pending, $newRefund->status);
+        $this->assertSame(AuctionDepositStatus::RefundPending, $deposit->refresh()->status);
+    }
+
+    public function test_cancel_succeeded_refund_endpoint_is_rejected(): void
+    {
+        [$refund] = $this->plannedRefund();
+        $refund->forceFill(['status' => RefundTransactionStatus::ManualReview])->save();
+        $admin = $this->user('admin');
+
+        app(ConfirmAuctionRefundManuallyAction::class)->execute($refund, $admin, 'manual-api-ref-success', 'paid externally');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/auctions/refunds/{$refund->public_id}/cancel", [
+                'reason' => 'cancel after success',
+            ])
+            ->assertStatus(422);
+    }
+
     private function bindProcessor(AuctionRefundProcessorInterface $processor): void
     {
         $this->app->instance(AuctionRefundProcessorInterface::class, $processor);

@@ -6,6 +6,7 @@ namespace App\Repositories\Auction;
 
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\RefundTransaction;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -18,7 +19,27 @@ final class AuctionRefundRepository
      */
     public function firstOrCreateRefund(array $uniqueAttributes, array $defaults): RefundTransaction
     {
-        return RefundTransaction::firstOrCreate($uniqueAttributes, $defaults);
+        $provider = (string) $uniqueAttributes['provider'];
+        $baseKey = (string) $uniqueAttributes['idempotency_key'];
+
+        $existing = RefundTransaction::where('provider', $provider)
+            ->where(function (Builder $query) use ($baseKey): void {
+                $query->where('idempotency_key', $baseKey)
+                    ->orWhere('idempotency_key', 'like', "{$baseKey}:retry:%");
+            })
+            ->where('status', '!=', RefundTransactionStatus::Cancelled->value)
+            ->orderBy('id')
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        if (RefundTransaction::where($uniqueAttributes)->where('status', RefundTransactionStatus::Cancelled->value)->exists()) {
+            $uniqueAttributes['idempotency_key'] = $this->nextRetryKey($provider, $baseKey);
+        }
+
+        return RefundTransaction::create($uniqueAttributes + $defaults);
     }
 
     /**
@@ -52,6 +73,42 @@ final class AuctionRefundRepository
             ])
             ->lockForUpdate()
             ->get();
+    }
+
+    public function hasOutstandingForDeposit(int $depositId, int $exceptRefundId): bool
+    {
+        return RefundTransaction::where('deposit_id', $depositId)
+            ->whereKeyNot($exceptRefundId)
+            ->whereIn('status', [
+                RefundTransactionStatus::Pending->value,
+                RefundTransactionStatus::Processing->value,
+                RefundTransactionStatus::Failed->value,
+                RefundTransactionStatus::ManualReview->value,
+            ])
+            ->lockForUpdate()
+            ->first() !== null;
+    }
+
+    public function paginateForAdmin(array $filters, int $perPage): LengthAwarePaginator
+    {
+        return RefundTransaction::with([
+            'auction:id,public_id,title',
+            'user:id,name',
+        ])
+            ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($filters['auction_id'] ?? null, function (Builder $query, string $auctionId): void {
+                if (ctype_digit($auctionId)) {
+                    $query->where('auction_id', (int) $auctionId);
+
+                    return;
+                }
+
+                $query->whereHas('auction', fn (Builder $auction) => $auction->where('public_id', $auctionId));
+            })
+            ->when($filters['user_id'] ?? null, fn (Builder $query, $userId) => $query->where('user_id', (int) $userId))
+            ->latest('id')
+            ->paginate($perPage)
+            ->withQueryString();
     }
 
     public function providerRefundIdExists(string $provider, string $providerRefundId, int $exceptRefundId): bool
@@ -97,5 +154,17 @@ final class AuctionRefundRepository
     public function save(RefundTransaction $refund): void
     {
         $refund->save();
+    }
+
+    private function nextRetryKey(string $provider, string $baseKey): string
+    {
+        $attempt = 1;
+
+        do {
+            $key = "{$baseKey}:retry:{$attempt}";
+            $attempt++;
+        } while (RefundTransaction::where('provider', $provider)->where('idempotency_key', $key)->exists());
+
+        return $key;
     }
 }

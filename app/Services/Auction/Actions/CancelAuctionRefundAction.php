@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Actions;
 
+use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\RefundTransaction;
 use App\Models\User;
+use App\Repositories\Auction\AuctionDepositRepository;
 use App\Repositories\Auction\AuctionRefundRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -19,6 +22,7 @@ final class CancelAuctionRefundAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionAudit $audit,
+        private readonly AuctionDepositRepository $deposits,
         private readonly AuctionRefundRepository $refunds,
     ) {}
 
@@ -37,7 +41,9 @@ final class CancelAuctionRefundAction
             }
 
             if ($refund->status === RefundTransactionStatus::Cancelled) {
-                return $refund;
+                $this->restoreDepositStatus($refund);
+
+                return $refund->refresh();
             }
 
             if ($refund->status === RefundTransactionStatus::Succeeded) {
@@ -67,6 +73,8 @@ final class CancelAuctionRefundAction
             ]);
             $this->refunds->save($refund);
 
+            $this->restoreDepositStatus($refund);
+
             $this->audit->log('auction.refund_cancelled', $refund->auction, $actor->id, 'admin', [
                 'refund_public_id' => $refund->public_id,
                 'reason' => $reason,
@@ -79,5 +87,59 @@ final class CancelAuctionRefundAction
 
             return $refund->refresh();
         });
+    }
+
+    private function restoreDepositStatus(RefundTransaction $refund): void
+    {
+        if (! $refund->deposit_id) {
+            return;
+        }
+
+        $deposit = $this->deposits->lockForRefund((int) $refund->deposit_id);
+
+        if ($this->refunds->hasOutstandingForDeposit($deposit->id, $refund->id)) {
+            if ($deposit->status !== AuctionDepositStatus::RefundPending) {
+                $deposit->forceFill(['status' => AuctionDepositStatus::RefundPending]);
+                $this->deposits->save($deposit);
+            }
+
+            return;
+        }
+
+        $status = $this->statusFromBuckets($deposit);
+
+        if ($deposit->status !== $status) {
+            $deposit->forceFill(['status' => $status]);
+            $this->deposits->save($deposit);
+        }
+    }
+
+    private function statusFromBuckets(AuctionDeposit $deposit): AuctionDepositStatus
+    {
+        if ((int) $deposit->held_amount_minor > 0) {
+            return AuctionDepositStatus::Held;
+        }
+
+        if ((int) $deposit->applied_amount_minor > 0) {
+            return AuctionDepositStatus::AppliedToSettlement;
+        }
+
+        if ((int) $deposit->refunded_amount_minor >= (int) $deposit->required_amount_minor) {
+            return AuctionDepositStatus::Refunded;
+        }
+
+        if ((int) $deposit->forfeited_amount_minor >= (int) $deposit->required_amount_minor) {
+            return AuctionDepositStatus::Forfeited;
+        }
+
+        if ((int) $deposit->refunded_amount_minor > 0) {
+            return AuctionDepositStatus::Refunded;
+        }
+
+        if ((int) $deposit->forfeited_amount_minor > 0) {
+            return AuctionDepositStatus::Forfeited;
+        }
+
+        return AuctionDepositStatus::Held;
     }
 }
