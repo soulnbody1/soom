@@ -208,6 +208,11 @@ final class ReviewPaymentSubmissionAction
                 'deadline_overridden' => $originalDeadline !== null,
                 'original_deadline' => $originalDeadline?->toIso8601String(),
             ]);
+            $this->audit->outbox('auction.payment_approved', $auction, [
+                'payment_submission_id' => $submission->id,
+                'user_id' => $submission->user_id,
+                'purpose' => $submission->purpose->value,
+            ]);
 
             return $submission->refresh()->load(['auction', 'deposit', 'settlement', 'transaction']);
         });
@@ -246,6 +251,11 @@ final class ReviewPaymentSubmissionAction
             $this->audit->log('auction.payment_rejected', $submission->auction, $adminId, 'admin', [
                 'submission_public_id' => $submission->public_id,
                 'reason' => $note,
+            ]);
+            $this->audit->outbox('auction.payment_rejected', $submission->auction, [
+                'payment_submission_id' => $submission->id,
+                'user_id' => $submission->user_id,
+                'purpose' => $submission->purpose->value,
             ]);
 
             return $submission->refresh()->load(['auction', 'deposit']);

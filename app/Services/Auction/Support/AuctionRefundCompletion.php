@@ -127,10 +127,8 @@ final class AuctionRefundCompletion
             'manual_confirmed_by' => $manualConfirmedBy,
         ]);
         $this->audit->outbox('auction.refund_succeeded', $refund->auction, [
-            'refund_public_id' => $refund->public_id,
-            'provider' => $refund->provider,
-            'provider_refund_id' => $providerRefundId,
-            'amount_minor' => $refund->amount_minor,
+            'refund_transaction_id' => $refund->id,
+            'user_id' => $refund->user_id,
             'status' => RefundTransactionStatus::Succeeded->value,
         ]);
 

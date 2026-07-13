@@ -29,6 +29,7 @@ use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\FinalizeAuctionAction;
 use App\Services\Auction\Actions\MarkWinnerDefaultedAction;
@@ -250,6 +251,8 @@ final class NonWinnerDepositReleaseTest extends TestCase
             'configuration' => [
                 'non_winner_deposit_policy' => $policy,
                 'non_winner_deposit_hold_count' => $holdCount,
+                'seller_deposit_policy' => config('auction.seller_deposit_policy'),
+                'winner_default_deposit_policy' => config('auction.winner_default_deposit_policy'),
             ],
             'is_active' => true,
             'published_at' => now()->subDay(),
@@ -280,6 +283,7 @@ final class NonWinnerDepositReleaseTest extends TestCase
             'original_ends_at' => now()->subHour(),
             'ends_at' => now()->subHour(),
         ]);
+        app(AuctionConfigurationSnapshotRepository::class)->createForApprovedAuction($auction, $seller->id);
 
         $bids = [];
         foreach ($amounts as $index => $amount) {

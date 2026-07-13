@@ -14,7 +14,6 @@ use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
-use App\Events\Auction\AuctionOutboxEvent;
 use App\Http\Resources\Auction\AuctionBidResource;
 use App\Http\Resources\Auction\PublicAuctionResource;
 use App\Models\Auction\Auction;
@@ -31,6 +30,7 @@ use App\Models\Auction\PaymentTransaction;
 use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
+use App\Notifications\AuctionOutboxNotification;
 use App\Models\User;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\DispatchOutboxMessagesAction;
@@ -47,8 +47,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -361,10 +361,8 @@ final class AuctionFinancialFlowTest extends TestCase
         $this->assertSame(1, RefundTransaction::where('deposit_id', $deposit->id)->count());
     }
 
-    public function test_outbox_without_consumer_is_not_marked_published(): void
+    public function test_outbox_without_consumer_is_not_marked_processed(): void
     {
-        Event::fake([AuctionOutboxEvent::class]);
-
         [$auction] = $this->auctionWithoutBids();
         OutboxMessage::query()->delete();
 
@@ -388,10 +386,9 @@ final class AuctionFinancialFlowTest extends TestCase
         $this->assertTrue($message->available_at->greaterThan(Carbon::now()));
     }
 
-    public function test_outbox_failure_after_max_attempts_moves_to_dead_letter(): void
+    public function test_outbox_failure_after_max_attempts_moves_to_failed(): void
     {
         config(['auction.outbox.max_attempts' => 3]);
-        Event::fake([AuctionOutboxEvent::class]);
 
         [$auction] = $this->auctionWithoutBids();
         OutboxMessage::query()->delete();
@@ -411,13 +408,13 @@ final class AuctionFinancialFlowTest extends TestCase
         $processed = app(DispatchOutboxMessagesAction::class)->execute(1);
 
         $this->assertSame(0, $processed);
-        $this->assertSame(OutboxStatus::DeadLetter, $message->refresh()->status);
+        $this->assertSame(OutboxStatus::Failed, $message->refresh()->status);
         $this->assertSame(3, $message->attempts);
         $this->assertNotNull($message->dead_lettered_at);
         $this->assertNotNull($message->last_error);
     }
 
-    public function test_outbox_unsupported_event_is_not_marked_published(): void
+    public function test_outbox_unsupported_event_is_not_marked_processed(): void
     {
         [$auction] = $this->auctionWithoutBids();
         OutboxMessage::query()->delete();
@@ -437,7 +434,7 @@ final class AuctionFinancialFlowTest extends TestCase
 
         $this->assertSame(0, $processed);
         $this->assertSame(OutboxStatus::Pending, $message->refresh()->status);
-        $this->assertStringContainsString('No outbox consumer handled', $message->last_error);
+        $this->assertStringContainsString('Unsupported auction outbox event', $message->last_error);
         $this->assertSame(
             0,
             AuctionActivityLog::where('event_type', 'like', 'auction.outbox_consumer.%')
@@ -446,21 +443,24 @@ final class AuctionFinancialFlowTest extends TestCase
         );
     }
 
-    public function test_outbox_consumer_success_marks_message_published(): void
+    public function test_outbox_consumer_success_marks_message_processed_and_sends_notification(): void
     {
-        [$auction] = $this->auctionWithoutBids();
+        Notification::fake();
+
+        [$auction, $seller] = $this->auctionWithoutBids(AuctionStatus::Scheduled);
         OutboxMessage::query()->delete();
-        $activityCount = AuctionActivityLog::where('event_type', 'auction.outbox_consumer.bid_placed')
-            ->where('auction_id', $auction->id)
-            ->count();
 
         $message = OutboxMessage::create([
             'event_id' => (string) Str::ulid(),
             'topic' => 'auction.events',
-            'event_type' => 'auction.bid_accepted',
+            'event_type' => 'auction.status_changed',
             'aggregate_type' => Auction::class,
             'aggregate_id' => $auction->id,
-            'payload' => ['auction_id' => $auction->id],
+            'payload' => [
+                'auction_id' => $auction->id,
+                'from' => AuctionStatus::Scheduled->value,
+                'to' => AuctionStatus::Live->value,
+            ],
             'status' => OutboxStatus::Pending,
             'available_at' => Carbon::now()->subMinute(),
         ]);
@@ -468,37 +468,37 @@ final class AuctionFinancialFlowTest extends TestCase
         $processed = app(DispatchOutboxMessagesAction::class)->execute(1);
 
         $this->assertSame(1, $processed);
-        $this->assertSame(OutboxStatus::Published, $message->refresh()->status);
-        $this->assertNotNull($message->published_at);
-        $this->assertSame(
-            $activityCount + 1,
-            AuctionActivityLog::where('event_type', 'auction.outbox_consumer.bid_placed')->where('auction_id', $auction->id)->count()
-        );
+        $this->assertSame(OutboxStatus::Processed, $message->refresh()->status);
+        $this->assertNotNull($message->processed_at);
+        Notification::assertSentTo($seller, AuctionOutboxNotification::class);
     }
 
-    public function test_outbox_consumer_is_idempotent_for_same_event_id(): void
+    public function test_processed_outbox_message_is_idempotent_for_same_event_id(): void
     {
-        [$auction] = $this->auctionWithoutBids();
-        $eventId = (string) Str::ulid();
-        $event = new AuctionOutboxEvent(
-            eventId: $eventId,
-            topic: 'auction.events',
-            eventType: 'auction.bid_accepted',
-            aggregateType: Auction::class,
-            aggregateId: $auction->id,
-            payload: ['auction_id' => $auction->id],
-        );
+        Notification::fake();
 
-        Event::dispatch($event);
-        Event::dispatch($event);
+        [$auction, $seller] = $this->auctionWithoutBids(AuctionStatus::Scheduled);
+        OutboxMessage::query()->delete();
 
-        $this->assertSame(
-            1,
-            AuctionActivityLog::where('auction_id', $auction->id)
-                ->where('event_type', 'auction.outbox_consumer.bid_placed')
-                ->where('metadata->event_id', $eventId)
-                ->count()
-        );
+        OutboxMessage::create([
+            'event_id' => (string) Str::ulid(),
+            'topic' => 'auction.events',
+            'event_type' => 'auction.status_changed',
+            'aggregate_type' => Auction::class,
+            'aggregate_id' => $auction->id,
+            'payload' => [
+                'auction_id' => $auction->id,
+                'from' => AuctionStatus::Scheduled->value,
+                'to' => AuctionStatus::Live->value,
+            ],
+            'status' => OutboxStatus::Pending,
+            'available_at' => Carbon::now()->subMinute(),
+        ]);
+
+        app(DispatchOutboxMessagesAction::class)->execute(1);
+        app(DispatchOutboxMessagesAction::class)->execute(1);
+
+        Notification::assertSentToTimes($seller, AuctionOutboxNotification::class, 1);
     }
 
     public function test_cancellation_does_not_generate_deposit_refund_without_successful_payment(): void

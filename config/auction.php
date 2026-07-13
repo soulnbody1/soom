@@ -56,6 +56,7 @@ return [
 
     'outbox' => [
         'max_attempts' => (int) env('AUCTION_OUTBOX_MAX_ATTEMPTS', 3),
-        'retry_delay_seconds' => (int) env('AUCTION_OUTBOX_RETRY_DELAY_SECONDS', 60),
+        'retry_delay_minutes' => (int) env('AUCTION_OUTBOX_RETRY_DELAY_MINUTES', 5),
+        'retry_delay_seconds' => (int) env('AUCTION_OUTBOX_RETRY_DELAY_SECONDS', 300),
     ],
 ];

@@ -43,6 +43,7 @@ final class AuctionOutboxRepository
 
         $message->forceFill([
             'event_id' => $message->event_id ?: $message->public_id,
+            'status' => OutboxStatus::Processing,
             'locked_at' => Carbon::now(),
             'locked_by' => $worker,
             'attempts' => $message->attempts + 1,
@@ -52,15 +53,16 @@ final class AuctionOutboxRepository
     }
 
     /**
-     * Mark message as published (dispatched successfully).
+     * Mark message as processed successfully.
      */
-    public function markAsPublished(OutboxMessage $message): void
+    public function markAsProcessed(OutboxMessage $message): void
     {
         $message->forceFill([
-            'status' => OutboxStatus::Published,
+            'status' => OutboxStatus::Processed,
             'processed_at' => Carbon::now(),
             'published_at' => Carbon::now(),
             'dead_lettered_at' => null,
+            'failed_at' => null,
             'locked_at' => null,
             'locked_by' => null,
             'last_error' => null,
@@ -73,11 +75,12 @@ final class AuctionOutboxRepository
     public function markAsFailed(OutboxMessage $message, string $error): void
     {
         $maxAttempts = (int) config('auction.outbox.max_attempts', 3);
-        $retryDelaySeconds = (int) config('auction.outbox.retry_delay_seconds', 60);
+        $retryDelayMinutes = (int) config('auction.outbox.retry_delay_minutes', 5);
+        $retryDelaySeconds = (int) config('auction.outbox.retry_delay_seconds', $retryDelayMinutes * 60);
 
         if ($message->attempts >= $maxAttempts) {
             $message->forceFill([
-                'status' => OutboxStatus::DeadLetter,
+                'status' => OutboxStatus::Failed,
                 'failed_at' => Carbon::now(),
                 'dead_lettered_at' => Carbon::now(),
                 'locked_at' => null,

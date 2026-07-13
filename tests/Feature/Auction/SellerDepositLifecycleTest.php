@@ -28,6 +28,7 @@ use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\ConfirmAuctionReceiptByWinnerAction;
 use App\Services\Auction\Actions\FinalizeAuctionAction;
@@ -297,10 +298,14 @@ final class SellerDepositLifecycleTest extends TestCase
         ]);
         $configuration = AuctionConfigurationVersion::create([
             'version_number' => ((int) AuctionConfigurationVersion::max('version_number')) + 1,
-            'configuration' => array_merge([
+            'configuration' => array_replace_recursive([
                 'seller_deposit_minor' => $sellerDeposit,
                 'bidder_deposit_minor' => 10_000,
                 'minimum_bid_increment_minor' => 500,
+                'seller_deposit_policy' => config('auction.seller_deposit_policy'),
+                'winner_default_deposit_policy' => config('auction.winner_default_deposit_policy'),
+                'non_winner_deposit_policy' => config('auction.non_winner_deposit_policy'),
+                'non_winner_deposit_hold_count' => (int) config('auction.non_winner_deposit_hold_count', 1),
             ], $policy),
             'is_active' => true,
             'published_at' => now()->subDay(),
@@ -308,7 +313,7 @@ final class SellerDepositLifecycleTest extends TestCase
         $category = Category::create(['name' => 'seller-deposit-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'seller-deposit-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
 
-        return [Auction::create([
+        $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
@@ -331,7 +336,10 @@ final class SellerDepositLifecycleTest extends TestCase
             'starts_at' => now()->subDays(2),
             'original_ends_at' => now()->subHour(),
             'ends_at' => now()->subHour(),
-        ]), $seller];
+        ]);
+        app(AuctionConfigurationSnapshotRepository::class)->createForApprovedAuction($auction, $seller->id);
+
+        return [$auction, $seller];
     }
 
     private function sellerDeposit(Auction $auction, User $seller, AuctionDepositStatus $status): AuctionDeposit

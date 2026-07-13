@@ -147,7 +147,10 @@ final class CancelAuctionFinanciallyAction
             ]);
             $this->audit->outbox('auction.cancelled', $auction, [
                 'auction_public_id' => $auction->public_id,
-                ...$context->auditMetadata(),
+                'trigger' => $context->trigger->value,
+                'actor_id' => $context->actorId,
+                'actor_type' => $context->actorType,
+                'reason_code' => $context->reasonCode,
             ]);
 
             return $auction->refresh()->load('settlement');

@@ -7,7 +7,7 @@ namespace App\Domain\Auction\Enums;
 enum OutboxStatus: string
 {
     case Pending = 'pending';
-    case Published = 'published';
+    case Processing = 'processing';
+    case Processed = 'processed';
     case Failed = 'failed';
-    case DeadLetter = 'dead_letter';
 }

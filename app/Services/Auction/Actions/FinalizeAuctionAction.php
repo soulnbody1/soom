@@ -165,7 +165,6 @@ final class FinalizeAuctionAction
                 'auction_public_id' => $auction->public_id,
                 'settlement_public_id' => $settlement->public_id,
                 'winner_id' => $winningBid->bidder_id,
-                'remaining_amount' => $amountDue,
             ]);
 
             return $auction->refresh()->load('settlement');
