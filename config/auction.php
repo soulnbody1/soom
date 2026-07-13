@@ -12,6 +12,8 @@ return [
         'auction.refunds.cancel',
         'auction.settlement.override',
         'auction.dispute.resolve',
+        'auction.winners.mark_defaulted',
+        'auction.winners.override_payment_deadline',
     ],
 
     'refunds' => [
@@ -24,6 +26,11 @@ return [
 
     'non_winner_deposit_policy' => env('AUCTION_NON_WINNER_DEPOSIT_POLICY', 'hold_all_eligible_bidders_until_winner_payment'),
     'non_winner_deposit_hold_count' => (int) env('AUCTION_NON_WINNER_DEPOSIT_HOLD_COUNT', 1),
+
+    'winner_default_deposit_policy' => [
+        'disposition' => env('AUCTION_WINNER_DEFAULT_DEPOSIT_DISPOSITION', 'full_forfeit'),
+        'forfeit_amount_minor' => (int) env('AUCTION_WINNER_DEFAULT_DEPOSIT_FORFEIT_AMOUNT_MINOR', 0),
+    ],
 
     'seller_deposit_policy' => [
         'auction_rejected' => env('AUCTION_SELLER_DEPOSIT_AUCTION_REJECTED', 'refund'),

@@ -129,7 +129,9 @@ final class NonWinnerDepositReleaseTest extends TestCase
         $nextCandidateDeposit = AuctionDeposit::where('user_id', $bids[2]->bidder_id)->firstOrFail();
         $releasedDeposit = AuctionDeposit::where('user_id', $bids[3]->bidder_id)->firstOrFail();
 
-        $this->assertSame(AuctionDepositStatus::AppliedToSettlement, $defaultedDeposit->status);
+        $this->assertSame(AuctionDepositStatus::Forfeited, $defaultedDeposit->status);
+        $this->assertSame(0, $defaultedDeposit->applied_amount_minor);
+        $this->assertSame(10_000, $defaultedDeposit->forfeited_amount_minor);
         $this->assertSame(0, RefundTransaction::where('deposit_id', $defaultedDeposit->id)->count());
         $this->assertSame(0, RefundTransaction::where('deposit_id', $newWinnerDeposit->id)->count());
         $this->assertSame(AuctionDepositStatus::Held, $nextCandidateDeposit->status);

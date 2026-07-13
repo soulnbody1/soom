@@ -261,14 +261,15 @@ final class AuctionController extends Controller
         Auction $auction,
         MarkWinnerDefaultedAction $action
     ): JsonResponse {
-        Gate::authorize('resolveDispute', $auction);
+        Gate::authorize('markWinnerDefaulted', $auction);
 
         $updated = $action->execute(
             $auction,
             Auth::id(),
             (string) $request->validated('reason'),
             (bool) $request->boolean('reassign_to_next'),
-            (bool) $request->boolean('override_deadline')
+            (bool) $request->boolean('override_deadline'),
+            (string) ($request->validated('override_reason') ?? '')
         );
 
         return $this->sendResponse(

@@ -17,6 +17,7 @@ use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\AuctionTermsAcceptance;
 use App\Models\Auction\AuctionTermsVersion;
+use App\Models\Auction\AuctionWinnerReassignment;
 use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
@@ -286,6 +287,53 @@ final class AuctionMysqlConcurrencyTest extends TestCase
 
         $this->assertSame(2, AuctionSettlement::where('auction_id', $auction->id)->count());
         $this->assertSame(1, AuctionSettlement::where('auction_id', $auction->id)->where('current_marker', 1)->count());
+    }
+
+    public function test_parallel_winner_default_processes_do_not_duplicate_reassignment_settlement_or_deposit_disposition(): void
+    {
+        [$auction] = $this->auctionWithTwoBids(AuctionStatus::Ended);
+        $auction = app(FinalizeAuctionAction::class)->execute($auction);
+        $oldSettlement = $auction->settlement;
+        $oldSettlement->forceFill(['payment_due_at' => Carbon::now()->subMinute()])->save();
+        $admin = $this->user('admin');
+        $defaultedDeposit = AuctionDeposit::where('auction_id', $auction->id)
+            ->where('user_id', $oldSettlement->winner_id)
+            ->firstOrFail();
+
+        $workDir = storage_path('framework/testing/auction-concurrency-'.Str::ulid());
+        mkdir($workDir, 0777, true);
+
+        $worker = $workDir.DIRECTORY_SEPARATOR.'winner-default-worker.php';
+        $barrier = $workDir.DIRECTORY_SEPARATOR.'go';
+        $firstResult = $workDir.DIRECTORY_SEPARATOR.'first-result.txt';
+        $secondResult = $workDir.DIRECTORY_SEPARATOR.'second-result.txt';
+        file_put_contents($worker, $this->winnerDefaultWorkerScript());
+
+        $first = $this->winnerDefaultProcess($worker, $barrier, $firstResult, $auction->id, $admin->id);
+        $second = $this->winnerDefaultProcess($worker, $barrier, $secondResult, $auction->id, $admin->id);
+
+        $first->start();
+        $second->start();
+        usleep(200_000);
+        touch($barrier);
+
+        $first->wait();
+        $second->wait();
+
+        $this->assertTrue($first->isSuccessful(), $first->getErrorOutput().file_get_contents($firstResult));
+        $this->assertTrue($second->isSuccessful(), $second->getErrorOutput().file_get_contents($secondResult));
+
+        $oldSettlement->refresh();
+        $defaultedDeposit->refresh();
+        $this->assertSame(2, AuctionSettlement::where('auction_id', $auction->id)->count());
+        $this->assertSame(1, AuctionSettlement::where('auction_id', $auction->id)->where('current_marker', 1)->count());
+        $this->assertSame(1, AuctionWinnerReassignment::where('auction_id', $auction->id)->count());
+        $this->assertFalse($oldSettlement->is_current);
+        $this->assertSame(SettlementStatus::Defaulted, $oldSettlement->status);
+        $this->assertSame(AuctionDepositStatus::Forfeited, $defaultedDeposit->status);
+        $this->assertSame(0, $defaultedDeposit->held_amount_minor);
+        $this->assertSame(0, $defaultedDeposit->applied_amount_minor);
+        $this->assertSame(10_000, $defaultedDeposit->forfeited_amount_minor);
     }
 
     private function auctionWithTwoBids(AuctionStatus $status = AuctionStatus::PaymentPending): array
@@ -574,6 +622,33 @@ final class AuctionMysqlConcurrencyTest extends TestCase
         );
     }
 
+    private function winnerDefaultProcess(
+        string $worker,
+        string $barrier,
+        string $result,
+        int $auctionId,
+        int $adminId
+    ): Process {
+        return new Process(
+            [PHP_BINARY, $worker, base_path(), (string) $auctionId, (string) $adminId, $barrier, $result],
+            base_path(),
+            [
+                'APP_ENV' => 'testing',
+                'DB_CONNECTION' => config('database.default'),
+                'DB_HOST' => config('database.connections.mysql.host'),
+                'DB_PORT' => (string) config('database.connections.mysql.port'),
+                'DB_DATABASE' => config('database.connections.mysql.database'),
+                'DB_USERNAME' => config('database.connections.mysql.username'),
+                'DB_PASSWORD' => (string) config('database.connections.mysql.password'),
+                'CACHE_STORE' => 'array',
+                'SESSION_DRIVER' => 'array',
+                'QUEUE_CONNECTION' => 'sync',
+            ],
+            null,
+            20
+        );
+    }
+
     private function finalizeAuctionWorkerScript(): string
     {
         return <<<'PHP'
@@ -675,6 +750,41 @@ try {
 } catch (Throwable $exception) {
     file_put_contents($result, get_class($exception).': '.$exception->getMessage());
     exit(1);
+}
+PHP;
+    }
+
+    private function winnerDefaultWorkerScript(): string
+    {
+        return <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+[$script, $basePath, $auctionId, $adminId, $barrier, $result] = $argv;
+
+chdir($basePath);
+
+require $basePath.'/vendor/autoload.php';
+$app = require $basePath.'/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$deadline = microtime(true) + 10;
+while (! file_exists($barrier) && microtime(true) < $deadline) {
+    usleep(10_000);
+}
+
+try {
+    $auction = App\Models\Auction\Auction::findOrFail((int) $auctionId);
+    app(App\Services\Auction\Actions\MarkWinnerDefaultedAction::class)
+        ->execute($auction, (int) $adminId, 'parallel deadline expired', true);
+
+    file_put_contents($result, 'ok');
+    exit(0);
+} catch (Throwable $exception) {
+    file_put_contents($result, get_class($exception).': '.$exception->getMessage());
+    exit(0);
 }
 PHP;
     }

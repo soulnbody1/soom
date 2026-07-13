@@ -12,4 +12,14 @@ final class AuctionWinnerReassignmentRepository
     {
         return AuctionWinnerReassignment::create($attributes);
     }
+
+    public function firstOrCreate(array $uniqueAttributes, array $defaults): AuctionWinnerReassignment
+    {
+        return AuctionWinnerReassignment::firstOrCreate($uniqueAttributes, $defaults);
+    }
+
+    public function save(AuctionWinnerReassignment $reassignment): void
+    {
+        $reassignment->save();
+    }
 }

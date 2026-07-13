@@ -21,6 +21,8 @@ final class AuctionWinnerReassignment extends Model
         'to_bid_id',
         'from_user_id',
         'to_user_id',
+        'previous_settlement_id',
+        'new_settlement_id',
         'created_by',
         'reason',
         'metadata',

@@ -96,6 +96,25 @@ final class AuctionSettlementRepository
         ]));
     }
 
+    public function closeAsHistorical(AuctionSettlement $settlement, string $reason, ?int $overriddenBy = null, ?string $overrideReason = null): void
+    {
+        $now = Carbon::now();
+
+        $settlement->forceFill([
+            'is_current' => false,
+            'current_marker' => null,
+            'status' => \App\Domain\Auction\Enums\SettlementStatus::Defaulted,
+            'defaulted_at' => $settlement->defaulted_at ?? $now,
+            'default_reason' => $settlement->default_reason ?? $reason,
+            'superseded_at' => $settlement->superseded_at ?? $now,
+            'overridden_by' => $overriddenBy,
+            'overridden_at' => $overriddenBy ? $now : null,
+            'override_reason' => $overrideReason,
+            'original_payment_due_at' => $settlement->original_payment_due_at ?? $settlement->payment_due_at,
+        ]);
+        $this->save($settlement);
+    }
+
     public function lockCancellableForAuction(int $auctionId): Collection
     {
         return AuctionSettlement::where('auction_id', $auctionId)

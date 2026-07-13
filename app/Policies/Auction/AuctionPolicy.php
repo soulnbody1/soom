@@ -93,4 +93,9 @@ final class AuctionPolicy
     {
         return $this->hasAuctionPermission($user, 'auction.dispute.resolve');
     }
+
+    public function markWinnerDefaulted(User $user, Auction $auction): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.winners.mark_defaulted');
+    }
 }

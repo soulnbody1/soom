@@ -79,6 +79,14 @@ final class AuctionPaymentRepository
             ->first();
     }
 
+    public function lockPendingReviewSubmissionsForSettlement(int $settlementId): Collection
+    {
+        return PaymentSubmission::where('settlement_id', $settlementId)
+            ->where('status', PaymentSubmissionStatus::PendingReview->value)
+            ->lockForUpdate()
+            ->get();
+    }
+
     /**
      * Lock a payment submission for review.
      * Used by ReviewPaymentSubmissionAction.

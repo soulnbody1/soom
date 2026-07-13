@@ -41,6 +41,12 @@ final class AuctionSettlement extends Model
         'buyer_receipt_confirmed_at',
         'handover_completed_at',
         'completed_at',
+        'defaulted_at',
+        'default_reason',
+        'overridden_by',
+        'overridden_at',
+        'override_reason',
+        'original_payment_due_at',
     ];
 
     protected $casts = [
@@ -54,6 +60,9 @@ final class AuctionSettlement extends Model
         'buyer_receipt_confirmed_at' => 'immutable_datetime',
         'handover_completed_at' => 'immutable_datetime',
         'completed_at' => 'immutable_datetime',
+        'defaulted_at' => 'immutable_datetime',
+        'overridden_at' => 'immutable_datetime',
+        'original_payment_due_at' => 'immutable_datetime',
     ];
 
     public function auction(): BelongsTo

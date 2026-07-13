@@ -19,6 +19,7 @@ final class MarkWinnerDefaultedRequest extends FormRequest
             'reason' => ['required', 'string', 'max:1000'],
             'reassign_to_next' => ['sometimes', 'boolean'],
             'override_deadline' => ['sometimes', 'boolean'],
+            'override_reason' => ['nullable', 'required_if:override_deadline,true', 'string', 'max:1000'],
         ];
     }
 }
