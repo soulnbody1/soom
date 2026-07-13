@@ -12,6 +12,7 @@ use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionBid;
+use App\Models\Auction\AuctionConfigurationVersion;
 use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\AuctionTermsVersion;
@@ -21,6 +22,7 @@ use App\Models\Auction\PaymentTransaction;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use App\Services\Auction\Actions\ReviewPaymentSubmissionAction;
 use App\Services\Auction\Actions\SubmitPaymentSubmissionAction;
 use App\Services\Auction\Support\PaymentEligibilityRule;
@@ -40,6 +42,12 @@ final class PaymentDeadlineTest extends TestCase
 
         Artisan::call('migrate', ['--force' => true]);
         Storage::fake('spaces_private');
+        config([
+            'auction.admin_permissions' => array_values(array_diff(
+                config('auction.admin_permissions', []),
+                [PaymentEligibilityRule::OVERRIDE_DEADLINE_PERMISSION]
+            )),
+        ]);
     }
 
     public function test_bidder_deposit_deadline_is_auction_end_and_override_only_bypasses_deadline(): void
@@ -180,6 +188,17 @@ final class PaymentDeadlineTest extends TestCase
             'is_active' => true,
             'published_at' => now()->subDay(),
         ]);
+        $configuration = AuctionConfigurationVersion::create([
+            'version_number' => ((int) AuctionConfigurationVersion::max('version_number')) + 1,
+            'configuration' => [
+                'non_winner_deposit_policy' => config('auction.non_winner_deposit_policy'),
+                'non_winner_deposit_hold_count' => (int) config('auction.non_winner_deposit_hold_count', 1),
+                'seller_deposit_policy' => config('auction.seller_deposit_policy'),
+                'winner_default_deposit_policy' => config('auction.winner_default_deposit_policy'),
+            ],
+            'is_active' => true,
+            'published_at' => now()->subDay(),
+        ]);
         $category = Category::create(['name' => 'deadline-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'deadline-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
 
@@ -188,6 +207,7 @@ final class PaymentDeadlineTest extends TestCase
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Deadline auction',
             'description' => 'Deadline auction.',
@@ -206,8 +226,9 @@ final class PaymentDeadlineTest extends TestCase
             'original_ends_at' => $endsAt ?? now()->subMinute(),
             'ends_at' => $endsAt ?? now()->subMinute(),
         ]);
+        app(AuctionConfigurationSnapshotRepository::class)->createForApprovedAuction($auction, $seller->id);
 
-        return [$auction, $seller];
+        return [$auction->refresh(), $seller];
     }
 
     private function auctionWithWinningBid(AuctionStatus $status = AuctionStatus::PaymentPending): array

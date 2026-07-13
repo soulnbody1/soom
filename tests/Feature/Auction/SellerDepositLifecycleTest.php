@@ -252,7 +252,7 @@ final class SellerDepositLifecycleTest extends TestCase
         $this->assertSame(10_000, $deposit->forfeited_amount_minor);
     }
 
-    public function test_seller_deposit_disposition_is_idempotent_for_refund_forfeit_audit_and_outbox(): void
+    public function test_seller_deposit_disposition_is_idempotent_for_refund_forfeit_audit_only(): void
     {
         [$refundAuction, $seller] = $this->auction(AuctionStatus::Completed);
         $refundDeposit = $this->paidSellerDeposit($refundAuction, $seller);
@@ -263,7 +263,7 @@ final class SellerDepositLifecycleTest extends TestCase
 
         $this->assertSame(1, RefundTransaction::where('deposit_id', $refundDeposit->id)->count());
         $this->assertSame(1, AuctionActivityLog::where('auction_id', $refundAuction->id)->where('event_type', 'auction.seller_deposit_refund_planned')->count());
-        $this->assertSame(1, OutboxMessage::where('aggregate_id', $refundAuction->id)->where('event_type', 'auction.seller_deposit_refund_planned')->count());
+        $this->assertSame(0, OutboxMessage::where('aggregate_id', $refundAuction->id)->where('event_type', 'auction.seller_deposit_refund_planned')->count());
 
         [$forfeitAuction, $forfeitSeller] = $this->auction(AuctionStatus::Disputed);
         $forfeitDeposit = $this->paidSellerDeposit($forfeitAuction, $forfeitSeller);
@@ -273,7 +273,7 @@ final class SellerDepositLifecycleTest extends TestCase
 
         $this->assertSame(10_000, $forfeitDeposit->refresh()->forfeited_amount_minor);
         $this->assertSame(1, AuctionActivityLog::where('auction_id', $forfeitAuction->id)->where('event_type', 'auction.seller_deposit_forfeited')->count());
-        $this->assertSame(1, OutboxMessage::where('aggregate_id', $forfeitAuction->id)->where('event_type', 'auction.seller_deposit_forfeited')->count());
+        $this->assertSame(0, OutboxMessage::where('aggregate_id', $forfeitAuction->id)->where('event_type', 'auction.seller_deposit_forfeited')->count());
     }
 
     public function test_reconciliation_detects_terminal_held_seller_deposit_without_reason(): void

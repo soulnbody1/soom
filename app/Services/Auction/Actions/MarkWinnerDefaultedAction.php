@@ -35,7 +35,7 @@ use Illuminate\Support\Carbon;
 
 final class MarkWinnerDefaultedAction
 {
-    public const OVERRIDE_DEADLINE_PERMISSION = 'auction.winners.override_payment_deadline';
+    public const OVERRIDE_DEADLINE_PERMISSION = 'auction.payment.override_deadline';
 
     public function __construct(
         private readonly AuctionTransaction $transaction,

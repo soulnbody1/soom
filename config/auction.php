@@ -16,7 +16,7 @@ return [
         'auction.settlement.override',
         'auction.dispute.resolve',
         'auction.winners.mark_defaulted',
-        'auction.winners.override_payment_deadline',
+        'auction.payment.override_deadline',
     ],
 
     'refunds' => [

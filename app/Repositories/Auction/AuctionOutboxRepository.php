@@ -21,17 +21,28 @@ final class AuctionOutboxRepository
     }
 
     /**
-     * Lease (claim) the next pending outbox message for processing.
+     * Lease (claim) the next due outbox message for processing.
      * Applies lockForUpdate to prevent concurrent processing.
      * Used by DispatchOutboxMessagesAction.
      */
     public function leaseNextPending(string $worker): ?OutboxMessage
     {
-        $message = OutboxMessage::where('status', OutboxStatus::Pending->value)
-            ->where('available_at', '<=', Carbon::now())
-            ->where(function ($query): void {
-                $query->whereNull('locked_at')
-                    ->orWhere('locked_at', '<=', Carbon::now()->subMinutes(5));
+        $now = Carbon::now();
+        $lockExpiredAt = $now->copy()->subMinutes(5);
+
+        $message = OutboxMessage::query()
+            ->where(function ($query) use ($lockExpiredAt, $now): void {
+                $query->where(function ($query) use ($lockExpiredAt, $now): void {
+                    $query->where('status', OutboxStatus::Pending->value)
+                        ->where('available_at', '<=', $now)
+                        ->where(function ($query) use ($lockExpiredAt): void {
+                            $query->whereNull('locked_at')
+                                ->orWhere('locked_at', '<=', $lockExpiredAt);
+                        });
+                })->orWhere(function ($query) use ($lockExpiredAt): void {
+                    $query->where('status', OutboxStatus::Processing->value)
+                        ->where('locked_at', '<=', $lockExpiredAt);
+                });
             })
             ->orderBy('id')
             ->lockForUpdate()

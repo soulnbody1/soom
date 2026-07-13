@@ -32,6 +32,11 @@ final class DispatchOutboxMessagesAction
         private readonly AuctionOutboxRepository $outbox,
     ) {}
 
+    public static function supports(string $eventType): bool
+    {
+        return in_array($eventType, self::SUPPORTED_EVENTS, true);
+    }
+
     public function execute(int $limit = 100): int
     {
         $count = 0;
@@ -58,7 +63,7 @@ final class DispatchOutboxMessagesAction
 
     private function dispatchNotification(OutboxMessage $message): void
     {
-        if (! in_array($message->event_type, self::SUPPORTED_EVENTS, true)) {
+        if (! self::supports($message->event_type)) {
             throw new \RuntimeException("Unsupported auction outbox event: {$message->event_type}");
         }
 

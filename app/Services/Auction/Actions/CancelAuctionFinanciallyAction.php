@@ -301,11 +301,7 @@ final class CancelAuctionFinanciallyAction
             return;
         }
 
-        try {
-            $this->refundDeposit->execute($deposit, "auction_cancelled: {$context->reasonText}", $context->actorId);
-        } catch (AuctionException) {
-            // No refundable captured amount remains; reconciliation will detect unexpected leftovers.
-        }
+        $this->refundDeposit->execute($deposit, "auction_cancelled: {$context->reasonText}", $context->actorId);
     }
 
     private function createWinnerPaymentRefundPlans(

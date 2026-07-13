@@ -40,6 +40,7 @@ use App\Services\Auction\Actions\RefundAuctionDepositAction;
 use App\Services\Auction\Actions\ReviewAuctionAction;
 use App\Services\Auction\Actions\ReviewPaymentSubmissionAction;
 use App\Services\Auction\Actions\SubmitPaymentSubmissionAction;
+use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionMediaService;
 use Database\Factories\Auction\PaymentMethodFactory;
 use Illuminate\Database\QueryException;
@@ -443,6 +444,18 @@ final class AuctionFinancialFlowTest extends TestCase
         );
     }
 
+    public function test_audit_does_not_insert_unsupported_outbox_event(): void
+    {
+        [$auction] = $this->auctionWithoutBids();
+        OutboxMessage::query()->delete();
+
+        app(AuctionAudit::class)->outbox('auction.cancellation_started', $auction, [
+            'auction_public_id' => $auction->public_id,
+        ]);
+
+        $this->assertSame(0, OutboxMessage::where('aggregate_id', $auction->id)->count());
+    }
+
     public function test_outbox_consumer_success_marks_message_processed_and_sends_notification(): void
     {
         Notification::fake();
@@ -471,6 +484,41 @@ final class AuctionFinancialFlowTest extends TestCase
         $this->assertSame(OutboxStatus::Processed, $message->refresh()->status);
         $this->assertNotNull($message->processed_at);
         Notification::assertSentTo($seller, AuctionOutboxNotification::class);
+    }
+
+    public function test_expired_processing_outbox_message_can_be_retried(): void
+    {
+        Notification::fake();
+
+        [$auction, $seller] = $this->auctionWithoutBids(AuctionStatus::Scheduled);
+        OutboxMessage::query()->delete();
+
+        $message = OutboxMessage::create([
+            'event_id' => (string) Str::ulid(),
+            'topic' => 'auction.events',
+            'event_type' => 'auction.status_changed',
+            'aggregate_type' => Auction::class,
+            'aggregate_id' => $auction->id,
+            'payload' => [
+                'auction_id' => $auction->id,
+                'from' => AuctionStatus::Scheduled->value,
+                'to' => AuctionStatus::Live->value,
+            ],
+            'status' => OutboxStatus::Processing,
+            'attempts' => 1,
+            'available_at' => Carbon::now()->subHour(),
+            'locked_at' => Carbon::now()->subMinutes(6),
+            'locked_by' => 'old-worker',
+        ]);
+
+        $processed = app(DispatchOutboxMessagesAction::class)->execute(1);
+
+        $message->refresh();
+        $this->assertSame(1, $processed);
+        $this->assertSame(OutboxStatus::Processed, $message->status);
+        $this->assertSame(2, $message->attempts);
+        $this->assertNull($message->locked_at);
+        Notification::assertSentToTimes($seller, AuctionOutboxNotification::class, 1);
     }
 
     public function test_processed_outbox_message_is_idempotent_for_same_event_id(): void

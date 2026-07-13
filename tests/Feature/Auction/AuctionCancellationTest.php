@@ -17,6 +17,7 @@ use App\DTO\Auction\AuctionCancellationContextDTO;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionActivityLog;
 use App\Models\Auction\AuctionBid;
+use App\Models\Auction\AuctionConfigurationVersion;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionDispute;
 use App\Models\Auction\AuctionParticipant;
@@ -29,6 +30,7 @@ use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\CancelAuctionFinanciallyAction;
 use App\Services\Auction\Actions\ReconcileAuctionsAction;
@@ -150,6 +152,41 @@ final class AuctionCancellationTest extends TestCase
         $this->assertSame(PaymentTransactionStatus::Succeeded, $winnerPayment->refresh()->status);
     }
 
+    public function test_refund_failure_prevents_financial_cancellation_completion(): void
+    {
+        [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::PaymentPending);
+        $winnerDeposit = $this->bidderDeposit($auction, $winner, 10_000);
+        $this->paymentForDeposit($auction, $winnerDeposit, $winner, 10_000);
+        $this->settlement($auction, $bid, paid: false);
+        $winnerDeposit->forceFill([
+            'held_amount_minor' => 0,
+            'applied_amount_minor' => 0,
+        ])->save();
+
+        try {
+            app(CancelAuctionFinanciallyAction::class)->execute(new AuctionCancellationContextDTO(
+                auctionId: $auction->id,
+                trigger: AuctionCancellationTrigger::PlatformFault,
+                actorId: $this->user('admin')->id,
+                actorType: 'admin',
+                reasonCode: 'platform_fault',
+                reasonText: 'platform_fault: refund cannot be planned',
+                liability: 'platform',
+                requestedAt: Carbon::now(),
+            ));
+
+            $this->fail('Cancellation should fail when a required refund cannot be planned.');
+        } catch (AuctionException $exception) {
+            $this->assertSame(__('auction.errors.zero_refund_not_allowed'), $exception->getMessage());
+        }
+
+        $auction->refresh();
+        $this->assertSame(AuctionStatus::PaymentPending, $auction->status);
+        $this->assertNull($auction->financial_cancellation_completed_at);
+        $this->assertFalse($auction->financial_cancellation_manual_review_required);
+        $this->assertSame(0, RefundTransaction::where('auction_id', $auction->id)->count());
+    }
+
     public function test_is_idempotent_for_plan_refunds_and_audit(): void
     {
         [$auction, $seller] = $this->auction(AuctionStatus::Scheduled);
@@ -200,14 +237,26 @@ final class AuctionCancellationTest extends TestCase
             'is_active' => true,
             'published_at' => Carbon::now()->subDay(),
         ]);
+        $configuration = AuctionConfigurationVersion::create([
+            'version_number' => ((int) AuctionConfigurationVersion::max('version_number')) + 1,
+            'configuration' => [
+                'non_winner_deposit_policy' => config('auction.non_winner_deposit_policy'),
+                'non_winner_deposit_hold_count' => (int) config('auction.non_winner_deposit_hold_count', 1),
+                'seller_deposit_policy' => config('auction.seller_deposit_policy'),
+                'winner_default_deposit_policy' => config('auction.winner_default_deposit_policy'),
+            ],
+            'is_active' => true,
+            'published_at' => Carbon::now()->subDay(),
+        ]);
         $category = Category::create(['name' => 'auction-cancel-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'auction-cancel-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
 
-        return [Auction::create([
+        $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Auction cancellation',
             'description' => 'Auction cancellation.',
@@ -225,7 +274,10 @@ final class AuctionCancellationTest extends TestCase
             'starts_at' => Carbon::now()->subDays(2),
             'original_ends_at' => Carbon::now()->subHour(),
             'ends_at' => Carbon::now()->subHour(),
-        ]), $seller];
+        ]);
+        app(AuctionConfigurationSnapshotRepository::class)->createForApprovedAuction($auction, $seller->id);
+
+        return [$auction->refresh(), $seller];
     }
 
     private function auctionWithWinner(AuctionStatus $status): array

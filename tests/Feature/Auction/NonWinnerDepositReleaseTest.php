@@ -194,7 +194,7 @@ final class NonWinnerDepositReleaseTest extends TestCase
         }
     }
 
-    public function test_release_action_is_idempotent_for_refunds_audit_and_outbox(): void
+    public function test_release_action_is_idempotent_for_refunds_and_audit_only(): void
     {
         [$auction, $bids] = $this->auctionWithBids('refund_all_non_winners_immediately', [100_000, 90_000]);
         $this->currentSettlement($auction, $bids[0], SettlementStatus::Paid);
@@ -207,7 +207,7 @@ final class NonWinnerDepositReleaseTest extends TestCase
         $deposit = AuctionDeposit::where('user_id', $bids[1]->bidder_id)->firstOrFail();
         $this->assertSame(1, RefundTransaction::where('deposit_id', $deposit->id)->count());
         $this->assertSame(1, AuctionActivityLog::where('auction_id', $auction->id)->where('event_type', 'auction.non_winner_deposit_refund_planned')->count());
-        $this->assertSame(1, OutboxMessage::where('aggregate_id', $auction->id)->where('event_type', 'auction.non_winner_deposit_refund_planned')->count());
+        $this->assertSame(0, OutboxMessage::where('aggregate_id', $auction->id)->where('event_type', 'auction.non_winner_deposit_refund_planned')->count());
     }
 
     public function test_active_refund_and_unpaid_deposit_are_not_refunded_again(): void

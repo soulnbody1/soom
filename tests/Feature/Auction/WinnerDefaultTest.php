@@ -14,6 +14,7 @@ use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionBid;
+use App\Models\Auction\AuctionConfigurationVersion;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\AuctionSettlement;
@@ -27,6 +28,7 @@ use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use App\Services\Auction\Actions\FinalizeAuctionAction;
 use App\Services\Auction\Actions\MarkWinnerDefaultedAction;
 use Illuminate\Support\Carbon;
@@ -95,7 +97,7 @@ final class WinnerDefaultTest extends TestCase
             $this->assertSame(__('auction.errors.winner_default_override_not_authorized'), $exception->getMessage());
         }
 
-        $admin->forceFill(['auction_permissions' => ['auction.winners.override_payment_deadline']])->save();
+        $admin->forceFill(['auction_permissions' => ['auction.payment.override_deadline']])->save();
         app(MarkWinnerDefaultedAction::class)->execute($auction->refresh(), $admin->id, 'override', false, true, 'urgent review');
 
         $settlement = $auction->settlement->refresh();
@@ -205,6 +207,17 @@ final class WinnerDefaultTest extends TestCase
             'is_active' => true,
             'published_at' => Carbon::now()->subDay(),
         ]);
+        $configuration = AuctionConfigurationVersion::create([
+            'version_number' => (int) (AuctionConfigurationVersion::max('version_number') ?? 0) + 1,
+            'configuration' => [
+                'non_winner_deposit_policy' => config('auction.non_winner_deposit_policy'),
+                'non_winner_deposit_hold_count' => (int) config('auction.non_winner_deposit_hold_count', 1),
+                'seller_deposit_policy' => config('auction.seller_deposit_policy'),
+                'winner_default_deposit_policy' => config('auction.winner_default_deposit_policy'),
+            ],
+            'is_active' => true,
+            'published_at' => Carbon::now()->subDay(),
+        ]);
         $category = Category::create(['name' => 'cat-'.uniqid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'country-'.uniqid(), 'code' => 'C'.strtoupper(substr(md5(uniqid()), 0, 5))]);
 
@@ -213,6 +226,7 @@ final class WinnerDefaultTest extends TestCase
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Winner default auction',
             'description' => 'Winner default auction.',
@@ -231,8 +245,9 @@ final class WinnerDefaultTest extends TestCase
             'original_ends_at' => Carbon::now()->subMinute(),
             'ends_at' => Carbon::now()->subMinute(),
         ]);
+        app(AuctionConfigurationSnapshotRepository::class)->createForApprovedAuction($auction, $seller->id);
 
-        return [$auction, $seller];
+        return [$auction->refresh(), $seller];
     }
 
     private function qualifiedParticipant(Auction $auction, int $heldDeposit): array
