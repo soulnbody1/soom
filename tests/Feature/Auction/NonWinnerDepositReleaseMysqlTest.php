@@ -162,6 +162,10 @@ PHP;
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion([
+                'seller_deposit_minor' => 10_000,
+                'bidder_deposit_minor' => 10_000,
+            ])->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL non winner release auction',
             'description' => 'MySQL non winner release auction.',
@@ -180,6 +184,8 @@ PHP;
             'original_ends_at' => now()->subHour(),
             'ends_at' => now()->subHour(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         [$winner, $winnerParticipant, $winnerDeposit] = $this->participant($auction);
         $winningBid = $this->bid($auction, $winnerParticipant, $winner, 100_000, 1);

@@ -33,6 +33,19 @@ final class SellerDepositDispositionResolver
             );
         }
 
+        // No obligation row means there is nothing to dispose of. This is the case for
+        // auctions that were never approved: the seller deposit obligation and the
+        // configuration snapshot are both created at approval, so reading the snapshot
+        // here would fail for a draft or pending-review auction.
+        if ($deposit === null) {
+            return new SellerDepositDispositionDTO(
+                SellerDepositDisposition::NoAction,
+                'no_obligation',
+                $trigger,
+                'seller deposit obligation does not exist'
+            );
+        }
+
         $policyKey = $this->policyKey($auction, $trigger, $actorType, $reason, $context);
         $configured = $context['seller_deposit_disposition'] ?? $this->configuredDisposition($auction, $policyKey);
         $disposition = $configured
@@ -63,7 +76,6 @@ final class SellerDepositDispositionResolver
         }
 
         return match ($trigger) {
-            'auction_rejected' => 'auction_rejected',
             'unsold' => 'unsold',
             'completed' => 'completed',
             'winner_default' => 'winner_default',
@@ -148,7 +160,6 @@ final class SellerDepositDispositionResolver
     private function defaultDisposition(string $policyKey): SellerDepositDisposition
     {
         return match ($policyKey) {
-            'auction_rejected',
             'unsold',
             'completed',
             'seller_cancellation_before_start',

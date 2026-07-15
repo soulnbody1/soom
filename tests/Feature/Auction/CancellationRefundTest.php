@@ -151,12 +151,17 @@ final class CancellationRefundTest extends TestCase
         ]);
         $category = Category::create(['name' => 'cancel-refund-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'cancel-refund-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
+        $configuration = $this->auctionConfigurationVersion([
+            'seller_deposit_minor' => 10_000,
+            'bidder_deposit_minor' => 10_000,
+        ]);
 
-        return [Auction::create([
+        $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Cancellation refund auction',
             'description' => 'Cancellation refund auction.',
@@ -174,7 +179,11 @@ final class CancellationRefundTest extends TestCase
             'starts_at' => now()->subDays(2),
             'original_ends_at' => now()->subHour(),
             'ends_at' => now()->subHour(),
-        ]), $seller];
+        ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
+
+        return [$auction, $seller];
     }
 
     private function auctionWithWinner(AuctionStatus $status): array

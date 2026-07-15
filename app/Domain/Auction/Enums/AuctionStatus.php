@@ -35,9 +35,4 @@ enum AuctionStatus: string
             self::Unsold,
         ], true);
     }
-
-    public function acceptsBids(): bool
-    {
-        return $this === self::Live;
-    }
 }

@@ -136,11 +136,16 @@ final class SubmitPaymentSubmissionAction
 
     private function target(Auction $auction, int $userId, PaymentPurpose $purpose): array
     {
+        // The auction state is checked before the snapshot is read: a seller deposit can
+        // only be submitted once the auction is approved, and an auction that was never
+        // approved has no configuration snapshot to read.
+        if ($purpose === PaymentPurpose::SellerDeposit) {
+            $this->eligibility->assertCanSubmitSellerDeposit($auction, $userId);
+        }
+
         $snapshot = $this->snapshotReader->forAuction($auction);
 
         if ($purpose === PaymentPurpose::SellerDeposit) {
-            $this->eligibility->assertCanSubmitSellerDeposit($auction, $userId);
-
             $deposit = $this->deposits->firstOrCreateDeposit(
                 ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'seller'],
                 [

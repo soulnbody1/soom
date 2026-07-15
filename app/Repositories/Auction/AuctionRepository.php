@@ -31,7 +31,6 @@ final class AuctionRepository
 
     /**
      * Lock an auction row for generic state-changing operations.
-     * Used by RegisterParticipantAction, SubmitPaymentSubmissionAction, etc.
      */
     public function lockForStateChange(int $auctionId): Auction
     {

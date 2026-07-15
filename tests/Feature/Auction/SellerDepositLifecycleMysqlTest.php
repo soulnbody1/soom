@@ -156,6 +156,10 @@ PHP;
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion([
+                'seller_deposit_minor' => 10_000,
+                'bidder_deposit_minor' => 10_000,
+            ])->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL seller deposit auction',
             'description' => 'MySQL seller deposit auction.',
@@ -174,6 +178,8 @@ PHP;
             'original_ends_at' => now()->subHour(),
             'ends_at' => now()->subHour(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
         $deposit = AuctionDeposit::create([
             'auction_id' => $auction->id,
             'user_id' => $seller->id,

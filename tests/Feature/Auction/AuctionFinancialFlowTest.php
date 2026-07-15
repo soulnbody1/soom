@@ -321,7 +321,7 @@ final class AuctionFinancialFlowTest extends TestCase
         $review->approve($second, $admin->id, 'approved', $providerTransactionId);
     }
 
-    public function test_payment_approval_is_rejected_after_auction_cancelled(): void
+    public function test_payment_approval_after_auction_cancelled_captures_no_money(): void
     {
         [$auction, $seller] = $this->auctionWithoutBids(AuctionStatus::AwaitingSellerDeposit);
         $method = PaymentMethodFactory::new()->create();
@@ -330,10 +330,20 @@ final class AuctionFinancialFlowTest extends TestCase
 
         app(CancelAuctionAction::class)->execute($auction, $admin->id, 'admin', 'cancel before payment approval');
 
-        $this->expectException(AuctionException::class);
-        $this->expectExceptionMessage(__('auction.errors.payment_approval_auction_not_active'));
+        // Cancellation closes every pending submission up front, so the submission is
+        // already out of review before an approval can be attempted.
+        $submission->refresh();
+        $this->assertSame(PaymentSubmissionStatus::Rejected, $submission->status);
+        $this->assertSame('auction_cancelled', $submission->review_note);
 
-        app(ReviewPaymentSubmissionAction::class)->approve($submission, $admin->id, 'approved');
+        // Approving a closed submission is an idempotent no-op: it must never capture money.
+        $reviewed = app(ReviewPaymentSubmissionAction::class)->approve($submission, $admin->id, 'approved');
+
+        $this->assertSame(PaymentSubmissionStatus::Rejected, $reviewed->refresh()->status);
+        $this->assertSame('auction_cancelled', $reviewed->review_note);
+        $this->assertNull($reviewed->transaction);
+        $this->assertSame(0, PaymentTransaction::where('auction_id', $auction->id)->count());
+        $this->assertSame(0, RefundTransaction::where('auction_id', $auction->id)->count());
     }
 
     public function test_refund_confirmation_is_idempotent(): void
@@ -598,8 +608,16 @@ final class AuctionFinancialFlowTest extends TestCase
         $action->execute($auction->refresh(), $admin->id, 'admin', 'seller cancelled replay');
 
         $this->assertSame(AuctionStatus::Cancelled, $auction->refresh()->status);
+
+        $deposit = AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
+
+        // No successful source payment means no money may be returned: the obligation is
+        // closed without a refund rather than refunded.
         $this->assertSame(0, RefundTransaction::where('auction_id', $auction->id)->where('user_id', $bidder->id)->count());
-        $this->assertSame(AuctionDepositStatus::Held, AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail()->status);
+        $this->assertSame(0, $deposit->refunded_amount_minor);
+        $this->assertSame(0, $deposit->forfeited_amount_minor);
+        $this->assertSame(AuctionDepositStatus::Rejected, $deposit->status);
+        $this->assertSame('auction_cancelled_without_payment', $deposit->hold_reason);
     }
 
     public function test_cancellation_is_allowed_from_required_lifecycle_states(): void
@@ -748,12 +766,14 @@ final class AuctionFinancialFlowTest extends TestCase
 
         $category = Category::create(['name' => fake()->unique()->word(), 'display_order' => 0]);
         $country = Country::create(['name' => fake()->country(), 'code' => fake()->unique()->countryCode()]);
+        $configuration = $this->auctionConfigurationVersion();
 
         $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Auction',
             'description' => 'Auction description.',
@@ -772,6 +792,8 @@ final class AuctionFinancialFlowTest extends TestCase
             'original_ends_at' => Carbon::now()->subMinute(),
             'ends_at' => Carbon::now()->subMinute(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         return [$auction, $seller, null];
     }

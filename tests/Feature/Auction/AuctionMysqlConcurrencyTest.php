@@ -354,6 +354,7 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion()->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL concurrency auction',
             'description' => 'MySQL concurrency auction.',
@@ -372,6 +373,8 @@ final class AuctionMysqlConcurrencyTest extends TestCase
             'original_ends_at' => $status === AuctionStatus::Live ? Carbon::now()->addHour() : Carbon::now()->subMinute(),
             'ends_at' => $status === AuctionStatus::Live ? Carbon::now()->addHour() : Carbon::now()->subMinute(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         $firstBid = $this->bidFor($auction, 100_000, 1);
         $secondBid = $this->bidFor($auction, 95_000, 2);

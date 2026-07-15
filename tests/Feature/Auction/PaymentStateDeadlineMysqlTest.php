@@ -101,6 +101,7 @@ final class PaymentStateDeadlineMysqlTest extends TestCase
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion()->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL payment state auction',
             'description' => 'MySQL payment state auction.',
@@ -119,6 +120,8 @@ final class PaymentStateDeadlineMysqlTest extends TestCase
             'original_ends_at' => now()->subMinute(),
             'ends_at' => now()->subMinute(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         [$winner, $participant] = $this->participant($auction);
         $bid = $this->bid($auction, $participant, $winner, $amount, $sequence);

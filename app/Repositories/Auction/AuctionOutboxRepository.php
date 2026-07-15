@@ -86,8 +86,7 @@ final class AuctionOutboxRepository
     public function markAsFailed(OutboxMessage $message, string $error): void
     {
         $maxAttempts = (int) config('auction.outbox.max_attempts', 3);
-        $retryDelayMinutes = (int) config('auction.outbox.retry_delay_minutes', 5);
-        $retryDelaySeconds = (int) config('auction.outbox.retry_delay_seconds', $retryDelayMinutes * 60);
+        $retryDelaySeconds = (int) config('auction.outbox.retry_delay_seconds', 300);
 
         if ($message->attempts >= $maxAttempts) {
             $message->forceFill([

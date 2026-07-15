@@ -256,6 +256,10 @@ PHP;
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion([
+                'seller_deposit_minor' => 10_000,
+                'bidder_deposit_minor' => 10_000,
+            ])->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL refund lifecycle auction',
             'description' => 'MySQL refund lifecycle auction.',
@@ -274,6 +278,8 @@ PHP;
             'original_ends_at' => now()->addHour(),
             'ends_at' => now()->addHour(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
         $participant = AuctionParticipant::create([
             'auction_id' => $auction->id,
             'user_id' => $bidder->id,

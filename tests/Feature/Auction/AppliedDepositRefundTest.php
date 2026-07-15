@@ -203,11 +203,15 @@ final class AppliedDepositRefundTest extends TestCase
         $category = Category::create(['name' => 'applied-refund-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'applied-refund-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
 
-        return [Auction::create([
+        $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion([
+                'seller_deposit_minor' => 10_000,
+                'bidder_deposit_minor' => 10_000,
+            ])->id,
             'currency_code' => 'JOD',
             'title' => 'Applied deposit refund auction',
             'description' => 'Applied deposit refund auction.',
@@ -225,7 +229,11 @@ final class AppliedDepositRefundTest extends TestCase
             'starts_at' => now()->subDays(2),
             'original_ends_at' => now()->subHour(),
             'ends_at' => now()->subHour(),
-        ]), $seller];
+        ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
+
+        return [$auction, $seller];
     }
 
     private function auctionWithBid(): array
@@ -273,6 +281,12 @@ final class AppliedDepositRefundTest extends TestCase
 
     private function settlement(Auction $auction, AuctionBid $bid, SettlementStatus $status, int $applied = 10_000): AuctionSettlement
     {
+        // Keep the fixture within the chk_settlement_amounts / chk_settlement_remaining
+        // database constraints: amount_due + deposit_applied = winning, and
+        // remaining + paid = amount_due.
+        $winning = 100_000;
+        $amountDue = $winning - $applied;
+
         return AuctionSettlement::create([
             'auction_id' => $auction->id,
             'winning_bid_id' => $bid->id,
@@ -281,13 +295,13 @@ final class AppliedDepositRefundTest extends TestCase
             'is_current' => true,
             'current_marker' => 1,
             'status' => $status,
-            'winning_amount_minor' => 100_000,
+            'winning_amount_minor' => $winning,
             'deposit_applied_minor' => $applied,
             'platform_fee_minor' => 2_500,
             'seller_net_amount_minor' => 97_500,
-            'amount_due_minor' => 90_000,
-            'amount_paid_minor' => $status === SettlementStatus::Paid ? 90_000 : 0,
-            'remaining_amount_minor' => $status === SettlementStatus::Paid ? 0 : 90_000,
+            'amount_due_minor' => $amountDue,
+            'amount_paid_minor' => $status === SettlementStatus::Paid ? $amountDue : 0,
+            'remaining_amount_minor' => $status === SettlementStatus::Paid ? 0 : $amountDue,
             'currency_code' => 'JOD',
             'payment_due_at' => now()->addDay(),
             'paid_at' => $status === SettlementStatus::Paid ? now()->subMinute() : null,

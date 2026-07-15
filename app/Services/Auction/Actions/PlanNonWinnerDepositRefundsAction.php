@@ -54,10 +54,17 @@ final class PlanNonWinnerDepositRefundsAction
     ): array {
         return $this->transaction->run(function () use ($auction, $trigger, $actorId, $actorType, $excludedUserIds): array {
             $auction = $this->auctions->lockForStateChange($auction->id)->loadMissing(['winningBid']);
-            $snapshot = $this->snapshotReader->forAuction($auction);
             $currentSettlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
             $currentWinnerIds = $this->currentWinnerIds($auction, $currentSettlement?->winner_id);
             $deposits = $this->deposits->lockBidderDepositsForAuction($auction->id);
+
+            // Without bidder deposits there is nothing to plan. An auction that was never
+            // approved has no configuration snapshot, so it must not be read before this.
+            if ($deposits->isEmpty()) {
+                return [];
+            }
+
+            $snapshot = $this->snapshotReader->forAuction($auction);
             $depositByUser = $deposits->keyBy('user_id');
             $holdDecisions = $this->holdDecisions($auction, $trigger, $snapshot, $depositByUser, $currentWinnerIds, $excludedUserIds);
             $dispositions = [];

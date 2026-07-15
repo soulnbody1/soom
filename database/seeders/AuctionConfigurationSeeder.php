@@ -37,7 +37,6 @@ final class AuctionConfigurationSeeder extends Seeder
                         'forfeit_amount_minor' => 0,
                     ],
                     'seller_deposit_policy' => [
-                        'auction_rejected' => 'refund',
                         'unsold' => 'refund',
                         'completed' => 'refund',
                         'seller_cancellation_before_start' => 'refund',

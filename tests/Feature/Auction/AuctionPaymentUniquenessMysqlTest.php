@@ -105,6 +105,7 @@ final class AuctionPaymentUniquenessMysqlTest extends TestCase
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion()->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL payment uniqueness auction',
             'description' => 'MySQL payment uniqueness auction.',
@@ -123,6 +124,8 @@ final class AuctionPaymentUniquenessMysqlTest extends TestCase
             'original_ends_at' => Carbon::now()->subMinute(),
             'ends_at' => Carbon::now()->subMinute(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         return [$auction, $seller];
     }

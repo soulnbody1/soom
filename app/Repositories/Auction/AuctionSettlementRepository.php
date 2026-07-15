@@ -14,7 +14,6 @@ final class AuctionSettlementRepository
 {
     /**
      * Lock the current settlement for an auction.
-     * Used by MarkWinnerDefaultedAction, ConfirmHandoverAction, ConfirmReceiptAction, etc.
      */
     public function lockSettlement(int $auctionId): AuctionSettlement
     {

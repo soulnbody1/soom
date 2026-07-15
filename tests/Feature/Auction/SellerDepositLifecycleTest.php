@@ -11,6 +11,7 @@ use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\PaymentSubmissionStatus;
 use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
+use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionActivityLog;
 use App\Models\Auction\AuctionBid;
@@ -67,16 +68,39 @@ final class SellerDepositLifecycleTest extends TestCase
         $this->assertSame(0, PaymentSubmission::where('auction_id', $auction->id)->where('purpose', PaymentPurpose::SellerDeposit)->count());
     }
 
-    public function test_rejected_auction_before_payment_closes_seller_deposit_obligation_without_refund(): void
+    public function test_rejected_auction_never_holds_a_seller_deposit_obligation_and_creates_no_refund(): void
     {
-        [$auction, $seller] = $this->auction(AuctionStatus::PendingReview);
-        $deposit = $this->sellerDeposit($auction, $seller, AuctionDepositStatus::PendingSubmission);
+        [$auction] = $this->auction(AuctionStatus::PendingReview);
 
-        app(ReviewAuctionAction::class)->reject($auction, $this->user('admin')->id, 'not accepted');
+        $rejected = app(ReviewAuctionAction::class)->reject($auction, $this->user('admin')->id, 'not accepted');
 
-        $this->assertSame(AuctionDepositStatus::Rejected, $deposit->refresh()->status);
-        $this->assertSame('seller_deposit_closed_without_payment', $deposit->hold_reason);
-        $this->assertSame(0, RefundTransaction::where('deposit_id', $deposit->id)->count());
+        // The seller deposit obligation is only created at approval, so an auction that
+        // is rejected out of review never held seller money and owes no refund.
+        $this->assertSame(AuctionStatus::Rejected, $rejected->status);
+        $this->assertSame(0, AuctionDeposit::where('auction_id', $auction->id)->where('type', 'seller')->count());
+        $this->assertSame(0, RefundTransaction::where('auction_id', $auction->id)->count());
+        $this->assertSame(0, PaymentTransaction::where('auction_id', $auction->id)->count());
+    }
+
+    public function test_auction_holding_a_seller_deposit_can_never_be_rejected(): void
+    {
+        [$auction] = $this->auction(AuctionStatus::PendingReview);
+
+        $approved = app(ReviewAuctionAction::class)->approve($auction, $this->user('admin')->id, 'approved');
+
+        // Rejected is only reachable from PendingReview, and approval is the only way to
+        // create a seller deposit obligation, so a deposit-bearing auction can never be
+        // rejected. That invariant is why no `auction_rejected` seller deposit policy exists.
+        $this->assertSame(AuctionStatus::AwaitingSellerDeposit, $approved->status);
+        $this->assertSame(1, AuctionDeposit::where('auction_id', $auction->id)->where('type', 'seller')->count());
+
+        $this->expectException(AuctionException::class);
+        $this->expectExceptionMessage(__('auction.errors.invalid_transition', [
+            'from' => AuctionStatus::AwaitingSellerDeposit->value,
+            'to' => AuctionStatus::Rejected->value,
+        ]));
+
+        app(ReviewAuctionAction::class)->reject($approved->refresh(), $this->user('admin')->id, 'too late to reject');
     }
 
     public function test_seller_deposit_payment_can_be_rejected_resubmitted_and_approved_once(): void

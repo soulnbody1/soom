@@ -34,7 +34,7 @@ final class AuctionParticipantRepository
 
     /**
      * Find existing participant by auction and user (without lock).
-     * Used by SubmitPaymentSubmissionAction.
+     * Used by AcceptAuctionTermsAction.
      */
     public function findByAuctionAndUser(int $auctionId, int $userId): ?AuctionParticipant
     {

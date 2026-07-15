@@ -186,7 +186,6 @@ PHP;
             'non_winner_deposit_hold_count' => 1,
             'winner_default_deposit_policy' => ['disposition' => 'full_forfeit', 'forfeit_amount_minor' => 0],
             'seller_deposit_policy' => [
-                'auction_rejected' => 'refund',
                 'unsold' => 'refund',
                 'completed' => 'refund',
                 'seller_cancellation_before_start' => 'refund',

@@ -215,12 +215,14 @@ final class PaymentStateTest extends TestCase
         ]);
         $category = Category::create(['name' => 'payment-state-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'payment-state-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
+        $configuration = $this->auctionConfigurationVersion(['seller_deposit_minor' => $sellerDeposit]);
 
         $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Payment state auction',
             'description' => 'Payment state auction.',
@@ -239,6 +241,8 @@ final class PaymentStateTest extends TestCase
             'original_ends_at' => $endsAt ?? now()->subMinute(),
             'ends_at' => $endsAt ?? now()->subMinute(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         return [$auction, $seller];
     }

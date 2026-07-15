@@ -166,11 +166,15 @@ PHP;
         $category = Category::create(['name' => 'mysql-auction-cancel-cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'mysql-auction-cancel-country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
 
-        return [Auction::create([
+        $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $this->auctionConfigurationVersion([
+                'seller_deposit_minor' => 10_000,
+                'bidder_deposit_minor' => 10_000,
+            ])->id,
             'currency_code' => 'JOD',
             'title' => 'MySQL auction cancellation',
             'description' => 'MySQL auction cancellation.',
@@ -188,7 +192,11 @@ PHP;
             'starts_at' => now()->subDays(2),
             'original_ends_at' => now()->addHour(),
             'ends_at' => now()->addHour(),
-        ]), $seller];
+        ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
+
+        return [$auction, $seller];
     }
 
     private function sellerDeposit(Auction $auction, User $seller, int $amount): AuctionDeposit

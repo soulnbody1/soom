@@ -10,7 +10,6 @@ use App\Models\Auction\AuctionTermsVersion;
 final class AuctionConfigurationSnapshotValidator
 {
     private const SELLER_POLICY_KEYS = [
-        'auction_rejected',
         'unsold',
         'completed',
         'seller_cancellation_before_start',

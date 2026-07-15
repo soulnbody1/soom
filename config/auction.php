@@ -35,7 +35,6 @@ return [
     ],
 
     'seller_deposit_policy' => [
-        'auction_rejected' => env('AUCTION_SELLER_DEPOSIT_AUCTION_REJECTED', 'refund'),
         'unsold' => env('AUCTION_SELLER_DEPOSIT_UNSOLD', 'refund'),
         'completed' => env('AUCTION_SELLER_DEPOSIT_COMPLETED', 'refund'),
         'seller_cancellation_before_start' => env('AUCTION_SELLER_DEPOSIT_SELLER_CANCEL_BEFORE_START', 'refund'),
@@ -56,7 +55,6 @@ return [
 
     'outbox' => [
         'max_attempts' => (int) env('AUCTION_OUTBOX_MAX_ATTEMPTS', 3),
-        'retry_delay_minutes' => (int) env('AUCTION_OUTBOX_RETRY_DELAY_MINUTES', 5),
         'retry_delay_seconds' => (int) env('AUCTION_OUTBOX_RETRY_DELAY_SECONDS', 300),
     ],
 ];

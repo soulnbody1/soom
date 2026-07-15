@@ -205,12 +205,14 @@ final class AuctionPaymentUniquenessTest extends TestCase
         ]);
         $category = Category::create(['name' => 'cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'country-'.Str::ulid(), 'code' => strtoupper(substr((string) Str::ulid(), 0, 6))]);
+        $configuration = $this->auctionConfigurationVersion();
 
         $auction = Auction::create([
             'seller_id' => $seller->id,
             'category_id' => $category->id,
             'country_id' => $country->id,
             'terms_version_id' => $terms->id,
+            'configuration_version_id' => $configuration->id,
             'currency_code' => 'JOD',
             'title' => 'Payment uniqueness auction',
             'description' => 'Payment uniqueness auction.',
@@ -229,6 +231,8 @@ final class AuctionPaymentUniquenessTest extends TestCase
             'original_ends_at' => Carbon::now()->subMinute(),
             'ends_at' => Carbon::now()->subMinute(),
         ]);
+
+        $this->snapshotApprovedAuction($auction, $seller->id);
 
         return [$auction, $seller];
     }
