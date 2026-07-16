@@ -27,6 +27,11 @@ final class AdminAuctionResource extends JsonResource
             'id' => $this->public_id,
             'internal_id' => $this->id,
             'seller_id' => $this->seller_id,
+            'seller' => $this->whenLoaded('seller', fn () => [
+                'id' => $this->seller->id,
+                'name' => $this->seller->name,
+                'phone' => $this->seller->phone,
+            ]),
             'title' => $this->title,
             'description' => $this->description,
             'status' => $this->status->value,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auction;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auction\AuctionIndexRequest;
+use App\Http\Requests\Auction\AdminPaymentSubmissionIndexRequest;
 use App\Http\Requests\Auction\ReviewPaymentSubmissionRequest;
 use App\Http\Resources\Auction\PaymentSubmissionResource;
 use App\Models\Auction\PaymentSubmission;
@@ -21,12 +21,12 @@ final class PaymentSubmissionController extends Controller
 {
     use ApiResponseTrait;
 
-    public function index(AuctionIndexRequest $request, ListPaymentSubmissionsAction $action): JsonResponse
+    public function index(AdminPaymentSubmissionIndexRequest $request, ListPaymentSubmissionsAction $action): JsonResponse
     {
         Gate::authorize('viewAny', PaymentSubmission::class);
 
         return $this->sendResponse(
-            PaymentSubmissionResource::collection($action->execute($request->perPage())),
+            PaymentSubmissionResource::collection($action->execute($request->filters(), $request->perPage())),
             __('auction.messages.payment_submissions_fetched')
         );
     }

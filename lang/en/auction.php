@@ -33,6 +33,8 @@ return [
         'payment_method_updated' => 'Payment method updated.',
         'terms_fetched' => 'Auction terms fetched.',
         'terms_version_created' => 'Auction terms version created.',
+        'terms_version_fetched' => 'Auction terms version fetched.',
+        'participants_fetched' => 'Auction participants fetched.',
     ],
     'errors' => [
         'auction_not_found' => 'Auction not found.',

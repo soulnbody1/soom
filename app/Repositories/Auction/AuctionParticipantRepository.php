@@ -4,10 +4,26 @@ declare(strict_types=1);
 
 namespace App\Repositories\Auction;
 
+use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionParticipant;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class AuctionParticipantRepository
 {
+    /**
+     * Paginate participants of an auction for the admin dashboard.
+     * Used by AuctionController::participants.
+     */
+    public function paginateByAuction(Auction $auction, ?string $status, int $perPage): LengthAwarePaginator
+    {
+        return AuctionParticipant::with('user')
+            ->where('auction_id', $auction->id)
+            ->when($status, fn ($query, string $value) => $query->where('status', $value))
+            ->orderBy('registered_at')
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
     /**
      * Find a participant with lockForUpdate for bid validation.
      * Used by PlaceBidAction within transaction.

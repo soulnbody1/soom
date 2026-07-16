@@ -33,6 +33,8 @@ return [
         'payment_method_updated' => 'تم تحديث طريقة الدفع.',
         'terms_fetched' => 'تم جلب شروط المزاد.',
         'terms_version_created' => 'تم إنشاء نسخة شروط المزاد.',
+        'terms_version_fetched' => 'تم جلب نسخة شروط المزاد.',
+        'participants_fetched' => 'تم جلب مشاركي المزاد.',
     ],
     'errors' => [
         'auction_not_found' => 'المزاد غير موجود.',

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Enums\AuctionParticipantStatus;
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\DTO\Auction\CreateAuctionInputDTO;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auction\AdminAuctionIndexRequest;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\CancelAuctionRequest;
 use App\Http\Requests\Auction\MarkWinnerDefaultedRequest;
@@ -24,6 +26,7 @@ use App\Http\Resources\Auction\PublicAuctionResource;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Models\Auction\PaymentSubmission;
+use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Services\Auction\Actions\AcceptAuctionTermsAction;
 use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\ConfirmAuctionHandoverBySellerAction;
@@ -46,6 +49,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 final class AuctionController extends Controller
 {
@@ -62,13 +66,35 @@ final class AuctionController extends Controller
         );
     }
 
-    public function all(AuctionIndexRequest $request, ListAdminAuctionsAction $action): JsonResponse
+    public function all(AdminAuctionIndexRequest $request, ListAdminAuctionsAction $action): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
 
         return $this->sendResponse(
-            AdminAuctionResource::collection($action->execute($request->perPage())),
+            AdminAuctionResource::collection($action->execute($request->filters(), $request->perPage())),
             __('auction.messages.admin_auctions_fetched')
+        );
+    }
+
+    public function participants(
+        Request $request,
+        Auction $auction,
+        AuctionParticipantRepository $participants
+    ): JsonResponse {
+        Gate::authorize('viewAny', Auction::class);
+
+        $filters = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'status' => ['nullable', Rule::in(array_column(AuctionParticipantStatus::cases(), 'value'))],
+        ]);
+
+        return $this->sendResponse(
+            AuctionParticipantResource::collection($participants->paginateByAuction(
+                $auction,
+                $filters['status'] ?? null,
+                min(100, max(1, (int) $request->input('per_page', 20)))
+            )),
+            __('auction.messages.participants_fetched')
         );
     }
 
@@ -375,10 +401,12 @@ final class AuctionController extends Controller
         $relations = [
             'seller',
             'winningBid',
-            'settlement',
+            'settlement.winner',
         ];
 
         if (Gate::forUser($user)->allows('viewAny', PaymentSubmission::class)) {
+            $relations[] = 'deposits.user';
+            $relations[] = 'deposits.paymentSubmissions.user';
             $relations[] = 'deposits.paymentSubmissions.paymentMethod';
             $relations[] = 'deposits.paymentSubmissions.transaction.refunds';
         }

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Auction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\CreateTermsVersionRequest;
 use App\Models\Auction\Auction;
+use App\Models\Auction\AuctionTermsVersion;
 use App\Services\Auction\Actions\CreateAuctionTermsVersionAction;
 use App\Services\Auction\Actions\ListAuctionTermsAction;
 use App\Traits\ApiResponseTrait;
@@ -24,6 +25,20 @@ final class AuctionTermsController extends Controller
             $action->execute(),
             __('auction.messages.terms_fetched')
         );
+    }
+
+    public function show(AuctionTermsVersion $terms): JsonResponse
+    {
+        Gate::authorize('viewAny', Auction::class);
+
+        return $this->sendResponse([
+            'id' => $terms->public_id,
+            'version_number' => $terms->version_number,
+            'title' => $terms->title,
+            'body' => $terms->body,
+            'is_active' => $terms->is_active,
+            'published_at' => $terms->published_at?->toIso8601String(),
+        ], __('auction.messages.terms_version_fetched'));
     }
 
     public function store(CreateTermsVersionRequest $request, CreateAuctionTermsVersionAction $action): JsonResponse

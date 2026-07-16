@@ -13,8 +13,8 @@ final class ListPaymentSubmissionsAction
         private readonly PaymentSubmissionQuery $query,
     ) {}
 
-    public function execute(int $perPage): LengthAwarePaginator
+    public function execute(array $filters, int $perPage): LengthAwarePaginator
     {
-        return $this->query->paginate($perPage);
+        return $this->query->paginate($filters, $perPage);
     }
 }

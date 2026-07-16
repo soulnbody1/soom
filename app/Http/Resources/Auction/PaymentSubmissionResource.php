@@ -28,6 +28,13 @@ final class PaymentSubmissionResource extends JsonResource
             ]),
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'reviewed_at' => $this->reviewed_at?->toIso8601String(),
+            'user' => $this->when(
+                $canReviewPayments && $this->relationLoaded('user') && $this->user,
+                fn () => [
+                    'id' => $this->user->id,
+                    'name' => $this->user->name,
+                ]
+            ),
             'review_note' => $this->when(
                 $canReviewPayments || $user?->id === $this->user_id,
                 $this->review_note

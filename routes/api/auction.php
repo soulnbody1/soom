@@ -43,6 +43,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->group(function () {
     Route::get('/', [AuctionController::class, 'all']);
+    Route::get('/terms/{terms}', [AuctionTermsController::class, 'show']);
     Route::post('/terms', [AuctionTermsController::class, 'store']);
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
@@ -52,6 +53,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/{auction}/review', [AuctionController::class, 'review']);
     Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
     Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);
+    Route::get('/{auction}/participants', [AuctionController::class, 'participants']);
     Route::get('/payment-submissions', [PaymentSubmissionController::class, 'index']);
     Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
     Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review']);
