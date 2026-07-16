@@ -4,10 +4,12 @@ namespace App\Providers;
 
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDeposit;
+use App\Models\Auction\AuctionDispute;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
 use App\Policies\Auction\AuctionDepositPolicy;
+use App\Policies\Auction\AuctionDisputePolicy;
 use App\Policies\Auction\AuctionPolicy;
 use App\Policies\Auction\AuctionRefundPolicy;
 use App\Policies\Auction\AuctionSettlementPolicy;
@@ -37,5 +39,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuctionDeposit::class, AuctionDepositPolicy::class);
         Gate::policy(AuctionSettlement::class, AuctionSettlementPolicy::class);
         Gate::policy(RefundTransaction::class, AuctionRefundPolicy::class);
+        Gate::policy(AuctionDispute::class, AuctionDisputePolicy::class);
     }
 }

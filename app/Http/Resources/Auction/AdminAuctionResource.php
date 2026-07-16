@@ -126,7 +126,9 @@ final class AdminAuctionResource extends JsonResource
             $data['disputes'] = $this->whenLoaded('disputes', fn () => $this->disputes->map(fn ($dispute): array => [
                 'id' => $dispute->public_id,
                 'status' => $dispute->status,
+                'reason' => $dispute->reason,
                 'opened_by' => $dispute->opened_by,
+                'opened_at' => $dispute->opened_at?->toIso8601String(),
                 'resolution_note' => $dispute->resolution_note,
                 'resolved_at' => $dispute->resolved_at?->toIso8601String(),
             ])->values());

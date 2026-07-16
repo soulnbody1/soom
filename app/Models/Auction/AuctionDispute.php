@@ -45,4 +45,9 @@ final class AuctionDispute extends Model
     {
         return $this->belongsTo(User::class, 'opened_by');
     }
+
+    public function resolver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by');
+    }
 }

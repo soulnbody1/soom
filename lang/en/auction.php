@@ -35,6 +35,12 @@ return [
         'terms_version_created' => 'Auction terms version created.',
         'terms_version_fetched' => 'Auction terms version fetched.',
         'participants_fetched' => 'Auction participants fetched.',
+        'activity_fetched' => 'Auction activity fetched.',
+        'status_history_fetched' => 'Auction status history fetched.',
+        'configuration_versions_fetched' => 'Configuration versions fetched.',
+        'configuration_version_fetched' => 'Configuration version fetched.',
+        'configuration_version_created' => 'Configuration version created.',
+        'disputes_fetched' => 'Auction disputes fetched.',
     ],
     'errors' => [
         'auction_not_found' => 'Auction not found.',

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class AuctionActivityLog extends Model
 {
@@ -28,4 +30,9 @@ final class AuctionActivityLog extends Model
         'metadata' => 'array',
         'created_at' => 'immutable_datetime',
     ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }

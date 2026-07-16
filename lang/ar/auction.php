@@ -35,6 +35,12 @@ return [
         'terms_version_created' => 'تم إنشاء نسخة شروط المزاد.',
         'terms_version_fetched' => 'تم جلب نسخة شروط المزاد.',
         'participants_fetched' => 'تم جلب مشاركي المزاد.',
+        'activity_fetched' => 'تم جلب سجل نشاط المزاد.',
+        'status_history_fetched' => 'تم جلب سجل حالات المزاد.',
+        'configuration_versions_fetched' => 'تم جلب نسخ الإعدادات.',
+        'configuration_version_fetched' => 'تم جلب نسخة الإعدادات.',
+        'configuration_version_created' => 'تم إنشاء نسخة الإعدادات.',
+        'disputes_fetched' => 'تم جلب نزاعات المزادات.',
     ],
     'errors' => [
         'auction_not_found' => 'المزاد غير موجود.',

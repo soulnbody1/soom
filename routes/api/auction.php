@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Auction\AuctionAuditController;
+use App\Http\Controllers\Auction\AuctionConfigurationController;
 use App\Http\Controllers\Auction\AuctionController;
+use App\Http\Controllers\Auction\AuctionDisputeController;
 use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
 use App\Http\Controllers\Auction\PaymentMethodController;
@@ -45,6 +48,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::get('/', [AuctionController::class, 'all']);
     Route::get('/terms/{terms}', [AuctionTermsController::class, 'show']);
     Route::post('/terms', [AuctionTermsController::class, 'store']);
+    Route::get('/configuration-versions', [AuctionConfigurationController::class, 'index']);
+    Route::get('/configuration-versions/{configurationVersion}', [AuctionConfigurationController::class, 'show']);
+    Route::post('/configuration-versions', [AuctionConfigurationController::class, 'store']);
+    Route::get('/disputes', [AuctionDisputeController::class, 'index']);
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
     Route::get('/refunds', [RefundController::class, 'index']);
@@ -54,6 +61,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
     Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);
     Route::get('/{auction}/participants', [AuctionController::class, 'participants']);
+    Route::get('/{auction}/activity', [AuctionAuditController::class, 'activity']);
+    Route::get('/{auction}/status-history', [AuctionAuditController::class, 'statusHistory']);
     Route::get('/payment-submissions', [PaymentSubmissionController::class, 'index']);
     Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
     Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review']);
