@@ -9,9 +9,10 @@ use App\Http\Controllers\Auction\BidController;
 use App\Http\Controllers\Auction\PaymentMethodController;
 use App\Http\Controllers\Auction\PaymentSubmissionController;
 use App\Http\Controllers\Auction\RefundController;
+use App\Http\Middleware\OptionalSanctumAuthentication;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('auctions')->group(function () {
+Route::prefix('auctions')->middleware(OptionalSanctumAuthentication::class)->group(function () {
     Route::get('/', [AuctionController::class, 'index']);
     Route::get('/{auction}', [AuctionController::class, 'show']);
     Route::get('/{auction}/bids', [BidController::class, 'index']);
