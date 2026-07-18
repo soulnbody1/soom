@@ -51,6 +51,7 @@ return [
         'payout_proof_url_created' => 'Transfer proof URL created.',
         'payout_destinations_fetched' => 'Payout destinations fetched.',
         'payout_destination_saved' => 'Payout destination saved.',
+        'dashboard_fetched' => 'Auction dashboard metrics fetched.',
     ],
     'errors' => [
         'auction_not_found' => 'Auction not found.',

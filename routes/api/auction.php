@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auction\AuctionAuditController;
 use App\Http\Controllers\Auction\AuctionConfigurationController;
 use App\Http\Controllers\Auction\AuctionController;
+use App\Http\Controllers\Auction\AuctionDashboardController;
 use App\Http\Controllers\Auction\AuctionDisputeController;
 use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
@@ -55,6 +56,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->group(function () {
     Route::get('/', [AuctionController::class, 'all']);
+    Route::get('/dashboard', [AuctionDashboardController::class, 'index']);
     Route::get('/terms/{terms}', [AuctionTermsController::class, 'show']);
     Route::post('/terms', [AuctionTermsController::class, 'store']);
     Route::get('/configuration-versions', [AuctionConfigurationController::class, 'index']);

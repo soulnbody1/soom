@@ -19,6 +19,7 @@ return [
         'auction.payment.override_deadline',
         'auction.payouts.view',
         'auction.payouts.manage',
+        'auction.dashboard.view',
     ],
 
     'refunds' => [

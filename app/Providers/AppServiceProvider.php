@@ -9,6 +9,7 @@ use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
+use App\Policies\Auction\AuctionDashboardPolicy;
 use App\Policies\Auction\AuctionDepositPolicy;
 use App\Policies\Auction\AuctionDisputePolicy;
 use App\Policies\Auction\AuctionPolicy;
@@ -43,5 +44,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(RefundTransaction::class, AuctionRefundPolicy::class);
         Gate::policy(AuctionDispute::class, AuctionDisputePolicy::class);
         Gate::policy(AuctionSellerPayout::class, SellerPayoutPolicy::class);
+        Gate::define('auction.dashboard.view', [AuctionDashboardPolicy::class, 'view']);
     }
 }

@@ -51,6 +51,7 @@ return [
         'payout_proof_url_created' => 'تم إنشاء رابط إثبات التحويل.',
         'payout_destinations_fetched' => 'تم جلب وسائل استلام المستحقات.',
         'payout_destination_saved' => 'تم حفظ وسيلة استلام المستحقات.',
+        'dashboard_fetched' => 'تم جلب مؤشرات لوحة المزادات.',
     ],
     'errors' => [
         'auction_not_found' => 'المزاد غير موجود.',
