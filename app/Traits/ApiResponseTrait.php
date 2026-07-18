@@ -16,7 +16,10 @@ trait ApiResponseTrait
             'message' => $message,
         ];
 
-        if ($data instanceof AbstractPaginator || $data instanceof AnonymousResourceCollection) {
+        if ($data instanceof AnonymousResourceCollection
+            && ! ($data->resource instanceof AbstractPaginator)) {
+            $response['data'] = $data;
+        } elseif ($data instanceof AbstractPaginator || $data instanceof AnonymousResourceCollection) {
             $response['data'] = $data->items();
             $response['current_page'] = $data->currentPage();
             $response['last_page'] = $data->lastPage();
