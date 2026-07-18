@@ -155,4 +155,184 @@ return [
     'validation' => [
         'reserve_below_starting' => 'The reserve amount cannot be lower than the starting amount.',
     ],
+    'notifications' => [
+        'status' => [
+            'pending_review' => [
+                'title' => 'Your auction was submitted',
+                'body' => 'Auction ":auction" was submitted for review. We will notify you once the review is complete.',
+            ],
+            'rejected' => [
+                'title' => 'Auction not approved',
+                'body' => 'Unfortunately, auction ":auction" was not approved. You can update it and submit it again.',
+            ],
+            'rejected_with_reason' => [
+                'title' => 'Auction not approved',
+                'body' => 'Unfortunately, auction ":auction" was not approved. Reason: :reason',
+            ],
+            'awaiting_seller_deposit' => [
+                'title' => 'Your auction was approved',
+                'body' => 'Auction ":auction" was approved. Please pay the seller deposit to complete scheduling.',
+            ],
+            'scheduled' => [
+                'title' => 'Your auction is published',
+                'body' => 'Auction ":auction" is now public and will start on :starts_at.',
+            ],
+            'live' => [
+                'title' => 'Your auction has started',
+                'body' => 'Auction ":auction" has started and bidders can now place bids.',
+            ],
+            'ended' => [
+                'title' => 'Your auction has ended',
+                'body' => 'Auction ":auction" has ended. We will notify you about the outcome shortly.',
+            ],
+            'completed' => [
+                'title' => 'Auction completed',
+                'body' => 'Auction ":auction" was completed successfully. Thank you for using our platform.',
+            ],
+            'unsold' => [
+                'title' => 'Auction did not sell',
+                'body' => 'Auction ":auction" ended without a completed sale. You can review it and relist later.',
+            ],
+            'handover_pending_seller' => [
+                'title' => 'Auction payment received',
+                'body' => 'Payment for auction ":auction" was confirmed. Please hand over the item within the deadline.',
+            ],
+            'handover_pending_winner' => [
+                'title' => 'Awaiting handover',
+                'body' => 'Your payment for auction ":auction" was confirmed. Please confirm receipt once you receive the item.',
+            ],
+        ],
+        'bid_outbid' => [
+            'title' => 'You have been outbid',
+            'body' => 'The current price in auction ":auction" is now :amount :currency. You can place a new bid before the auction ends.',
+        ],
+        'participant_registered' => [
+            'title' => 'Registered for the auction',
+            'body' => 'You are registered for auction ":auction". Complete the bidder deposit to qualify for bidding.',
+        ],
+        'payment_submitted' => [
+            'seller_deposit' => [
+                'title' => 'Deposit proof received',
+                'body' => 'We received your seller deposit proof for auction ":auction". It is now under review.',
+            ],
+            'bidder_deposit' => [
+                'title' => 'Deposit proof received',
+                'body' => 'We received your bidder deposit proof for auction ":auction". It is now under review.',
+            ],
+            'winner_settlement' => [
+                'title' => 'Payment proof received',
+                'body' => 'We received your payment proof for auction ":auction". It is now under review.',
+            ],
+        ],
+        'payment_approved' => [
+            'seller_deposit' => [
+                'title' => 'Deposit approved',
+                'body' => 'Your seller deposit for auction ":auction" was approved and the auction is scheduled.',
+            ],
+            'bidder_deposit' => [
+                'title' => 'Deposit approved',
+                'body' => 'Your deposit for auction ":auction" was approved. You are now qualified to bid.',
+            ],
+            'winner_settlement' => [
+                'title' => 'Payment confirmed',
+                'body' => 'Your payment for auction ":auction" was confirmed. Please confirm receipt once you receive the item.',
+            ],
+        ],
+        'payment_rejected' => [
+            'seller_deposit' => [
+                'title' => 'Deposit proof rejected',
+                'body' => 'Your seller deposit proof for auction ":auction" was not accepted. Reason: :reason',
+            ],
+            'bidder_deposit' => [
+                'title' => 'Deposit proof rejected',
+                'body' => 'Your bidder deposit proof for auction ":auction" was not accepted. Reason: :reason',
+            ],
+            'winner_settlement' => [
+                'title' => 'Payment proof rejected',
+                'body' => 'Your payment proof for auction ":auction" was not accepted. Reason: :reason',
+            ],
+        ],
+        'finalized_winner' => [
+            'title' => 'Congratulations, you won',
+            'body' => 'You won auction ":auction" for :amount :currency. Please complete the payment before :deadline.',
+        ],
+        'finalized_winner_paid' => [
+            'title' => 'Congratulations, you won',
+            'body' => 'You won auction ":auction" for :amount :currency. The amount was covered by your held deposit.',
+        ],
+        'finalized_seller' => [
+            'title' => 'A winner was selected',
+            'body' => 'A winner was selected for auction ":auction" at :amount :currency. We will notify you once payment is confirmed.',
+        ],
+        'winner_defaulted_winner' => [
+            'title' => 'Payment deadline expired',
+            'body' => 'Payment for auction ":auction" was not completed within the deadline, and the win was cancelled per the auction terms.',
+        ],
+        'winner_defaulted_seller' => [
+            'title' => 'Winner defaulted',
+            'body' => 'The winner did not pay for auction ":auction" within the deadline. We will notify you about the next steps.',
+        ],
+        'alternative_winner_selected' => [
+            'title' => 'You are now the auction winner',
+            'body' => 'You were selected as the winner of auction ":auction" for :amount :currency. Please complete the payment within the deadline.',
+        ],
+        'winner_deposit_forfeited' => [
+            'title' => 'Deposit forfeited',
+            'body' => ':amount :currency of your deposit for auction ":auction" was forfeited per the auction terms.',
+        ],
+        'seller_deposit_forfeited' => [
+            'title' => 'Seller deposit forfeited',
+            'body' => ':amount :currency of your seller deposit for auction ":auction" was forfeited per the platform terms.',
+        ],
+        'seller_deposit_refund_planned' => [
+            'title' => 'Deposit refund created',
+            'body' => 'A refund of :amount :currency for your auction ":auction" deposit was created and will be transferred soon.',
+        ],
+        'seller_deposit_manual_review' => [
+            'title' => 'Deposit refund under review',
+            'body' => 'The refund of your deposit for auction ":auction" requires manual review. We will keep you updated.',
+        ],
+        'non_winner_deposit_refund_planned' => [
+            'title' => 'Deposit refund created',
+            'body' => 'A refund of :amount :currency for your auction ":auction" bidder deposit was created and will be transferred soon.',
+        ],
+        'refund_succeeded' => [
+            'title' => 'Refund completed',
+            'body' => 'Your refund of :amount :currency for auction ":auction" was completed successfully.',
+        ],
+        'refund_manual_review' => [
+            'title' => 'Refund under review',
+            'body' => 'Your refund for auction ":auction" requires manual review. We will notify you once it is complete.',
+        ],
+        'seller_handover_confirmed' => [
+            'title' => 'Seller confirmed handover',
+            'body' => 'The seller of auction ":auction" confirmed the handover. Please confirm receipt in the app.',
+        ],
+        'dispute_opened' => [
+            'title' => 'Dispute opened',
+            'body' => 'A dispute was opened for auction ":auction". Our team will review it and contact the involved parties.',
+        ],
+        'dispute_resolved' => [
+            'title' => 'Dispute resolved',
+            'body' => 'The dispute for auction ":auction" was resolved. You can review the details on the auction page.',
+        ],
+        'cancelled' => [
+            'title' => 'Auction cancelled',
+            'body' => 'Auction ":auction" was cancelled. Any paid amounts will be handled per the terms and you will be notified of any refund.',
+        ],
+        'announcements' => [
+            'published' => [
+                'title' => 'New auction',
+                'body' => 'New auction: ":auction" — bidding starts on :starts_at.',
+            ],
+            'started' => [
+                'title' => 'Auction started',
+                'body' => 'Bidding has started in auction ":auction" with an opening price of :amount :currency.',
+            ],
+            'cancelled' => [
+                'title' => 'Scheduled auction cancelled',
+                'body' => 'Auction ":auction" was cancelled before it started.',
+            ],
+        ],
+    ],
 ];

@@ -117,7 +117,7 @@ final class AuctionRefundLifecycleTest extends TestCase
         app(ProcessAuctionRefundAction::class)->execute($refund);
 
         $this->assertSame(RefundTransactionStatus::ManualReview, $refund->refresh()->status);
-        $this->assertSame(0, OutboxMessage::where('aggregate_id', $refund->auction_id)->where('event_type', 'auction.refund_manual_review')->count());
+        $this->assertSame(1, OutboxMessage::where('aggregate_id', $refund->auction_id)->where('event_type', 'auction.refund_manual_review')->count());
     }
 
     public function test_expired_lease_can_be_reclaimed_and_old_token_cannot_complete(): void

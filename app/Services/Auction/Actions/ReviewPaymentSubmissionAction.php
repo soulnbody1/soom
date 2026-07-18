@@ -256,6 +256,7 @@ final class ReviewPaymentSubmissionAction
                 'payment_submission_id' => $submission->id,
                 'user_id' => $submission->user_id,
                 'purpose' => $submission->purpose->value,
+                'reason' => $note,
             ]);
 
             return $submission->refresh()->load(['auction', 'deposit']);

@@ -96,6 +96,11 @@ final class ResolveAuctionDisputeAction
                 'dispute_public_id' => $dispute->public_id,
                 'resolution' => $resolution,
             ]);
+            $this->audit->outbox('auction.dispute_resolved', $auction, [
+                'auction_public_id' => $auction->public_id,
+                'dispute_public_id' => $dispute->public_id,
+                'resolution' => $resolution,
+            ]);
 
             $auction = $this->stateMachine->transition($auction, $target, $adminId, 'admin', $note)->load('settlement');
             $this->sellerDepositDisposition->execute($auction, 'dispute_resolution', $adminId, 'admin', $note, [
@@ -149,6 +154,11 @@ final class ResolveAuctionDisputeAction
             $this->disputes->save($dispute);
 
             $this->audit->log('auction.dispute_resolved', $cancelled, $adminId, 'admin', [
+                'dispute_public_id' => $dispute->public_id,
+                'resolution' => 'cancel',
+            ]);
+            $this->audit->outbox('auction.dispute_resolved', $cancelled, [
+                'auction_public_id' => $cancelled->public_id,
                 'dispute_public_id' => $dispute->public_id,
                 'resolution' => 'cancel',
             ]);

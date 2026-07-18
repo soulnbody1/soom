@@ -207,7 +207,7 @@ final class NonWinnerDepositReleaseTest extends TestCase
         $deposit = AuctionDeposit::where('user_id', $bids[1]->bidder_id)->firstOrFail();
         $this->assertSame(1, RefundTransaction::where('deposit_id', $deposit->id)->count());
         $this->assertSame(1, AuctionActivityLog::where('auction_id', $auction->id)->where('event_type', 'auction.non_winner_deposit_refund_planned')->count());
-        $this->assertSame(0, OutboxMessage::where('aggregate_id', $auction->id)->where('event_type', 'auction.non_winner_deposit_refund_planned')->count());
+        $this->assertSame(1, OutboxMessage::where('aggregate_id', $auction->id)->where('event_type', 'auction.non_winner_deposit_refund_planned')->count());
     }
 
     public function test_active_refund_and_unpaid_deposit_are_not_refunded_again(): void

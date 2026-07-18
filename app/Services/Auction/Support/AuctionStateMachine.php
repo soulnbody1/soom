@@ -80,9 +80,15 @@ final class AuctionStateMachine
      * Status transitions that have a real `auction.status_changed` notification handler.
      */
     private const NOTIFIABLE_STATUSES = [
+        AuctionStatus::PendingReview,
+        AuctionStatus::Rejected,
+        AuctionStatus::AwaitingSellerDeposit,
         AuctionStatus::Scheduled,
         AuctionStatus::Live,
         AuctionStatus::Ended,
+        AuctionStatus::HandoverPending,
+        AuctionStatus::Completed,
+        AuctionStatus::Unsold,
     ];
 
     public function __construct(private readonly AuctionAudit $audit) {}

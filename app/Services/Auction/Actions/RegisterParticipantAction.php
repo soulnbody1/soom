@@ -53,6 +53,14 @@ final class RegisterParticipantAction
                 'participant_public_id' => $participant->public_id,
             ]);
 
+            if ($participant->wasRecentlyCreated) {
+                $this->audit->outbox('auction.participant_registered', $auction, [
+                    'auction_public_id' => $auction->public_id,
+                    'participant_public_id' => $participant->public_id,
+                    'user_id' => $userId,
+                ]);
+            }
+
             return $participant->refresh();
         });
     }

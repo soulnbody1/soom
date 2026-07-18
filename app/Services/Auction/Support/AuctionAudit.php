@@ -12,6 +12,7 @@ use App\Repositories\Auction\AuctionAuditRepository;
 use App\Repositories\Auction\AuctionOutboxRepository;
 use App\Services\Auction\Actions\DispatchOutboxMessagesAction;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class AuctionAudit
@@ -59,8 +60,14 @@ final class AuctionAudit
 
     public function outbox(string $eventType, Auction $auction, array $payload): void
     {
+        // Unknown events are stored anyway: the dispatcher fails them into the
+        // outbox retry/dead-letter flow with diagnostics instead of silently
+        // dropping them here.
         if (! DispatchOutboxMessagesAction::supports($eventType)) {
-            return;
+            Log::warning('Auction outbox event is not in the notification catalog.', [
+                'event_type' => $eventType,
+                'auction_id' => $auction->id,
+            ]);
         }
 
         $this->outboxRepo->store(new CreateOutboxMessageDTO(

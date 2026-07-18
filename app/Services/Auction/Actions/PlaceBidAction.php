@@ -86,6 +86,7 @@ final class PlaceBidAction
                 throw AuctionException::bidRejected(__('auction.errors.bid_currency_mismatch'));
             }
 
+            $previousLeaderId = $auction->currentLeadingBid?->bidder_id;
             $currentAmount = $auction->currentLeadingBid?->amount_minor ?? 0;
             $minimum = $currentAmount === 0
                 ? $auction->starting_amount_minor
@@ -123,6 +124,7 @@ final class PlaceBidAction
 
             $auction->forceFill(['current_leading_bid_id' => $bid->id]);
 
+            $wasExtended = false;
             $secondsRemaining = $now->diffInSeconds($auction->ends_at, false);
             if (
                 $secondsRemaining > 0
@@ -135,6 +137,7 @@ final class PlaceBidAction
                     'extension_count' => $auction->extension_count + 1,
                     'last_extended_at' => $now,
                 ]);
+                $wasExtended = true;
             }
 
             $this->auctions->save($auction);
@@ -149,6 +152,10 @@ final class PlaceBidAction
                 'bidder_id' => $bidderId,
                 'amount_minor' => $bid->amount_minor,
                 'currency_code' => $bid->currency_code,
+                'sequence_number' => $bid->sequence_number,
+                'previous_leader_id' => $previousLeaderId,
+                'extended' => $wasExtended,
+                'ends_at' => $auction->ends_at?->toIso8601String(),
             ]);
 
             return $bid->load(['auction.currentLeadingBid', 'bidder']);

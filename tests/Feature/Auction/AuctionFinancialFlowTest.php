@@ -455,16 +455,20 @@ final class AuctionFinancialFlowTest extends TestCase
         );
     }
 
-    public function test_audit_does_not_insert_unsupported_outbox_event(): void
+    public function test_audit_inserts_uncatalogued_outbox_event_for_dead_lettering(): void
     {
         [$auction] = $this->auctionWithoutBids();
         OutboxMessage::query()->delete();
 
-        app(AuctionAudit::class)->outbox('auction.cancellation_started', $auction, [
+        // Uncatalogued events are stored anyway so the dispatcher fails them
+        // into the retry/dead-letter flow instead of losing them silently.
+        app(AuctionAudit::class)->outbox('auction.some_unknown_event', $auction, [
             'auction_public_id' => $auction->public_id,
         ]);
 
-        $this->assertSame(0, OutboxMessage::where('aggregate_id', $auction->id)->count());
+        $this->assertSame(1, OutboxMessage::where('aggregate_id', $auction->id)
+            ->where('event_type', 'auction.some_unknown_event')
+            ->count());
     }
 
     public function test_state_transition_to_unnotifiable_status_does_not_create_outbox_message(): void

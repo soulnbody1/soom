@@ -124,6 +124,12 @@ final class SubmitPaymentSubmissionAction
                     'purpose' => $purpose->value,
                     'submission_public_id' => $submission->public_id,
                 ]);
+                $this->audit->outbox('auction.payment_submitted', $auction, [
+                    'auction_public_id' => $auction->public_id,
+                    'payment_submission_id' => $submission->id,
+                    'user_id' => $userId,
+                    'purpose' => $purpose->value,
+                ]);
 
                 return $submission->load(['paymentMethod', 'deposit', 'settlement']);
             });
