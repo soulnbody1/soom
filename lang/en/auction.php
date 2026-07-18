@@ -284,6 +284,10 @@ return [
             'title' => 'Seller deposit forfeited',
             'body' => ':amount :currency of your seller deposit for auction ":auction" was forfeited per the platform terms.',
         ],
+        'seller_deposit_partially_forfeited' => [
+            'title' => 'Seller deposit partially forfeited',
+            'body' => ':amount :currency of your seller deposit for auction ":auction" was forfeited per the platform terms. The remaining amount will be handled per the applicable policy.',
+        ],
         'seller_deposit_refund_planned' => [
             'title' => 'Deposit refund created',
             'body' => 'A refund of :amount :currency for your auction ":auction" deposit was created and will be transferred soon.',
@@ -322,8 +326,8 @@ return [
         ],
         'announcements' => [
             'published' => [
-                'title' => 'New auction',
-                'body' => 'New auction: ":auction" — bidding starts on :starts_at.',
+                'title' => 'New auction available now',
+                'body' => 'Auction ":auction" is now published with a starting price of :amount :currency. View the details and join before bidding starts.',
             ],
             'started' => [
                 'title' => 'Auction started',

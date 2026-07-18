@@ -284,6 +284,10 @@ return [
             'title' => 'تمت مصادرة عربون البائع',
             'body' => 'تمت مصادرة مبلغ :amount :currency من عربون البائع لمزاد «:auction» وفق شروط المنصة.',
         ],
+        'seller_deposit_partially_forfeited' => [
+            'title' => 'تمت مصادرة جزء من عربون البائع',
+            'body' => 'تمت مصادرة مبلغ :amount :currency من عربون البائع لمزاد «:auction» وفق شروط المنصة، وسيتم التعامل مع المبلغ المتبقي حسب السياسة المعتمدة.',
+        ],
         'seller_deposit_refund_planned' => [
             'title' => 'تم إنشاء استرداد عربونك',
             'body' => 'تم إنشاء طلب استرداد عربون مزاد «:auction» بقيمة :amount :currency وسيتم تحويله قريبًا.',
@@ -322,8 +326,8 @@ return [
         ],
         'announcements' => [
             'published' => [
-                'title' => 'مزاد جديد',
-                'body' => 'مزاد جديد: «:auction» — تبدأ المزايدة بتاريخ :starts_at.',
+                'title' => 'مزاد جديد متاح الآن',
+                'body' => 'تم نشر مزاد «:auction» ويبدأ السعر من :amount :currency. اطّلع على التفاصيل وشارك قبل بدء المزاد.',
             ],
             'started' => [
                 'title' => 'بدأ المزاد الآن',

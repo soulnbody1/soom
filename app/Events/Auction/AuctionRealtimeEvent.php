@@ -10,9 +10,8 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Safe realtime update on the public per-auction channel. The payload must
- * only ever contain data that is already publicly visible for the auction
- * (anonymous bidders, public ids, amounts, times).
+ * Public per-auction channel: the payload must only contain data that is
+ * already publicly visible (anonymous bidders, public ids, amounts, times).
  */
 final class AuctionRealtimeEvent implements ShouldBroadcastNow
 {

@@ -9,10 +9,6 @@ use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
-/**
- * Marketing announcement on the shared public auctions channel.
- * Reaches currently connected clients only; contains public data only.
- */
 final class AuctionPublicAnnouncementEvent implements ShouldBroadcastNow
 {
     use Dispatchable;

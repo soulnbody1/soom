@@ -5,16 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Auction\Support;
 
 /**
- * Explicit catalog of every auction outbox event and the notification
- * audiences it feeds. An event missing from this catalog is dead-lettered
- * by DispatchOutboxMessagesAction instead of being silently ignored.
- *
- * - personal: database notification + private user-channel broadcast (+FCM when a token exists)
- * - realtime: safe public broadcast on the auction channel (auction.{public_id})
- * - public:   marketing announcement on the shared public channel (public.auctions)
- *
- * Events with all flags false are operational: they are processed and marked
- * as such for audit purposes but produce no user-facing notification.
+ * personal: database + private user broadcast (+FCM). realtime: public auction
+ * channel. public: marketing announcement channel. Events with all flags false
+ * are processed without user-facing delivery; uncatalogued events dead-letter.
  */
 final class AuctionNotificationCatalog
 {
@@ -44,6 +37,7 @@ final class AuctionNotificationCatalog
         'auction.alternative_winner_selected' => ['personal' => true, 'realtime' => true, 'public' => false],
         'auction.winner_deposit_forfeited' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.seller_deposit_forfeited' => ['personal' => true, 'realtime' => false, 'public' => false],
+        'auction.seller_deposit_partially_forfeited' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.seller_deposit_refund_planned' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.seller_deposit_manual_review' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.non_winner_deposit_refund_planned' => ['personal' => true, 'realtime' => false, 'public' => false],
@@ -54,7 +48,6 @@ final class AuctionNotificationCatalog
         'auction.dispute_resolved' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.cancelled' => ['personal' => true, 'realtime' => true, 'public' => true],
 
-        // Operational events: processed, audited, no user-facing notification.
         'auction.no_alternative_winner' => ['personal' => false, 'realtime' => false, 'public' => false],
         'auction.alternative_settlement_created' => ['personal' => false, 'realtime' => false, 'public' => false],
         'auction.seller_deposit_held' => ['personal' => false, 'realtime' => false, 'public' => false],
