@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auction;
 
+use App\Domain\Auction\Enums\NonWinnerDepositHoldPolicy;
 use App\Domain\Auction\Enums\SellerDepositDisposition;
 use App\Domain\Auction\Enums\WinnerDefaultDepositDisposition;
 use Illuminate\Foundation\Http\FormRequest;
@@ -58,8 +59,13 @@ final class CreateConfigurationVersionRequest extends FormRequest
             'configuration.maximum_extension_count' => ['required', 'integer', 'min:0'],
             'configuration.winner_payment_deadline_hours' => ['required', 'integer', 'min:1'],
             'configuration.handover_deadline_hours' => ['required', 'integer', 'min:1'],
-            'configuration.non_winner_deposit_policy' => ['required', 'string', 'max:120'],
-            'configuration.non_winner_deposit_hold_count' => ['required', 'integer', 'min:0'],
+            'configuration.non_winner_deposit_policy' => ['required', 'string', Rule::in(array_column(NonWinnerDepositHoldPolicy::cases(), 'value'))],
+            'configuration.non_winner_deposit_hold_count' => [
+                'exclude_unless:configuration.non_winner_deposit_policy,'.NonWinnerDepositHoldPolicy::HoldTopN->value,
+                'required',
+                'integer',
+                'min:1',
+            ],
             'configuration.alternative_winner_enabled' => ['required', 'boolean'],
             'configuration.winner_default_deposit_policy' => ['required', 'array'],
             'configuration.winner_default_deposit_policy.disposition' => ['required', Rule::in($winnerDispositions)],

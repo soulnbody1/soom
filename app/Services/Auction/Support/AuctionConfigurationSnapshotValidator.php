@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Support;
 
+use App\Domain\Auction\Enums\NonWinnerDepositHoldPolicy;
 use App\Domain\Auction\Exceptions\AuctionConfigurationSnapshotIncompleteException;
 use App\Models\Auction\AuctionTermsVersion;
 
@@ -61,11 +62,16 @@ final class AuctionConfigurationSnapshotValidator
             }
         }
 
+        $holdPolicy = NonWinnerDepositHoldPolicy::tryFrom((string) ($data['non_winner_deposit_hold_policy'] ?? ''));
+        if ($holdPolicy === null) {
+            $errors[] = 'non_winner_deposit_hold_policy: unknown';
+        }
+
         $candidateLimit = $data['alternative_candidate_limit'] ?? null;
         if (! $this->isIntegerLike($candidateLimit) || (int) $candidateLimit < 0) {
             $errors[] = 'alternative_candidate_limit: must be a non-negative integer';
-        } elseif (! empty($data['alternative_winner_enabled']) && (int) $candidateLimit <= 0) {
-            $errors[] = 'alternative_candidate_limit: must be positive when alternative winner is enabled';
+        } elseif ($holdPolicy === NonWinnerDepositHoldPolicy::HoldTopN && (int) $candidateLimit <= 0) {
+            $errors[] = 'alternative_candidate_limit: must be positive when policy is hold_top_n_bidders_until_winner_payment';
         }
 
         if (($data['platform_fee_type'] ?? null) === 'percentage') {

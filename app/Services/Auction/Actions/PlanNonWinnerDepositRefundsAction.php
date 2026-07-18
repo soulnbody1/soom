@@ -6,6 +6,7 @@ namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\AuctionParticipantStatus;
+use App\Domain\Auction\Enums\NonWinnerDepositHoldPolicy;
 use App\DTO\Auction\DepositHoldDecisionDTO;
 use App\DTO\Auction\NonWinnerDepositDispositionDTO;
 use App\Models\Auction\Auction;
@@ -133,13 +134,14 @@ final class PlanNonWinnerDepositRefundsAction
             return [];
         }
 
-        if ($snapshot->non_winner_deposit_hold_policy === 'refund_all_non_winners_immediately') {
-            return [];
-        }
+        // Unknown snapshot values must fail loudly instead of silently holding all deposits.
+        $policy = NonWinnerDepositHoldPolicy::from((string) $snapshot->non_winner_deposit_hold_policy);
 
-        $limit = $snapshot->non_winner_deposit_hold_policy === 'hold_top_n_bidders_until_winner_payment'
-            ? $this->topCandidateLimit($snapshot, $trigger)
-            : PHP_INT_MAX;
+        $limit = match ($policy) {
+            NonWinnerDepositHoldPolicy::RefundAllImmediately => 0,
+            NonWinnerDepositHoldPolicy::HoldTopN => $this->topCandidateLimit($snapshot, $trigger),
+            NonWinnerDepositHoldPolicy::HoldAllEligible => PHP_INT_MAX,
+        };
 
         if ($limit <= 0) {
             return [];
