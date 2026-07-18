@@ -15,6 +15,7 @@ use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 final class PaymentMethodController extends Controller
 {
@@ -35,6 +36,9 @@ final class PaymentMethodController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'code' => ['required', 'string', 'max:80', 'unique:payment_methods,code'],
+            'recipient_name' => ['nullable', 'string', 'max:120'],
+            'identifier_type' => ['nullable', 'string', Rule::in(PaymentMethod::IDENTIFIER_TYPES), 'required_with:identifier_value'],
+            'identifier_value' => ['nullable', 'string', 'max:190', 'required_with:identifier_type'],
             'instructions' => ['nullable', 'string'],
             'requires_manual_review' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
@@ -58,6 +62,9 @@ final class PaymentMethodController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:120'],
+            'recipient_name' => ['nullable', 'string', 'max:120'],
+            'identifier_type' => ['nullable', 'string', Rule::in(PaymentMethod::IDENTIFIER_TYPES), 'required_with:identifier_value'],
+            'identifier_value' => ['nullable', 'string', 'max:190', 'required_with:identifier_type'],
             'instructions' => ['nullable', 'string'],
             'requires_manual_review' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
