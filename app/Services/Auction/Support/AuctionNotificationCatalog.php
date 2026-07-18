@@ -25,6 +25,8 @@ final class AuctionNotificationCatalog
 
     public const SCREEN_AUCTION_DISPUTE = 'auction_dispute';
 
+    public const SCREEN_SELLER_PAYOUT = 'seller_payouts';
+
     private const EVENTS = [
         'auction.status_changed' => ['personal' => true, 'realtime' => true, 'public' => true],
         'auction.bid_accepted' => ['personal' => true, 'realtime' => true, 'public' => false],
@@ -47,6 +49,12 @@ final class AuctionNotificationCatalog
         'auction.dispute_opened' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.dispute_resolved' => ['personal' => true, 'realtime' => false, 'public' => false],
         'auction.cancelled' => ['personal' => true, 'realtime' => true, 'public' => true],
+        'auction.seller_payout_created' => ['personal' => true, 'realtime' => false, 'public' => false],
+        'auction.seller_payout_on_hold' => ['personal' => true, 'realtime' => false, 'public' => false],
+        'auction.seller_payout_processing' => ['personal' => true, 'realtime' => false, 'public' => false],
+        'auction.seller_payout_paid' => ['personal' => true, 'realtime' => false, 'public' => false],
+        'auction.seller_payout_failed' => ['personal' => true, 'realtime' => false, 'public' => false],
+        'auction.seller_payout_manual_review' => ['personal' => true, 'realtime' => false, 'public' => false],
 
         'auction.no_alternative_winner' => ['personal' => false, 'realtime' => false, 'public' => false],
         'auction.alternative_settlement_created' => ['personal' => false, 'realtime' => false, 'public' => false],

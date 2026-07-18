@@ -60,6 +60,12 @@ final class PersonalDeliveryResolver
             'auction.dispute_resolved' => $this->users([$auction->seller, $auction->settlement?->winner])
                 ->map(fn (User $user) => $this->delivery($user, 'dispute_resolved', $params, AuctionNotificationCatalog::SCREEN_AUCTION_DISPUTE))
                 ->all(),
+            'auction.seller_payout_created',
+            'auction.seller_payout_on_hold',
+            'auction.seller_payout_processing',
+            'auction.seller_payout_paid',
+            'auction.seller_payout_failed',
+            'auction.seller_payout_manual_review' => $this->sellerPayout($message, $payload, $params),
             'auction.cancelled' => $this->users([
                 $auction->seller,
                 $auction->settlement?->winner,
@@ -279,6 +285,36 @@ final class PersonalDeliveryResolver
                 $key,
                 [...$params, 'amount' => $this->format->money((int) $refund->amount_minor, $currency), 'currency' => $currency],
                 AuctionNotificationCatalog::SCREEN_AUCTION_REFUNDS,
+            ),
+        ];
+    }
+
+    private function sellerPayout(OutboxMessage $message, array $payload, array $params): array
+    {
+        $payout = $this->payloads->sellerPayout($payload);
+        if (! $payout) {
+            throw new \RuntimeException("No notification recipient found for {$message->event_type}.");
+        }
+
+        $seller = $this->payloads->requiredUser((int) $payout->seller_id, $message->event_type);
+        $currency = (string) $payout->currency_code;
+
+        $key = match ($message->event_type) {
+            'auction.seller_payout_created' => match (true) {
+                (bool) ($payload['on_hold'] ?? false) => 'seller_payout.on_hold',
+                ! ($payload['has_destination'] ?? true) => 'seller_payout.awaiting_destination',
+                default => 'seller_payout.created',
+            },
+            default => 'seller_payout.'.str_replace('auction.seller_payout_', '', $message->event_type),
+        };
+
+        return [
+            $this->delivery(
+                $seller,
+                $key,
+                [...$params, 'amount' => $this->format->money((int) $payout->amount_minor, $currency), 'currency' => $currency],
+                AuctionNotificationCatalog::SCREEN_SELLER_PAYOUT,
+                ['payout_id' => $payout->public_id],
             ),
         ];
     }

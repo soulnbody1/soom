@@ -120,6 +120,18 @@ final class AdminAuctionResource extends JsonResource
                 ],
                 'settlement' => new AuctionSettlementResource($this->settlement),
             ];
+
+            if ($this->settlement->relationLoaded('sellerPayout') && $this->settlement->sellerPayout) {
+                $payout = $this->settlement->sellerPayout;
+                $data['financial_details']['seller_payout'] = [
+                    'id' => $payout->public_id,
+                    'status' => $payout->status->value,
+                    'amount' => MoneyResource::make((int) $payout->amount_minor, (string) $payout->currency_code),
+                    'has_destination' => $payout->hasDestinationSnapshot(),
+                    'transfer_reference' => $payout->transfer_reference,
+                    'paid_at' => $payout->paid_at?->toIso8601String(),
+                ];
+            }
         }
 
         if ($canResolveDisputes) {

@@ -52,6 +52,13 @@ final class AuctionDisputeRepository
         return AuctionDispute::firstOrCreate($uniqueAttributes, $defaults);
     }
 
+    public function hasOpenDispute(int $auctionId): bool
+    {
+        return AuctionDispute::where('auction_id', $auctionId)
+            ->where('status', 'open')
+            ->exists();
+    }
+
     /**
      * Lock a dispute for resolution.
      * Used by ResolveAuctionDisputeAction.

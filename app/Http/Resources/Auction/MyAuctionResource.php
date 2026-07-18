@@ -81,6 +81,9 @@ final class MyAuctionResource extends JsonResource
                 'seller_net_amount' => MoneyResource::make($this->settlement->seller_net_amount_minor, $this->currency_code),
                 'platform_fee' => MoneyResource::make($this->settlement->platform_fee_minor, $this->currency_code),
                 'completed_at' => $this->settlement->completed_at?->toIso8601String(),
+                'payout' => $this->settlement->relationLoaded('sellerPayout') && $this->settlement->sellerPayout
+                    ? SellerPayoutResource::sellerPayload($this->settlement->sellerPayout)
+                    : null,
             ] : null;
             $data['handover_status'] = $this->settlement ? [
                 'payment_due_at' => $this->settlement->payment_due_at?->toIso8601String(),

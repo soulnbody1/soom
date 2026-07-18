@@ -41,6 +41,16 @@ return [
         'configuration_version_fetched' => 'Configuration version fetched.',
         'configuration_version_created' => 'Configuration version created.',
         'disputes_fetched' => 'Auction disputes fetched.',
+        'payouts_fetched' => 'Seller payouts fetched.',
+        'payout_fetched' => 'Seller payout fetched.',
+        'payout_processing_started' => 'Seller payout processing started.',
+        'payout_paid' => 'Seller payout recorded as paid.',
+        'payout_failure_recorded' => 'Seller payout failure recorded.',
+        'payout_held' => 'Seller payout placed on hold.',
+        'payout_released' => 'Seller payout hold released.',
+        'payout_proof_url_created' => 'Transfer proof URL created.',
+        'payout_destinations_fetched' => 'Payout destinations fetched.',
+        'payout_destination_saved' => 'Payout destination saved.',
     ],
     'errors' => [
         'auction_not_found' => 'Auction not found.',
@@ -126,6 +136,14 @@ return [
         'configuration_snapshot_incomplete' => 'The auction configuration snapshot is incomplete or invalid.',
         'configuration_snapshot_immutable' => 'The auction configuration snapshot is immutable and cannot be modified.',
         'configuration_version_in_use' => 'The auction configuration version is in use and cannot be modified or deleted.',
+        'payout_not_found' => 'Seller payout not found.',
+        'payout_status_invalid' => 'This action is not allowed in the current payout status.',
+        'payout_already_paid' => 'This payout has already been paid.',
+        'payout_destination_missing' => 'The seller has no valid payout destination. A destination is required before paying.',
+        'payout_blocked_by_dispute' => 'The payout cannot be processed while an open dispute exists on the auction.',
+        'payout_reason_required' => 'A reason is required for this action.',
+        'payout_proof_unavailable' => 'Transfer proof is unavailable.',
+        'payout_destination_not_found' => 'Payout destination not found.',
     ],
     'audit' => [
         'cancelled_by_actor' => 'cancelled by actor',
@@ -323,6 +341,36 @@ return [
         'cancelled' => [
             'title' => 'Auction cancelled',
             'body' => 'Auction ":auction" was cancelled. Any paid amounts will be handled per the terms and you will be notified of any refund.',
+        ],
+        'seller_payout' => [
+            'created' => [
+                'title' => 'Your auction proceeds are recorded',
+                'body' => 'Auction ":auction" is complete and your proceeds of :amount :currency are recorded. The amount will be transferred to your registered payout destination.',
+            ],
+            'awaiting_destination' => [
+                'title' => 'Add a payout destination',
+                'body' => 'Auction ":auction" is complete and your proceeds of :amount :currency are recorded. Please add a payout destination to receive the amount.',
+            ],
+            'on_hold' => [
+                'title' => 'Auction payout on hold',
+                'body' => 'The payout for auction ":auction" is temporarily on hold. We will notify you once the status changes.',
+            ],
+            'processing' => [
+                'title' => 'Auction payout in progress',
+                'body' => 'We started transferring the proceeds of auction ":auction" to your registered payout destination.',
+            ],
+            'paid' => [
+                'title' => 'Auction payout transferred',
+                'body' => 'An amount of :amount :currency from auction ":auction" was transferred to your registered payout destination.',
+            ],
+            'failed' => [
+                'title' => 'Auction payout failed',
+                'body' => 'We could not transfer the proceeds of auction ":auction". Our team will contact you or retry shortly.',
+            ],
+            'manual_review' => [
+                'title' => 'Auction payout under review',
+                'body' => 'The payout for auction ":auction" requires additional review. We will notify you once the status changes.',
+            ],
         ],
         'announcements' => [
             'published' => [

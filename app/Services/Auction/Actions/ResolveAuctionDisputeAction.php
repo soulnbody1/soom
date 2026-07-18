@@ -30,6 +30,7 @@ final class ResolveAuctionDisputeAction
         private readonly AuctionDisputeRepository $disputes,
         private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
         private readonly CancelAuctionFinanciallyAction $financialCancellation,
+        private readonly CreateSellerPayoutAction $sellerPayout,
     ) {}
 
     public function execute(
@@ -108,6 +109,10 @@ final class ResolveAuctionDisputeAction
                 'seller_deposit_disposition' => $sellerDepositDisposition,
                 'forfeit_amount_minor' => $sellerDepositForfeitAmountMinor,
             ]);
+
+            if ($target === AuctionStatus::Completed) {
+                $this->sellerPayout->execute($auction, $settlement, $adminId, 'admin');
+            }
 
             return $auction->refresh()->load('settlement');
         });

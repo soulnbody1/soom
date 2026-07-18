@@ -9,6 +9,7 @@ use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 final class AuctionSettlement extends Model
 {
@@ -87,5 +88,10 @@ final class AuctionSettlement extends Model
     public function previousSettlement(): BelongsTo
     {
         return $this->belongsTo(self::class, 'previous_settlement_id');
+    }
+
+    public function sellerPayout(): HasOne
+    {
+        return $this->hasOne(AuctionSellerPayout::class, 'settlement_id');
     }
 }

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionDispute;
+use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
@@ -14,6 +15,7 @@ use App\Policies\Auction\AuctionPolicy;
 use App\Policies\Auction\AuctionRefundPolicy;
 use App\Policies\Auction\AuctionSettlementPolicy;
 use App\Policies\Auction\PaymentSubmissionPolicy;
+use App\Policies\Auction\SellerPayoutPolicy;
 use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
 use App\Services\Auction\Refunds\ManualReviewRefundProcessor;
 use Illuminate\Support\Facades\Gate;
@@ -40,5 +42,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuctionSettlement::class, AuctionSettlementPolicy::class);
         Gate::policy(RefundTransaction::class, AuctionRefundPolicy::class);
         Gate::policy(AuctionDispute::class, AuctionDisputePolicy::class);
+        Gate::policy(AuctionSellerPayout::class, SellerPayoutPolicy::class);
     }
 }

@@ -7,6 +7,7 @@ namespace App\Services\Auction\Notifications;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionBid;
 use App\Models\Auction\AuctionDeposit;
+use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
 use App\Models\User;
@@ -42,6 +43,15 @@ final class OutboxPayloadResolver
 
         return $publicId !== ''
             ? RefundTransaction::where('public_id', $publicId)->first()
+            : null;
+    }
+
+    public function sellerPayout(array $payload): ?AuctionSellerPayout
+    {
+        $publicId = (string) ($payload['payout_public_id'] ?? '');
+
+        return $publicId !== ''
+            ? AuctionSellerPayout::where('public_id', $publicId)->first()
             : null;
     }
 

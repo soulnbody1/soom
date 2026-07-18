@@ -393,6 +393,9 @@ final class AuctionController extends Controller
             'settlement' => fn ($query) => $isSeller
                 ? $query
                 : $query->where('winner_id', $userId),
+            'settlement.sellerPayout' => fn ($query) => $isSeller
+                ? $query
+                : $query->whereRaw('1 = 0'),
         ]);
     }
 
@@ -403,6 +406,10 @@ final class AuctionController extends Controller
             'winningBid',
             'settlement.winner',
         ];
+
+        if (Gate::forUser($user)->allows('viewAny', \App\Models\Auction\AuctionSellerPayout::class)) {
+            $relations[] = 'settlement.sellerPayout';
+        }
 
         if (Gate::forUser($user)->allows('viewAny', PaymentSubmission::class)) {
             $relations[] = 'deposits.user';

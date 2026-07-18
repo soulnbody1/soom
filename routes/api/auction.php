@@ -8,7 +8,9 @@ use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
 use App\Http\Controllers\Auction\PaymentMethodController;
 use App\Http\Controllers\Auction\PaymentSubmissionController;
+use App\Http\Controllers\Auction\PayoutDestinationController;
 use App\Http\Controllers\Auction\RefundController;
+use App\Http\Controllers\Auction\SellerPayoutController;
 use App\Http\Middleware\OptionalSanctumAuthentication;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +29,12 @@ Route::prefix('soom')->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(function () {
     Route::get('/my/auctions', [AuctionController::class, 'mine']);
     Route::get('/my/bids', [BidController::class, 'mine']);
+    Route::get('/my/payouts', [SellerPayoutController::class, 'mine']);
+    Route::get('/my/payouts/{sellerPayout}', [SellerPayoutController::class, 'showMine']);
+    Route::get('/my/payouts/{sellerPayout}/proof-url', [SellerPayoutController::class, 'proofUrl']);
+    Route::get('/my/payout-destinations', [PayoutDestinationController::class, 'index']);
+    Route::post('/my/payout-destinations', [PayoutDestinationController::class, 'store']);
+    Route::put('/my/payout-destinations/{payoutDestination}', [PayoutDestinationController::class, 'update']);
     Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
 
     Route::prefix('auctions')->group(function () {
@@ -58,6 +66,15 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::get('/refunds', [RefundController::class, 'index']);
     Route::post('/refunds/{refund}/confirm', [RefundController::class, 'confirm']);
     Route::post('/refunds/{refund}/cancel', [RefundController::class, 'cancel']);
+    Route::get('/payouts', [SellerPayoutController::class, 'index']);
+    Route::get('/payouts/summary', [SellerPayoutController::class, 'summary']);
+    Route::get('/payouts/{sellerPayout}', [SellerPayoutController::class, 'show']);
+    Route::get('/payouts/{sellerPayout}/proof-url', [SellerPayoutController::class, 'proofUrl']);
+    Route::post('/payouts/{sellerPayout}/start-processing', [SellerPayoutController::class, 'startProcessing']);
+    Route::post('/payouts/{sellerPayout}/mark-paid', [SellerPayoutController::class, 'markPaid']);
+    Route::post('/payouts/{sellerPayout}/mark-failed', [SellerPayoutController::class, 'markFailed']);
+    Route::post('/payouts/{sellerPayout}/hold', [SellerPayoutController::class, 'hold']);
+    Route::post('/payouts/{sellerPayout}/release', [SellerPayoutController::class, 'release']);
     Route::post('/{auction}/review', [AuctionController::class, 'review']);
     Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
     Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);

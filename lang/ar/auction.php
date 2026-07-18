@@ -41,6 +41,16 @@ return [
         'configuration_version_fetched' => 'تم جلب نسخة الإعدادات.',
         'configuration_version_created' => 'تم إنشاء نسخة الإعدادات.',
         'disputes_fetched' => 'تم جلب نزاعات المزادات.',
+        'payouts_fetched' => 'تم جلب مستحقات البائعين.',
+        'payout_fetched' => 'تم جلب مستحقات البائع.',
+        'payout_processing_started' => 'تم بدء معالجة صرف المستحقات.',
+        'payout_paid' => 'تم تسجيل صرف المستحقات.',
+        'payout_failure_recorded' => 'تم تسجيل تعذر صرف المستحقات.',
+        'payout_held' => 'تم تعليق صرف المستحقات.',
+        'payout_released' => 'تم إلغاء تعليق صرف المستحقات.',
+        'payout_proof_url_created' => 'تم إنشاء رابط إثبات التحويل.',
+        'payout_destinations_fetched' => 'تم جلب وسائل استلام المستحقات.',
+        'payout_destination_saved' => 'تم حفظ وسيلة استلام المستحقات.',
     ],
     'errors' => [
         'auction_not_found' => 'المزاد غير موجود.',
@@ -126,6 +136,14 @@ return [
         'configuration_snapshot_incomplete' => 'Snapshot إعدادات المزاد غير مكتملة أو غير صالحة.',
         'configuration_snapshot_immutable' => 'Snapshot إعدادات المزاد ثابتة ولا يمكن تعديلها.',
         'configuration_version_in_use' => 'نسخة إعدادات المزاد مستخدمة ولا يمكن تعديلها أو حذفها.',
+        'payout_not_found' => 'مستحقات المزاد غير موجودة.',
+        'payout_status_invalid' => 'لا يمكن تنفيذ هذا الإجراء في حالة الصرف الحالية.',
+        'payout_already_paid' => 'تم صرف هذه المستحقات مسبقًا.',
+        'payout_destination_missing' => 'لا توجد وسيلة استلام صالحة للبائع. يجب تحديد وسيلة الاستلام قبل الصرف.',
+        'payout_blocked_by_dispute' => 'لا يمكن صرف المستحقات مع وجود نزاع مفتوح على المزاد.',
+        'payout_reason_required' => 'السبب مطلوب لهذا الإجراء.',
+        'payout_proof_unavailable' => 'إثبات التحويل غير متاح.',
+        'payout_destination_not_found' => 'وسيلة الاستلام غير موجودة.',
     ],
     'audit' => [
         'cancelled_by_actor' => 'تم الإلغاء بواسطة المستخدم',
@@ -323,6 +341,36 @@ return [
         'cancelled' => [
             'title' => 'تم إلغاء المزاد',
             'body' => 'تم إلغاء مزاد «:auction». في حال وجود مبالغ مدفوعة فسيتم التعامل معها وفق الشروط وسنعلمك بأي استرداد.',
+        ],
+        'seller_payout' => [
+            'created' => [
+                'title' => 'تم تسجيل مستحقاتك من المزاد',
+                'body' => 'اكتمل مزاد «:auction» وتم تسجيل مستحقاتك بقيمة :amount :currency. سيتم تحويل المبلغ إلى وسيلة الاستلام المسجلة لديك.',
+            ],
+            'awaiting_destination' => [
+                'title' => 'أضف وسيلة استلام مستحقاتك',
+                'body' => 'اكتمل مزاد «:auction» وتم تسجيل مستحقاتك بقيمة :amount :currency. يرجى إضافة وسيلة استلام ليتم تحويل المبلغ إليك.',
+            ],
+            'on_hold' => [
+                'title' => 'تم تعليق صرف مستحقات المزاد',
+                'body' => 'تم تعليق صرف مستحقات مزاد «:auction» مؤقتًا. سنعلمك فور تحديث الحالة.',
+            ],
+            'processing' => [
+                'title' => 'جارٍ تحويل مستحقات المزاد',
+                'body' => 'بدأنا إجراءات تحويل مستحقات مزاد «:auction» إلى وسيلة الاستلام المسجلة لديك.',
+            ],
+            'paid' => [
+                'title' => 'تم تحويل مستحقات المزاد',
+                'body' => 'تم تحويل مبلغ :amount :currency من مستحقات مزاد «:auction» إلى وسيلة الاستلام المسجلة لديك.',
+            ],
+            'failed' => [
+                'title' => 'تعذر تحويل مستحقات المزاد',
+                'body' => 'تعذر تحويل مستحقات مزاد «:auction». سيتواصل معك فريقنا أو ستتم إعادة المحاولة قريبًا.',
+            ],
+            'manual_review' => [
+                'title' => 'مستحقات المزاد قيد المراجعة',
+                'body' => 'يتطلب صرف مستحقات مزاد «:auction» مراجعة إضافية. سنقوم بإبلاغك عند تحديث الحالة.',
+            ],
         ],
         'announcements' => [
             'published' => [
