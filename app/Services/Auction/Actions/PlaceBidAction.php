@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Actions;
 
-use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Domain\Auction\ValueObjects\Money;
+use App\DTO\Auction\BidEligibilityContextDTO;
 use App\DTO\Auction\CreateBidRecordDTO;
 use App\Models\Auction\AuctionBid;
 use App\Repositories\Auction\AuctionBidRepository;
@@ -18,6 +18,7 @@ use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\BidEligibilityLadder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 
@@ -33,6 +34,7 @@ final class PlaceBidAction
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionTermsRepository $terms,
         private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+        private readonly BidEligibilityLadder $ladder,
     ) {}
 
     public function execute(
@@ -54,36 +56,47 @@ final class PlaceBidAction
 
             $now = Carbon::now();
 
-            if ($auction->seller_id === $bidderId) {
-                throw AuctionException::bidRejected(__('auction.errors.seller_cannot_bid'));
-            }
+            $auctionGate = $this->ladder->evaluateAuctionGate(new BidEligibilityContextDTO(
+                viewerId: $bidderId,
+                sellerId: (int) $auction->seller_id,
+                status: $auction->status,
+                startsAt: $auction->starts_at,
+                endsAt: $auction->ends_at,
+                now: $now,
+                configurationAvailable: true,
+            ));
 
-            if ($auction->status !== AuctionStatus::Live || ! $auction->starts_at || ! $auction->ends_at) {
-                throw AuctionException::bidRejected(__('auction.errors.auction_not_live'));
-            }
-
-            if ($auction->starts_at->greaterThan($now) || ! $now->lessThan($auction->ends_at)) {
-                throw AuctionException::bidRejected(__('auction.errors.bidding_window_closed'));
+            if ($auctionGate->blocksBidding()) {
+                throw AuctionException::bidRejected($auctionGate->errorKey());
             }
 
             $participant = $this->participants->lockParticipant($auction->id, $bidderId);
+            $deposit = $participant ? $this->deposits->lockBidderDeposit($participant->id) : null;
 
-            if (! $participant || $participant->status !== \App\Domain\Auction\Enums\AuctionParticipantStatus::Qualified) {
-                throw AuctionException::bidRejected(__('auction.errors.bidder_not_qualified'));
-            }
+            $participantGate = $this->ladder->evaluateParticipantGate(new BidEligibilityContextDTO(
+                viewerId: $bidderId,
+                sellerId: (int) $auction->seller_id,
+                status: $auction->status,
+                startsAt: $auction->starts_at,
+                endsAt: $auction->ends_at,
+                now: $now,
+                configurationAvailable: true,
+                participantStatus: $participant?->status,
+                hasAcceptedTerms: $snapshot->terms_version_id
+                    && $this->terms->hasAcceptedTerms($auction->id, $bidderId, (int) $snapshot->terms_version_id),
+                requiredTermsVersionId: $snapshot->terms_version_id === null ? null : (int) $snapshot->terms_version_id,
+                depositStatus: $deposit?->status,
+                depositHeldMinor: (int) ($deposit->held_amount_minor ?? 0),
+                depositRequiredMinor: (int) $snapshot->bidder_deposit_required_minor,
+            ));
 
-            if (! $snapshot->terms_version_id || ! $this->terms->hasAcceptedTerms($auction->id, $bidderId, (int) $snapshot->terms_version_id)) {
-                throw AuctionException::bidRejected(__('auction.errors.terms_required_before_bidding'));
-            }
-
-            $deposit = $this->deposits->lockBidderDeposit($participant->id);
-            if (! $deposit || $deposit->status !== \App\Domain\Auction\Enums\AuctionDepositStatus::Held || $deposit->held_amount_minor < (int) $snapshot->bidder_deposit_required_minor) {
-                throw AuctionException::bidRejected(__('auction.errors.bidder_deposit_required'));
+            if ($participantGate->blocksBidding()) {
+                throw AuctionException::bidRejected($participantGate->errorKey());
             }
 
             $bidMoney = Money::fromDecimalString($amount, strtoupper($currency));
             if ($bidMoney->currency !== $snapshot->currency_code) {
-                throw AuctionException::bidRejected(__('auction.errors.bid_currency_mismatch'));
+                throw AuctionException::bidRejected('bid_currency_mismatch');
             }
 
             $previousLeaderId = $auction->currentLeadingBid?->bidder_id;
@@ -93,7 +106,7 @@ final class PlaceBidAction
                 : $currentAmount + (int) $snapshot->minimum_bid_increment_minor;
 
             if ($bidMoney->minor < $minimum) {
-                throw AuctionException::bidRejected(__('auction.errors.bid_below_minimum'));
+                throw AuctionException::bidRejected('bid_below_minimum');
             }
 
             $sequence = $this->bids->nextSequenceNumber($auction->id);

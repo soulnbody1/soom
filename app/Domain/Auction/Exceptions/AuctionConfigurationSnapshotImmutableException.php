@@ -9,5 +9,6 @@ final class AuctionConfigurationSnapshotImmutableException extends AuctionExcept
     public function __construct()
     {
         parent::__construct(__('auction.errors.configuration_snapshot_immutable'));
+        $this->errorCode = 'configuration_snapshot_immutable';
     }
 }

@@ -57,3 +57,44 @@ test('legacy auction table names are not referenced by application code', functi
 
     expect($violations)->toBe([]);
 });
+
+test('auction domain errors are thrown through code carrying factories', function () {
+    $violations = [];
+
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(app_path())) as $file) {
+        if (! $file->isFile() || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        if (preg_match('/new AuctionException\(__\(/', file_get_contents($file->getPathname()))) {
+            $violations[] = $file->getPathname();
+        }
+    }
+
+    expect($violations)->toBe([]);
+});
+
+test('the user auction resource never emits conditional keys', function () {
+    $contents = file_get_contents(app_path('Http/Resources/Auction/UserAuctionResource.php'));
+
+    expect($contents)->not->toContain('whenLoaded(')
+        ->and($contents)->not->toContain('mergeWhen(')
+        ->and($contents)->not->toContain('$this->when(');
+});
+
+test('no auction action transitions an auction into the legacy disputed status', function () {
+    $violations = [];
+
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(app_path('Services/Auction/Actions'))) as $file) {
+        if (! $file->isFile() || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        $contents = file_get_contents($file->getPathname());
+        if (preg_match('/transition\(\s*\$auction\s*,\s*AuctionStatus::Disputed/', $contents)) {
+            $violations[] = $file->getPathname();
+        }
+    }
+
+    expect($violations)->toBe([]);
+});

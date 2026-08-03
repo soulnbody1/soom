@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auction;
 
 use App\Domain\Auction\Enums\SellerPayoutStatus;
-use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AdminSellerPayoutIndexRequest;
 use App\Http\Requests\Auction\FailSellerPayoutRequest;
@@ -137,14 +136,14 @@ final class SellerPayoutController extends Controller
         Gate::authorize('view', $sellerPayout);
 
         if ($sellerPayout->proof_path === null) {
-            return $this->sendError(__('auction.errors.payout_proof_unavailable'), 404);
+            return $this->sendError(__('auction.errors.payout_proof_unavailable'), 404, 'payout_proof_unavailable');
         }
 
         try {
             $url = Storage::disk((string) $sellerPayout->proof_disk)
                 ->temporaryUrl($sellerPayout->proof_path, now()->addMinutes(10));
         } catch (\Throwable) {
-            return $this->sendError(__('auction.errors.payout_proof_unavailable'), 404);
+            return $this->sendError(__('auction.errors.payout_proof_unavailable'), 404, 'payout_proof_unavailable');
         }
 
         return $this->sendResponse([
@@ -170,7 +169,7 @@ final class SellerPayoutController extends Controller
     public function showMine(Request $request, AuctionSellerPayout $sellerPayout): JsonResponse
     {
         if ($request->user()->id !== (int) $sellerPayout->seller_id) {
-            return $this->sendError(__('auction.errors.payout_not_found'), 404);
+            return $this->sendError(__('auction.errors.payout_not_found'), 404, 'payout_not_found');
         }
 
         $sellerPayout->load('auction:id,public_id,title');
@@ -180,11 +179,7 @@ final class SellerPayoutController extends Controller
 
     private function transitionResponse(callable $callback, string $message): JsonResponse
     {
-        try {
-            $payout = $callback();
-        } catch (AuctionException $exception) {
-            return $this->sendError($exception->getMessage(), 422);
-        }
+        $payout = $callback();
 
         $payout->load(self::ADMIN_RELATIONS);
 

@@ -48,10 +48,11 @@ final class PublicAuctionOptionalAuthTest extends TestCase
 
         $this->assertSame($auction->public_id, $data['id']);
         $this->assertArrayNotHasKey('internal_id', $data);
-        $this->assertArrayNotHasKey('seller', $data);
         $this->assertArrayNotHasKey('deposits', $data);
         $this->assertArrayNotHasKey('payment_submissions', $data);
         $this->assertArrayNotHasKey('financial_details', $data);
+        $this->assertArrayNotHasKey('id', $data['seller']);
+        $this->assertArrayNotHasKey('phone', $data['seller']);
     }
 
     public function test_guest_bid_identities_remain_anonymous(): void
@@ -86,7 +87,8 @@ final class PublicAuctionOptionalAuthTest extends TestCase
 
         $this->assertArrayNotHasKey('internal_id', $data);
         $this->assertArrayNotHasKey('deposits', $data);
-        $this->assertArrayNotHasKey('seller', $data);
+        $this->assertArrayNotHasKey('id', $data['seller']);
+        $this->assertFalse($data['seller']['is_me']);
 
         // Strangers still see anonymous bidders.
         $rows = $this->withToken($token)
@@ -130,7 +132,7 @@ final class PublicAuctionOptionalAuthTest extends TestCase
         $token = $this->user('admin')->createToken('test')->plainTextToken;
 
         $data = $this->withToken($token)
-            ->getJson('/api/auctions/'.$auction->public_id)
+            ->getJson('/api/admin/auctions/'.$auction->public_id)
             ->assertOk()
             ->json('data');
 
@@ -140,6 +142,22 @@ final class PublicAuctionOptionalAuthTest extends TestCase
         $this->assertCount(1, $data['deposits']);
         $this->assertSame($auction->seller_id, $data['deposits'][0]['user']['id']);
         $this->assertArrayHasKey('payment_submissions', $data);
+    }
+
+    public function test_admin_bearer_token_reads_non_public_auction_on_the_user_route(): void
+    {
+        $auction = $this->auction(AuctionStatus::PendingReview);
+        $token = $this->user('admin')->createToken('test')->plainTextToken;
+
+        $data = $this->withToken($token)
+            ->getJson('/api/auctions/'.$auction->public_id)
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame($auction->public_id, $data['id']);
+        $this->assertArrayNotHasKey('internal_id', $data);
+        $this->assertArrayNotHasKey('deposits', $data);
+        $this->assertArrayNotHasKey('id', $data['seller']);
     }
 
     public function test_admin_bearer_token_sees_bidder_identities(): void

@@ -30,18 +30,18 @@ final class FailSellerPayoutAction
     public function execute(AuctionSellerPayout $payout, User $admin, SellerPayoutStatus $target, string $reason): AuctionSellerPayout
     {
         if (! in_array($target, [SellerPayoutStatus::Failed, SellerPayoutStatus::ManualReview], true)) {
-            throw new AuctionException(__('auction.errors.payout_status_invalid'));
+            throw AuctionException::domain('payout_status_invalid');
         }
 
         if (trim($reason) === '') {
-            throw new AuctionException(__('auction.errors.payout_reason_required'));
+            throw AuctionException::domain('payout_reason_required');
         }
 
         return $this->transaction->run(function () use ($payout, $admin, $target, $reason): AuctionSellerPayout {
             $payout = $this->payouts->lockById($payout->id);
 
             if (! in_array($payout->status, self::ALLOWED_FROM, true)) {
-                throw new AuctionException(__('auction.errors.payout_status_invalid'));
+                throw AuctionException::domain('payout_status_invalid');
             }
 
             $payout->forceFill([

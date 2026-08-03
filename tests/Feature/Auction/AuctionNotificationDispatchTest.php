@@ -147,7 +147,7 @@ final class AuctionNotificationDispatchTest extends TestCase
         $this->assertStringContainsString('مؤهلًا', $notifications[0]->data['message']);
     }
 
-    public function test_finalization_notifies_winner_and_seller_but_not_other_bidders(): void
+    public function test_finalization_notifies_winner_seller_and_losing_bidders(): void
     {
         Event::fake([AuctionRealtimeEvent::class]);
 
@@ -175,7 +175,11 @@ final class AuctionNotificationDispatchTest extends TestCase
         $this->assertCount(1, $sellerFinalized);
         $this->assertSame('تم اختيار الفائز بمزادك', $sellerFinalized->first()->data['title']);
 
-        $this->assertSame(0, $loser->notifications()->count());
+        $loserNotifications = $loser->notifications()->get();
+        $this->assertCount(1, $loserNotifications);
+        $this->assertSame('auction.bidder_lost', $loserNotifications[0]->data['event_type']);
+        $this->assertSame('لم تفز بالمزاد', $loserNotifications[0]->data['title']);
+        $this->assertStringNotContainsString((string) $winner->name, (string) $loserNotifications[0]->data['message']);
     }
 
     public function test_scheduled_auction_broadcasts_public_announcement_without_private_data(): void

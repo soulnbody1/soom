@@ -13,6 +13,7 @@ use App\Repositories\Auction\AuctionTermsRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\ParticipantQualifier;
 use Illuminate\Support\Carbon;
 
 final class AcceptAuctionTermsAction
@@ -24,22 +25,23 @@ final class AcceptAuctionTermsAction
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionTermsRepository $terms,
         private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+        private readonly ParticipantQualifier $qualifier,
     ) {}
 
     public function execute(Auction $auction, int $userId, ?string $ipAddress, ?string $userAgent): AuctionTermsAcceptance
     {
         return $this->transaction->run(function () use ($auction, $userId, $ipAddress, $userAgent): AuctionTermsAcceptance {
             $auction = $this->auctions->lockForStateChange($auction->id);
-            $participant = $this->participants->findByAuctionAndUser($auction->id, $userId);
+            $participant = $this->participants->lockParticipant($auction->id, $userId);
 
             if (! $participant) {
-                throw new AuctionException(__('auction.errors.terms_registration_required'));
+                throw AuctionException::domain('terms_registration_required');
             }
 
             $snapshot = $this->snapshotReader->forAuction($auction);
 
             if (! $snapshot->terms_version_id) {
-                throw new AuctionException(__('auction.errors.terms_missing'));
+                throw AuctionException::domain('terms_missing');
             }
 
             $acceptance = $this->terms->firstOrCreateAcceptance(
@@ -59,6 +61,8 @@ final class AcceptAuctionTermsAction
             $this->audit->log('auction.terms_accepted', $auction, $userId, 'user', [
                 'terms_version_id' => $snapshot->terms_version_id,
             ]);
+
+            $this->qualifier->qualifyWhenNoDepositRequired($auction, $participant, $snapshot);
 
             return $acceptance->refresh();
         });

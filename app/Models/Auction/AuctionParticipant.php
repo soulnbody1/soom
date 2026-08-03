@@ -53,4 +53,9 @@ final class AuctionParticipant extends Model
     {
         return $this->hasMany(AuctionBid::class, 'participant_id');
     }
+
+    public function termsAcceptance(): HasOne
+    {
+        return $this->hasOne(AuctionTermsAcceptance::class, 'participant_id')->latestOfMany();
+    }
 }

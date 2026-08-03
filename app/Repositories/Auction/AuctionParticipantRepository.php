@@ -16,7 +16,9 @@ final class AuctionParticipantRepository
      */
     public function paginateByAuction(Auction $auction, ?string $status, int $perPage): LengthAwarePaginator
     {
-        return AuctionParticipant::with('user')
+        return AuctionParticipant::with(['user', 'bidderDeposit', 'termsAcceptance', 'auction'])
+            ->withMax('bids as highest_bid_amount_minor', 'amount_minor')
+            ->withCount('bids as bids_count')
             ->where('auction_id', $auction->id)
             ->when($status, fn ($query, string $value) => $query->where('status', $value))
             ->orderBy('registered_at')

@@ -15,7 +15,7 @@ use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Resources\Auction\AuctionBidResource;
-use App\Http\Resources\Auction\PublicAuctionResource;
+use App\Http\Resources\Auction\UserAuctionResource;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionActivityLog;
 use App\Models\Auction\AuctionBid;
@@ -691,7 +691,7 @@ final class AuctionFinancialFlowTest extends TestCase
         $auction = app(FinalizeAuctionAction::class)->execute($auction);
         $auction->load(['media', 'category', 'country', 'state', 'city', 'metric', 'currentLeadingBid', 'settlement']);
 
-        $payload = (new PublicAuctionResource($auction))->toArray(Request::create('/'));
+        $payload = (new UserAuctionResource($auction))->toArray(Request::create('/'));
 
         $this->assertArrayNotHasKey('reserve_amount', $payload);
         $this->assertArrayNotHasKey('settlement', $payload);

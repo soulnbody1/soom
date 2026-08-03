@@ -110,4 +110,9 @@ final class AuctionPolicy
     {
         return $this->hasAuctionPermission($user, 'auction.winners.mark_defaulted');
     }
+
+    public function blockParticipant(User $user, Auction $auction): bool
+    {
+        return $this->hasAuctionPermission($user, 'auction.participants.block');
+    }
 }

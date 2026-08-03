@@ -9,5 +9,6 @@ final class AuctionConfigurationSnapshotMissingException extends AuctionExceptio
     public function __construct()
     {
         parent::__construct(__('auction.errors.configuration_snapshot_missing'));
+        $this->errorCode = 'configuration_snapshot_missing';
     }
 }

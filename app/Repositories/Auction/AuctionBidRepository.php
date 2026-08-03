@@ -64,6 +64,16 @@ final class AuctionBidRepository
             ->get();
     }
 
+    public function distinctBidderIds(int $auctionId, ?int $excludeUserId = null): array
+    {
+        return AuctionBid::where('auction_id', $auctionId)
+            ->when($excludeUserId !== null, fn ($query) => $query->where('bidder_id', '!=', $excludeUserId))
+            ->distinct()
+            ->pluck('bidder_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
     public function lockRankedBids(int $auctionId): Collection
     {
         return AuctionBid::with('participant')

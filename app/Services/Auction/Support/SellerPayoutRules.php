@@ -19,7 +19,7 @@ final class SellerPayoutRules
     public function ensureNoOpenDispute(AuctionSellerPayout $payout): void
     {
         if ($this->disputes->hasOpenDispute((int) $payout->auction_id)) {
-            throw new AuctionException(__('auction.errors.payout_blocked_by_dispute'));
+            throw AuctionException::domain('payout_blocked_by_dispute');
         }
     }
 
@@ -51,7 +51,7 @@ final class SellerPayoutRules
 
         $default = $this->destinations->defaultFor((int) $payout->seller_id);
         if ($default === null) {
-            throw new AuctionException(__('auction.errors.payout_destination_missing'));
+            throw AuctionException::domain('payout_destination_missing');
         }
 
         $payout->forceFill([

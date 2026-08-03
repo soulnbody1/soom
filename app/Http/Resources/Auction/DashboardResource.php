@@ -48,7 +48,7 @@ final class DashboardResource
                 'paid_in_previous' => $payouts['paid_prev_minor'] === null
                     ? null
                     : self::bucket($payouts['paid_prev_minor'], (int) $payouts['paid_prev_count'], $currency),
-                'paid_change_pct' => self::changePct($payouts['paid_cur_minor'], $payouts['paid_prev_minor']),
+                'paid_change_basis_points' => self::changeBasisPoints($payouts['paid_cur_minor'], $payouts['paid_prev_minor']),
             ],
             'refunds' => [
                 'statuses' => self::statusMap($refunds['statuses'], RefundTransactionStatus::cases(), $currency),
@@ -64,7 +64,7 @@ final class DashboardResource
                     'oldest_submitted_at' => self::iso($collections['oldest_submitted_at']),
                 ],
                 'approved_in_period' => self::bucket($collections['approved_cur_minor'], $collections['approved_cur_count'], $currency) + [
-                    'change_pct' => self::changePct($collections['approved_cur_minor'], $collections['approved_prev_minor']),
+                    'change_basis_points' => self::changeBasisPoints($collections['approved_cur_minor'], $collections['approved_prev_minor']),
                 ],
                 'rejected_in_period' => $collections['rejected_cur_count'],
                 'awaiting_payment' => self::bucket($collections['awaiting_minor'], $collections['awaiting_count'], $currency),
@@ -86,25 +86,25 @@ final class DashboardResource
         return [
             'status_counts' => $counts,
             'lifecycle' => [
-                'created' => ['current' => $lifecycle['created_cur'], 'previous' => $lifecycle['created_prev'], 'change_pct' => self::changePct($lifecycle['created_cur'], $lifecycle['created_prev'])],
+                'created' => ['current' => $lifecycle['created_cur'], 'previous' => $lifecycle['created_prev'], 'change_basis_points' => self::changeBasisPoints($lifecycle['created_cur'], $lifecycle['created_prev'])],
                 'started' => ['current' => $lifecycle['started_cur'], 'previous' => $lifecycle['started_prev']],
-                'completed' => ['current' => $lifecycle['completed_cur'], 'previous' => $lifecycle['completed_prev'], 'change_pct' => self::changePct($lifecycle['completed_cur'], $lifecycle['completed_prev'])],
+                'completed' => ['current' => $lifecycle['completed_cur'], 'previous' => $lifecycle['completed_prev'], 'change_basis_points' => self::changeBasisPoints($lifecycle['completed_cur'], $lifecycle['completed_prev'])],
                 'unsold' => ['current' => $lifecycle['unsold_cur'], 'previous' => $lifecycle['unsold_prev']],
                 'cancelled' => ['current' => $lifecycle['cancelled_cur'], 'previous' => $lifecycle['cancelled_prev']],
             ],
             'rates' => [
                 'ended_count' => $ended['ended_count'],
                 'sold_count' => $ended['sold_count'],
-                'sell_through_pct' => self::ratio($ended['sold_count'], $ended['ended_count']),
-                'unsold_pct' => self::ratio($ended['unsold_count'], $ended['ended_count']),
-                'cancellation_pct' => self::ratio($lifecycle['cancelled_cur'], $ended['ended_count'] + $lifecycle['cancelled_cur']),
+                'sell_through_basis_points' => self::ratioBasisPoints($ended['sold_count'], $ended['ended_count']),
+                'unsold_basis_points' => self::ratioBasisPoints($ended['unsold_count'], $ended['ended_count']),
+                'cancellation_basis_points' => self::ratioBasisPoints($lifecycle['cancelled_cur'], $ended['ended_count'] + $lifecycle['cancelled_cur']),
                 'avg_winning_amount' => $revenue['sold_cur'] > 0 ? MoneyResource::make(intdiv($revenue['gross_cur'], $soldCount), $currency) : null,
                 'avg_platform_fee' => $revenue['sold_cur'] > 0 ? MoneyResource::make(intdiv($revenue['fee_cur'], $soldCount), $currency) : null,
                 'avg_bids' => $ended['avg_bids'],
                 'avg_bidders' => $ended['avg_bidders'],
                 'extensions_total' => $ended['extensions_total'],
                 'avg_uplift_pct' => $settlements['avg_uplift_pct'],
-                'reserve_met_pct' => self::ratio($settlements['reserve_met_count'], $settlements['reserve_count']),
+                'reserve_met_basis_points' => self::ratioBasisPoints($settlements['reserve_met_count'], $settlements['reserve_count']),
                 'winner_defaults' => $settlements['winner_defaults'],
                 'reassignments' => $settlements['reassignments'],
             ],
@@ -202,7 +202,7 @@ final class DashboardResource
         return [
             'current' => MoneyResource::make($current, $currency),
             'previous' => $previous === null ? null : MoneyResource::make($previous, $currency),
-            'change_pct' => self::changePct($current, $previous),
+            'change_basis_points' => self::changeBasisPoints($current, $previous),
         ];
     }
 
@@ -211,7 +211,6 @@ final class DashboardResource
         return ['count' => $count, 'amount' => MoneyResource::make($minor, $currency)];
     }
 
-    /** @param array<int, \BackedEnum> $cases */
     private static function statusMap(array $statuses, array $cases, string $currency): array
     {
         $map = [];
@@ -223,7 +222,6 @@ final class DashboardResource
         return $map;
     }
 
-    /** @return array{count: int, amount_minor: int} */
     private static function statusTotals(array $statuses, array $keys): array
     {
         $count = 0;
@@ -236,18 +234,31 @@ final class DashboardResource
         return ['count' => $count, 'amount_minor' => $amount];
     }
 
-    private static function changePct(int|float|null $current, int|float|null $previous): ?float
+    private static function changeBasisPoints(?int $current, ?int $previous): ?int
     {
-        if ($previous === null || $previous == 0 || $current === null) {
+        if ($previous === null || $previous === 0 || $current === null) {
             return null;
         }
 
-        return round((($current - $previous) / $previous) * 100, 1);
+        return self::scaledRatio($current - $previous, $previous);
     }
 
-    private static function ratio(int $part, int $whole): ?float
+    private static function ratioBasisPoints(int $part, int $whole): ?int
     {
-        return $whole > 0 ? round(($part / $whole) * 100, 1) : null;
+        return $whole > 0 ? self::scaledRatio($part, $whole) : null;
+    }
+
+    private static function scaledRatio(int $numerator, int $denominator): ?int
+    {
+        if ($denominator === 0) {
+            return null;
+        }
+
+        $scaled = $numerator * 10000;
+        $sign = ($scaled < 0) === ($denominator < 0) ? 1 : -1;
+        $magnitude = intdiv(abs($scaled) + intdiv(abs($denominator), 2), abs($denominator));
+
+        return $sign * $magnitude;
     }
 
     private static function nullableSum(?int $left, ?int $right): ?int

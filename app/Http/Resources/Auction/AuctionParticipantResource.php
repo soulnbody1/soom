@@ -31,6 +31,27 @@ final class AuctionParticipantResource extends JsonResource
             ),
             'blocked_at' => $this->when($isAdmin, $this->blocked_at?->toIso8601String()),
             'block_reason' => $this->when($isAdmin, $this->block_reason),
+            'terms_accepted_at' => $this->relationLoaded('termsAcceptance')
+                ? $this->termsAcceptance?->accepted_at?->toIso8601String()
+                : null,
+            'deposit' => $this->relationLoaded('bidderDeposit') && $this->bidderDeposit
+                ? [
+                    'id' => $this->bidderDeposit->public_id,
+                    'status' => $this->bidderDeposit->status->value,
+                    'required_amount' => MoneyResource::make(
+                        (int) $this->bidderDeposit->required_amount_minor,
+                        (string) $this->bidderDeposit->currency_code
+                    ),
+                    'held_amount' => MoneyResource::make(
+                        (int) $this->bidderDeposit->held_amount_minor,
+                        (string) $this->bidderDeposit->currency_code
+                    ),
+                ]
+                : null,
+            'bids_count' => (int) ($this->bids_count ?? 0),
+            'highest_bid' => $this->highest_bid_amount_minor !== null && $this->relationLoaded('auction')
+                ? MoneyResource::make((int) $this->highest_bid_amount_minor, (string) $this->auction->currency_code)
+                : null,
         ];
     }
 }

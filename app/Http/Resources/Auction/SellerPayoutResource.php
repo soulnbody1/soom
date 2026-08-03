@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Auction;
 
+use App\Domain\Auction\Enums\SellerPayoutStatus;
 use App\Models\Auction\AuctionSellerPayout;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -93,8 +94,48 @@ final class SellerPayoutResource extends JsonResource
             ] : null,
             'payout_method' => $payout->payout_method,
             'transfer_reference' => $payout->transfer_reference,
+            'hold_reason' => $payout->hold_reason,
+            'hold_reason_label' => self::reasonLabel($payout->hold_reason),
+            'failure_reason' => self::safeFailureReason($payout),
+            'failure_reason_label' => self::reasonLabel($payout->hold_reason),
+            'required_action' => self::requiredAction($payout),
+            'proof_available' => $payout->proof_path !== null,
             'paid_at' => $payout->paid_at?->toIso8601String(),
             'created_at' => $payout->created_at?->toIso8601String(),
         ];
+    }
+
+    private static function reasonLabel(?string $reason): ?string
+    {
+        if ($reason === null) {
+            return null;
+        }
+
+        $key = 'auction.payout_hold_reasons.'.$reason;
+        $label = __($key);
+
+        return $label === $key ? null : $label;
+    }
+
+    private static function safeFailureReason(AuctionSellerPayout $payout): ?string
+    {
+        if (! in_array($payout->status, [SellerPayoutStatus::Failed, SellerPayoutStatus::ManualReview], true)) {
+            return null;
+        }
+
+        return $payout->failure_reason === null ? null : 'payout_failed';
+    }
+
+    private static function requiredAction(AuctionSellerPayout $payout): ?string
+    {
+        if (! $payout->hasDestinationSnapshot() && $payout->status !== SellerPayoutStatus::Paid) {
+            return 'add_payout_destination';
+        }
+
+        return match ($payout->status) {
+            SellerPayoutStatus::Failed => 'contact_support',
+            SellerPayoutStatus::OnHold, SellerPayoutStatus::ManualReview => 'await_review',
+            default => null,
+        };
     }
 }

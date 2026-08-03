@@ -43,7 +43,7 @@ final class ResolveAuctionDisputeAction
         ?int $sellerDepositForfeitAmountMinor = null,
     ): Auction {
         if (trim($note) === '') {
-            throw new AuctionException(__('auction.errors.dispute_resolution_note_required'));
+            throw AuctionException::domain('dispute_resolution_note_required');
         }
 
         if ($resolution === 'cancel') {
@@ -63,25 +63,27 @@ final class ResolveAuctionDisputeAction
             $settlement = $this->settlements->lockSettlement($auction->id);
 
             if ($dispute->auction_id !== $auction->id || $dispute->status !== 'open') {
-                throw new AuctionException(__('auction.errors.dispute_not_available'));
+                throw AuctionException::domain('dispute_not_available');
             }
 
-            $target = match ($resolution) {
-                'complete' => AuctionStatus::Completed,
-                'resume_handover' => AuctionStatus::HandoverPending,
-                default => throw new AuctionException(__('auction.errors.dispute_resolution_invalid')),
+            if (! in_array($resolution, ['complete', 'resume_handover'], true)) {
+                throw AuctionException::domain('dispute_resolution_invalid');
+            }
+
+            $target = match (true) {
+                $resolution === 'complete' => AuctionStatus::Completed,
+                $auction->status === AuctionStatus::Disputed => AuctionStatus::HandoverPending,
+                default => null,
             };
 
-            $settlementStatus = match ($target) {
-                AuctionStatus::Completed => SettlementStatus::Completed,
-                AuctionStatus::HandoverPending => SettlementStatus::HandoverPending,
-                default => $settlement->status,
-            };
+            $settlementStatus = $resolution === 'complete'
+                ? SettlementStatus::Completed
+                : SettlementStatus::HandoverPending;
 
             $now = Carbon::now();
             $settlement->forceFill([
                 'status' => $settlementStatus,
-                'completed_at' => $target === AuctionStatus::Completed ? ($settlement->completed_at ?? $now) : $settlement->completed_at,
+                'completed_at' => $resolution === 'complete' ? ($settlement->completed_at ?? $now) : $settlement->completed_at,
             ]);
             $this->settlements->save($settlement);
 
@@ -103,14 +105,18 @@ final class ResolveAuctionDisputeAction
                 'resolution' => $resolution,
             ]);
 
-            $auction = $this->stateMachine->transition($auction, $target, $adminId, 'admin', $note)->load('settlement');
+            if ($target !== null) {
+                $auction = $this->stateMachine->transition($auction, $target, $adminId, 'admin', $note);
+            }
+
+            $auction = $auction->load('settlement');
             $this->sellerDepositDisposition->execute($auction, 'dispute_resolution', $adminId, 'admin', $note, [
                 'resolution' => $resolution,
                 'seller_deposit_disposition' => $sellerDepositDisposition,
                 'forfeit_amount_minor' => $sellerDepositForfeitAmountMinor,
             ]);
 
-            if ($target === AuctionStatus::Completed) {
+            if ($resolution === 'complete') {
                 $this->sellerPayout->execute($auction, $settlement, $adminId, 'admin');
             }
 
@@ -130,7 +136,7 @@ final class ResolveAuctionDisputeAction
             $dispute = $this->disputes->lockForResolution($dispute->id);
 
             if ($dispute->auction_id !== $auction->id || $dispute->status !== 'open') {
-                throw new AuctionException(__('auction.errors.dispute_not_available'));
+                throw AuctionException::domain('dispute_not_available');
             }
 
             $cancelled = $this->financialCancellation->execute(new AuctionCancellationContextDTO(

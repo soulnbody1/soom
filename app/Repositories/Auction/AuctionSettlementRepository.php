@@ -74,7 +74,7 @@ final class AuctionSettlementRepository
         ]));
     }
 
-    public function closeAsHistorical(AuctionSettlement $settlement, string $reason, ?int $overriddenBy = null, ?string $overrideReason = null): void
+    public function closeAsHistorical(AuctionSettlement $settlement, string $reason, ?int $overriddenBy = null, ?string $overrideReason = null, bool $automatic = false): void
     {
         $now = Carbon::now();
 
@@ -84,6 +84,7 @@ final class AuctionSettlementRepository
             'status' => \App\Domain\Auction\Enums\SettlementStatus::Defaulted,
             'defaulted_at' => $settlement->defaulted_at ?? $now,
             'default_reason' => $settlement->default_reason ?? $reason,
+            'auto_defaulted' => $automatic,
             'superseded_at' => $settlement->superseded_at ?? $now,
             'overridden_by' => $overriddenBy,
             'overridden_at' => $overriddenBy ? $now : null,

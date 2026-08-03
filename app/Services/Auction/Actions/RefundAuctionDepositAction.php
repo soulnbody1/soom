@@ -38,7 +38,7 @@ final class RefundAuctionDepositAction
             $payment = $this->payments->lockSucceededTransactionForObligation(FinancialObligationKey::forDeposit($deposit));
 
             if (! $payment) {
-                throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+                throw AuctionException::domain('refund_exceeds_available');
             }
 
             $existingRefunds = $this->refunds->lockActiveOrSucceededForDeposit($deposit->id);
@@ -52,10 +52,10 @@ final class RefundAuctionDepositAction
 
             if ($allocation->isEmpty()) {
                 if (DepositRefundAllocation::hasActiveAppliedSettlement($relatedSettlements)) {
-                    throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+                    throw AuctionException::domain('refund_exceeds_available');
                 }
 
-                throw new AuctionException(__('auction.errors.zero_refund_not_allowed'));
+                throw AuctionException::domain('zero_refund_not_allowed');
             }
 
             $amount = $allocation->totalAmountMinor();

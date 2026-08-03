@@ -19,7 +19,10 @@ use App\Policies\Auction\PaymentSubmissionPolicy;
 use App\Policies\Auction\SellerPayoutPolicy;
 use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
 use App\Services\Auction\Refunds\ManualReviewRefundProcessor;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -45,5 +48,28 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuctionDispute::class, AuctionDisputePolicy::class);
         Gate::policy(AuctionSellerPayout::class, SellerPayoutPolicy::class);
         Gate::define('auction.dashboard.view', [AuctionDashboardPolicy::class, 'view']);
+
+        $this->configureBidRateLimiting();
+    }
+
+    private function configureBidRateLimiting(): void
+    {
+        RateLimiter::for('auction-bids', function (Request $request): array {
+            $auctionKey = (string) ($request->route('auction')?->public_id ?? $request->route('auction') ?? 'unknown');
+            $userId = (int) ($request->user()?->id ?? 0);
+
+            $limits = [
+                Limit::perMinute((int) config('auction.bidding.rate_limit_per_minute', 30))
+                    ->by("auction-bids:user:{$userId}:auction:{$auctionKey}"),
+            ];
+
+            $perIp = (int) config('auction.bidding.rate_limit_per_minute_per_ip', 0);
+
+            if ($perIp > 0) {
+                $limits[] = Limit::perMinute($perIp)->by("auction-bids:ip:{$request->ip()}");
+            }
+
+            return $limits;
+        });
     }
 }

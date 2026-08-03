@@ -2,6 +2,11 @@
 
 return [
     'messages' => [
+        'payout_destination_archived' => 'تم حذف وسيلة الاستلام.',
+        'participant_blocked' => 'تم حظر المشارك.',
+        'participant_unblocked' => 'تم إلغاء حظر المشارك.',
+        'support_contact_fetched' => 'تم جلب بيانات الدعم.',
+
         'auctions_fetched' => 'تم جلب المزادات.',
         'admin_auctions_fetched' => 'تم جلب مزادات الإدارة.',
         'auction_fetched' => 'تم جلب المزاد.',
@@ -35,6 +40,7 @@ return [
         'terms_version_created' => 'تم إنشاء نسخة شروط المزاد.',
         'terms_version_fetched' => 'تم جلب نسخة شروط المزاد.',
         'participants_fetched' => 'تم جلب مشاركي المزاد.',
+        'operational_settings_fetched' => 'تم جلب الإعدادات التشغيلية.',
         'activity_fetched' => 'تم جلب سجل نشاط المزاد.',
         'status_history_fetched' => 'تم جلب سجل حالات المزاد.',
         'configuration_versions_fetched' => 'تم جلب نسخ الإعدادات.',
@@ -54,6 +60,15 @@ return [
         'dashboard_fetched' => 'تم جلب مؤشرات لوحة المزادات.',
     ],
     'errors' => [
+        'participant_block_reason_required' => 'سبب حظر المشارك مطلوب.',
+        'participant_not_found' => 'المشارك غير موجود في هذا المزاد.',
+        'participant_block_winner_not_allowed' => 'لا يمكن حظر الفائز بعد إنشاء التسوية.',
+        'payout_destination_in_use' => 'لا يمكن حذف وسيلة استلام مرتبطة بمستحق قيد التنفيذ.',
+        'payout_destination_default_required' => 'يجب تعيين وسيلة استلام بديلة قبل حذف الوسيلة الافتراضية.',
+        'unauthenticated' => 'يرجى تسجيل الدخول.',
+        'not_found' => 'العنصر المطلوب غير موجود.',
+        'too_many_requests' => 'عدد المحاولات كبير جدًا. يرجى المحاولة بعد قليل.',
+        'handover_blocked_by_dispute' => 'لا يمكن تأكيد التسليم أثناء وجود نزاع مفتوح.',
         'auction_not_found' => 'المزاد غير موجود.',
         'forbidden' => 'غير مصرح.',
         'cancellation_reason_required' => 'سبب إلغاء المزاد مطلوب.',
@@ -89,6 +104,9 @@ return [
         'winner_default_override_not_authorized' => 'يتطلب تجاوز مهلة تعثر الفائز صلاحية مستقلة.',
         'winner_default_override_reason_required' => 'يتطلب تجاوز مهلة تعثر الفائز سببا موثقا.',
         'payment_deadline_not_expired' => 'لم تنته مهلة دفع الفائز بعد.',
+        'payment_grace_period_not_expired' => 'لم تنته فترة السماح لدفع الفائز بعد.',
+        'winner_default_blocked_by_pending_payment' => 'يوجد إثبات دفع قيد المراجعة، ولا يمكن تسجيل تعثر الفائز حاليا.',
+        'winner_default_actor_required' => 'يتطلب تسجيل تعثر الفائز يدويا تحديد المسؤول.',
         'invalid_transition' => 'لا يمكن نقل المزاد من :from إلى :to.',
         'dispute_reason_required' => 'سبب النزاع مطلوب.',
         'dispute_not_available' => 'نزاع المزاد غير متاح.',
@@ -154,6 +172,28 @@ return [
         'winner_receipt_confirmed' => 'تم تأكيد الاستلام من الفائز',
         'seller_submitted_review' => 'أرسل البائع المزاد للمراجعة',
     ],
+    'refund_statuses' => [
+        'pending' => 'قيد الانتظار',
+        'processing' => 'قيد التنفيذ',
+        'succeeded' => 'تم الاسترداد',
+        'failed' => 'فشل الاسترداد',
+        'manual_review' => 'قيد المراجعة اليدوية',
+        'cancelled' => 'ملغي',
+    ],
+
+    'deposit_hold_reasons' => [
+        'alternative_winner_candidate' => 'عربونك محجوز لأنك مرشح كفائز بديل.',
+        'seller_deposit_manual_review' => 'التأمين قيد المراجعة اليدوية.',
+        'seller_deposit_keep_held' => 'التأمين يبقى محجوزًا حتى اكتمال الإجراءات.',
+        'winner_payment_pending' => 'عربونك محجوز حتى سداد الفائز.',
+    ],
+
+    'payout_hold_reasons' => [
+        'open_dispute' => 'المستحق موقوف بسبب نزاع مفتوح.',
+        'missing_destination' => 'لا توجد وسيلة استلام محددة.',
+        'manual_review' => 'المستحق قيد المراجعة اليدوية.',
+    ],
+
     'statuses' => [
         'draft' => 'مسودة',
         'pending_review' => 'بانتظار المراجعة',
@@ -282,6 +322,90 @@ return [
         'finalized_seller' => [
             'title' => 'تم اختيار الفائز بمزادك',
             'body' => 'تم اختيار الفائز في مزاد «:auction» بقيمة :amount :currency. سنعلمك فور تأكيد الدفع.',
+        ],
+        'bidder_lost' => [
+            'refund_pending' => [
+                'title' => 'لم تفز بالمزاد',
+                'body' => 'انتهى مزاد «:auction» ولم تكن مزايدتك هي الفائزة. تم إدراج عربونك للاسترداد ويمكنك متابعة حالته من صفحة الاستردادات.',
+            ],
+            'held' => [
+                'title' => 'لم تفز بالمزاد',
+                'body' => 'انتهى مزاد «:auction» ولم تكن مزايدتك هي الفائزة. لا يزال عربونك محجوزًا مؤقتًا حتى اكتمال سداد الفائز، وسنعلمك فور الإفراج عنه.',
+            ],
+            'forfeited' => [
+                'title' => 'لم تفز بالمزاد',
+                'body' => 'انتهى مزاد «:auction» ولم تكن مزايدتك هي الفائزة. يمكنك مراجعة تفاصيل عربونك من صفحة المزاد.',
+            ],
+            'no_deposit' => [
+                'title' => 'لم تفز بالمزاد',
+                'body' => 'انتهى مزاد «:auction» ولم تكن مزايدتك هي الفائزة. شكرًا لمشاركتك، ويمكنك تصفح مزادات أخرى.',
+            ],
+        ],
+        'unsold_bidder' => [
+            'refund_pending' => [
+                'title' => 'انتهى المزاد دون بيع',
+                'body' => 'انتهى مزاد «:auction» دون إتمام البيع. تم إدراج عربونك للاسترداد ويمكنك متابعة حالته من صفحة الاستردادات.',
+            ],
+            'held' => [
+                'title' => 'انتهى المزاد دون بيع',
+                'body' => 'انتهى مزاد «:auction» دون إتمام البيع. سنعلمك فور الإفراج عن عربونك المحجوز.',
+            ],
+            'forfeited' => [
+                'title' => 'انتهى المزاد دون بيع',
+                'body' => 'انتهى مزاد «:auction» دون إتمام البيع. يمكنك مراجعة تفاصيل عربونك من صفحة المزاد.',
+            ],
+            'no_deposit' => [
+                'title' => 'انتهى المزاد دون بيع',
+                'body' => 'انتهى مزاد «:auction» دون إتمام البيع. شكرًا لمشاركتك، ويمكنك تصفح مزادات أخرى.',
+            ],
+        ],
+        'winner_payment_reminder' => [
+            'upcoming' => [
+                'title' => 'تذكير بموعد سداد المزاد',
+                'body' => 'تبقّى مبلغ :amount :currency لسداد مزاد «:auction» قبل :deadline. يرجى استكمال الدفع في الوقت المحدد.',
+            ],
+            'final' => [
+                'title' => 'تذكير أخير بموعد سداد المزاد',
+                'body' => 'تقترب مهلة سداد مزاد «:auction» وتنتهي في :deadline. المبلغ المتبقي :amount :currency، ويرجى استكمال الدفع فورًا لتفادي إلغاء الفوز.',
+            ],
+            'overdue' => [
+                'title' => 'انتهت مهلة سداد المزاد',
+                'body' => 'انتهت مهلة سداد مزاد «:auction» بتاريخ :deadline ولم يكتمل الدفع. أنت الآن ضمن فترة السماح، ويرجى سداد :amount :currency فورًا قبل إلغاء الفوز.',
+            ],
+        ],
+        'handover_reminder' => [
+            'seller' => [
+                'upcoming' => [
+                    'title' => 'تذكير بموعد التسليم',
+                    'body' => 'يرجى تسليم منتج مزاد «:auction» للفائز قبل :deadline وتأكيد التسليم من التطبيق.',
+                ],
+                'final' => [
+                    'title' => 'تذكير أخير بموعد التسليم',
+                    'body' => 'تقترب مهلة تسليم منتج مزاد «:auction» وتنتهي في :deadline. يرجى إتمام التسليم وتأكيده من التطبيق.',
+                ],
+                'overdue' => [
+                    'title' => 'تأخر تسليم المزاد',
+                    'body' => 'انتهت مهلة تسليم منتج مزاد «:auction» بتاريخ :deadline ولم يتم تأكيد التسليم. يرجى التواصل مع الفائز وإتمام التسليم، أو فتح نزاع إذا واجهتك مشكلة.',
+                ],
+            ],
+            'winner' => [
+                'upcoming' => [
+                    'title' => 'تذكير بتأكيد الاستلام',
+                    'body' => 'يرجى تأكيد استلام منتج مزاد «:auction» قبل :deadline بعد تسلمه من البائع.',
+                ],
+                'final' => [
+                    'title' => 'تذكير أخير بتأكيد الاستلام',
+                    'body' => 'تقترب مهلة تأكيد استلام منتج مزاد «:auction» وتنتهي في :deadline. يرجى تأكيد الاستلام من التطبيق.',
+                ],
+                'overdue' => [
+                    'title' => 'تأخر تأكيد الاستلام',
+                    'body' => 'انتهت مهلة تأكيد استلام منتج مزاد «:auction» بتاريخ :deadline. يرجى تأكيد الاستلام من التطبيق، أو فتح نزاع إذا لم تستلم المنتج.',
+                ],
+            ],
+        ],
+        'seller_deposit_expired' => [
+            'title' => 'تم إلغاء المزاد لانتهاء مهلة التأمين',
+            'body' => 'لم يتم استلام تأمين البائع لمزاد «:auction» خلال المهلة المحددة، وتم إلغاء المزاد ولم يتم نشره. يمكنك إنشاء مزاد جديد في أي وقت.',
         ],
         'winner_defaulted_winner' => [
             'title' => 'انتهت مهلة الدفع',

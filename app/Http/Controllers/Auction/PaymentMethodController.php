@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Auction\PaymentMethodResource;
 use App\Models\Auction\Auction;
@@ -11,6 +12,7 @@ use App\Models\Auction\PaymentMethod;
 use App\Services\Auction\Actions\CreatePaymentMethodAction;
 use App\Services\Auction\Actions\ListPaymentMethodsAction;
 use App\Services\Auction\Actions\UpdatePaymentMethodAction;
+use App\Services\Auction\Support\PaymentMethodDisclosureRule;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +27,34 @@ final class PaymentMethodController extends Controller
     {
         return $this->sendResponse(
             PaymentMethodResource::collection($action->execute()),
+            __('auction.messages.payment_methods_fetched')
+        );
+    }
+
+    public function forAuction(
+        Request $request,
+        Auction $auction,
+        ListPaymentMethodsAction $action,
+        PaymentMethodDisclosureRule $rule
+    ): JsonResponse {
+        if (! Gate::allows('view', $auction)) {
+            return $this->sendError(__('auction.errors.auction_not_found'), 404, 'auction_not_found');
+        }
+
+        $data = $request->validate([
+            'purpose' => ['required', Rule::in(['bidder_deposit', 'seller_deposit', 'winner_payment'])],
+        ]);
+
+        $purpose = match ($data['purpose']) {
+            'bidder_deposit' => PaymentPurpose::BidderDeposit,
+            'seller_deposit' => PaymentPurpose::SellerDeposit,
+            default => PaymentPurpose::WinnerSettlement,
+        };
+
+        $rule->assertCanSee($auction, $request->user(), $purpose);
+
+        return $this->sendResponse(
+            PaymentMethodResource::detailedCollection($action->execute()),
             __('auction.messages.payment_methods_fetched')
         );
     }
@@ -45,7 +75,7 @@ final class PaymentMethodController extends Controller
         ]);
 
         return $this->sendResponse(
-            new PaymentMethodResource($action->execute($data)),
+            (new PaymentMethodResource($action->execute($data)))->withTransferDetails(),
             __('auction.messages.payment_method_created'),
             201
         );
@@ -70,6 +100,9 @@ final class PaymentMethodController extends Controller
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
-        return $this->sendResponse(new PaymentMethodResource($action->execute($paymentMethod, $data)), __('auction.messages.payment_method_updated'));
+        return $this->sendResponse(
+            (new PaymentMethodResource($action->execute($paymentMethod, $data)))->withTransferDetails(),
+            __('auction.messages.payment_method_updated')
+        );
     }
 }

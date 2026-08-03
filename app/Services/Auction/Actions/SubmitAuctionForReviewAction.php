@@ -25,15 +25,15 @@ final class SubmitAuctionForReviewAction
             $auction = $this->auctions->lockForStateChange($auction->id);
 
             if ($auction->seller_id !== $sellerId) {
-                throw new AuctionException(__('auction.errors.seller_only_submit_review'));
+                throw AuctionException::domain('seller_only_submit_review');
             }
 
             if (! $auction->ends_at || ! $auction->starts_at || $auction->ends_at <= $auction->starts_at) {
-                throw new AuctionException(__('auction.errors.invalid_auction_times'));
+                throw AuctionException::domain('invalid_auction_times');
             }
 
             if (! $auction->terms_version_id) {
-                throw new AuctionException(__('auction.errors.active_terms_required'));
+                throw AuctionException::domain('active_terms_required');
             }
 
             return $this->stateMachine->transition(

@@ -8,6 +8,7 @@ use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
+use App\Repositories\Auction\AuctionDisputeRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
@@ -21,6 +22,7 @@ final class ConfirmAuctionHandoverBySellerAction
         private readonly AuctionAudit $audit,
         private readonly AuctionRepository $auctions,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly AuctionDisputeRepository $disputes,
     ) {}
 
     public function execute(Auction $auction, int $sellerId): Auction
@@ -30,11 +32,15 @@ final class ConfirmAuctionHandoverBySellerAction
             $settlement = $this->settlements->lockSettlement($auction->id);
 
             if ($auction->seller_id !== $sellerId || $auction->status !== AuctionStatus::HandoverPending) {
-                throw new AuctionException(__('auction.errors.auction_not_found'));
+                throw AuctionException::domain('auction_not_found');
             }
 
             if (! in_array($settlement->status, [SettlementStatus::Paid, SettlementStatus::HandoverPending], true)) {
-                throw new AuctionException(__('auction.errors.settlement_must_be_paid'));
+                throw AuctionException::domain('settlement_must_be_paid');
+            }
+
+            if ($this->disputes->hasOpenDispute($auction->id)) {
+                throw AuctionException::domain('handover_blocked_by_dispute');
             }
 
             $now = Carbon::now();

@@ -187,6 +187,34 @@ final class AuctionConfigurationSnapshotTest extends TestCase
         $this->assertNotSame($hasher->hash($first), $hasher->hash($changed));
     }
 
+    public function test_snapshot_created_before_the_deadline_columns_existed_still_validates(): void
+    {
+        $version = $this->configurationVersion(1);
+        $auction = $this->auction(AuctionStatus::PendingReview, $version);
+        app(ReviewAuctionAction::class)->approve($auction, $this->user('admin')->id, 'approved');
+
+        $snapshot = AuctionConfigurationSnapshot::where('auction_id', $auction->id)->firstOrFail();
+
+        $legacy = $snapshot->toArray();
+        unset(
+            $legacy['winner_payment_grace_period_minutes'],
+            $legacy['seller_deposit_deadline_minutes'],
+            $legacy['review_sla_minutes'],
+        );
+
+        $this->assertSame(
+            $snapshot->snapshot_hash,
+            app(AuctionConfigurationSnapshotHasher::class)->hash($legacy),
+            'Adding deadline columns must not invalidate snapshots hashed before they existed'
+        );
+
+        $this->assertSame(
+            $snapshot->id,
+            app(\App\Services\Auction\Support\AuctionConfigurationSnapshotReader::class)
+                ->forAuction($auction->refresh())->id
+        );
+    }
+
     private function configurationVersion(
         int $number,
         int $sellerDeposit = 100,

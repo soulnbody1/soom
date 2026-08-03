@@ -10,6 +10,8 @@ use App\Models\Auction\AuctionTermsVersion;
 
 final class AuctionConfigurationSnapshotValidator
 {
+    private array $knownTermsVersions = [];
+
     private const SELLER_POLICY_KEYS = [
         'unsold',
         'completed',
@@ -102,11 +104,20 @@ final class AuctionConfigurationSnapshotValidator
             $errors[] = 'winner_default_deposit_policy.forfeit_amount_minor: must be non-negative';
         }
 
-        if (($data['terms_version_id'] ?? null) && ! AuctionTermsVersion::whereKey($data['terms_version_id'])->exists()) {
+        if (($data['terms_version_id'] ?? null) && ! $this->termsVersionExists((int) $data['terms_version_id'])) {
             $errors[] = 'terms_version_id: not found';
         }
 
         return $errors;
+    }
+
+    private function termsVersionExists(int $termsVersionId): bool
+    {
+        if (array_key_exists($termsVersionId, $this->knownTermsVersions)) {
+            return $this->knownTermsVersions[$termsVersionId];
+        }
+
+        return $this->knownTermsVersions[$termsVersionId] = AuctionTermsVersion::whereKey($termsVersionId)->exists();
     }
 
     private function requiredKeys(): array

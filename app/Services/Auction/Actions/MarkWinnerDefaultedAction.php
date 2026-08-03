@@ -57,17 +57,23 @@ final class MarkWinnerDefaultedAction
 
     public function execute(
         Auction $auction,
-        int $adminId,
+        ?int $adminId,
         string $reason,
         bool $reassignToNext = false,
         bool $overrideDeadline = false,
-        string $overrideReason = ''
+        string $overrideReason = '',
+        bool $automatic = false
     ): Auction {
         if (trim($reason) === '') {
-            throw new AuctionException(__('auction.errors.default_reason_required'));
+            throw AuctionException::domain('default_reason_required');
         }
 
-        return $this->transaction->run(function () use ($auction, $adminId, $reason, $reassignToNext, $overrideDeadline, $overrideReason): Auction {
+        if (! $automatic && $adminId === null) {
+            throw AuctionException::domain('winner_default_actor_required');
+        }
+
+        return $this->transaction->run(function () use ($auction, $adminId, $reason, $reassignToNext, $overrideDeadline, $overrideReason, $automatic): Auction {
+            $actorType = $automatic ? 'system' : 'admin';
             $auction = $this->auctions->lockForStateChange($auction->id);
             $snapshot = $this->snapshotReader->forAuction($auction);
             $settlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
@@ -77,18 +83,24 @@ final class MarkWinnerDefaultedAction
             }
 
             if ($auction->status !== AuctionStatus::PaymentPending) {
-                throw new AuctionException(__('auction.errors.winner_default_state_not_allowed'));
+                throw AuctionException::domain('winner_default_state_not_allowed');
             }
 
             if (! $settlement) {
-                throw new AuctionException(__('auction.errors.current_settlement_missing'));
+                throw AuctionException::domain('current_settlement_missing');
             }
 
             $this->assertDefaultableSettlement($auction, $settlement);
-            $originalDeadline = $this->assertDeadline($settlement, $overrideDeadline, $overrideReason, $adminId);
+            $originalDeadline = $automatic
+                ? $this->assertAutomaticDeadline($settlement, $snapshot)
+                : $this->assertDeadline($settlement, $overrideDeadline, $overrideReason, (int) $adminId);
 
             if ($this->payments->lockSucceededTransactionForObligation(FinancialObligationKey::forSettlement($settlement))) {
-                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                throw AuctionException::domain('payment_obligation_already_paid');
+            }
+
+            if ($automatic && $this->payments->lockPendingReviewSubmissionsForSettlement($settlement->id)->isNotEmpty()) {
+                throw AuctionException::domain('winner_default_blocked_by_pending_payment');
             }
 
             $defaultedUserId = (int) $settlement->winner_id;
@@ -100,17 +112,19 @@ final class MarkWinnerDefaultedAction
                 $settlement,
                 $reason,
                 $originalDeadline ? $adminId : null,
-                $originalDeadline ? trim($overrideReason) : null
+                $originalDeadline ? trim($overrideReason) : null,
+                $automatic
             );
 
             $this->supersedePendingSettlementSubmissions($settlement->id, $adminId);
             $this->resolveDefaultedWinnerDeposit($auction, $winnerDeposit, $disposition, $adminId);
 
-            $this->audit->log('auction.winner_defaulted', $auction, $adminId, 'admin', [
+            $this->audit->log('auction.winner_defaulted', $auction, $adminId, $actorType, [
                 'defaulted_user_id' => $defaultedUserId,
                 'settlement_public_id' => $settlement->public_id,
                 'winning_bid_public_id' => $currentWinningBid->public_id,
                 'reason' => $reason,
+                'automatic' => $automatic,
                 'deadline_overridden' => $originalDeadline !== null,
                 'original_payment_due_at' => $originalDeadline?->toIso8601String(),
                 'deposit_disposition' => $disposition->metadata(),
@@ -120,6 +134,7 @@ final class MarkWinnerDefaultedAction
                 'settlement_public_id' => $settlement->public_id,
                 'defaulted_user_id' => $defaultedUserId,
                 'reason' => $reason,
+                'automatic' => $automatic,
                 'deadline_overridden' => $originalDeadline !== null,
             ]);
 
@@ -130,17 +145,17 @@ final class MarkWinnerDefaultedAction
 
                 if ($alternativeBid) {
                     $auction = $this->assignAlternativeWinner($auction, $settlement, $alternativeBid, $adminId, $reason);
-                    $this->nonWinnerDeposits->execute($auction, 'alternative_selected', $adminId, 'admin', [$defaultedUserId]);
-                    $this->sellerDepositDisposition->execute($auction, 'winner_default', $adminId, 'admin', $reason);
+                    $this->nonWinnerDeposits->execute($auction, 'alternative_selected', $adminId, $actorType, [$defaultedUserId]);
+                    $this->sellerDepositDisposition->execute($auction, 'winner_default', $adminId, $actorType, $reason);
 
                     return $auction->refresh();
                 }
             }
 
-            $auction = $this->stateMachine->transition($auction, AuctionStatus::Defaulted, $adminId, 'admin', $reason);
+            $auction = $this->stateMachine->transition($auction, AuctionStatus::Defaulted, $adminId, $actorType, $reason);
             $auction->forceFill(['winning_bid_id' => null]);
             $this->auctions->save($auction);
-            $auction = $this->stateMachine->transition($auction->refresh(), AuctionStatus::Unsold, $adminId, 'admin', $reason);
+            $auction = $this->stateMachine->transition($auction->refresh(), AuctionStatus::Unsold, $adminId, $actorType, $reason);
 
             $this->audit->outbox('auction.no_alternative_winner', $auction, [
                 'auction_public_id' => $auction->public_id,
@@ -148,8 +163,8 @@ final class MarkWinnerDefaultedAction
                 'settlement_public_id' => $settlement->public_id,
             ]);
 
-            $this->nonWinnerDeposits->execute($auction, 'no_alternative', $adminId, 'admin', [$defaultedUserId]);
-            $this->sellerDepositDisposition->execute($auction, 'winner_default', $adminId, 'admin', $reason);
+            $this->nonWinnerDeposits->execute($auction, 'no_alternative', $adminId, $actorType, [$defaultedUserId]);
+            $this->sellerDepositDisposition->execute($auction, 'winner_default', $adminId, $actorType, $reason);
 
             return $auction->refresh();
         });
@@ -158,35 +173,51 @@ final class MarkWinnerDefaultedAction
     private function assertDefaultableSettlement(Auction $auction, $settlement): void
     {
         if (! $settlement->is_current || $settlement->current_marker !== 1) {
-            throw new AuctionException(__('auction.errors.payment_target_not_current'));
+            throw AuctionException::domain('payment_target_not_current');
         }
 
         if ($settlement->status !== SettlementStatus::PaymentPending) {
             if (in_array($settlement->status, [SettlementStatus::Paid, SettlementStatus::HandoverPending, SettlementStatus::Completed], true)) {
-                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                throw AuctionException::domain('payment_obligation_already_paid');
             }
 
-            throw new AuctionException(__('auction.errors.winner_default_settlement_not_allowed'));
+            throw AuctionException::domain('winner_default_settlement_not_allowed');
         }
 
         if ((int) $settlement->amount_due_minor <= 0 || (int) $settlement->amount_paid_minor >= (int) $settlement->amount_due_minor || (int) $settlement->remaining_amount_minor <= 0) {
-            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+            throw AuctionException::domain('payment_obligation_already_paid');
         }
 
         if ((int) $auction->winning_bid_id !== (int) $settlement->winning_bid_id) {
-            throw new AuctionException(__('auction.errors.winner_changed'));
+            throw AuctionException::domain('winner_changed');
         }
 
         $winningBid = AuctionBid::whereKey($settlement->winning_bid_id)->lockForUpdate()->firstOrFail();
         if ((int) $winningBid->bidder_id !== (int) $settlement->winner_id) {
-            throw new AuctionException(__('auction.errors.winner_changed'));
+            throw AuctionException::domain('winner_changed');
         }
+    }
+
+    private function assertAutomaticDeadline($settlement, $snapshot): ?\Carbon\CarbonInterface
+    {
+        if (! $settlement->payment_due_at) {
+            throw AuctionException::domain('payment_deadline_missing');
+        }
+
+        $graceEndsAt = $settlement->payment_grace_ends_at
+            ?? $settlement->payment_due_at->addMinutes($snapshot->winnerPaymentGracePeriodMinutes());
+
+        if (Carbon::now()->lessThanOrEqualTo($graceEndsAt)) {
+            throw AuctionException::domain('payment_grace_period_not_expired');
+        }
+
+        return null;
     }
 
     private function assertDeadline($settlement, bool $overrideDeadline, string $overrideReason, int $adminId): ?\Carbon\CarbonInterface
     {
         if (! $settlement->payment_due_at) {
-            throw new AuctionException(__('auction.errors.payment_deadline_missing'));
+            throw AuctionException::domain('payment_deadline_missing');
         }
 
         if (Carbon::now()->greaterThan($settlement->payment_due_at)) {
@@ -194,21 +225,21 @@ final class MarkWinnerDefaultedAction
         }
 
         if (! $overrideDeadline) {
-            throw new AuctionException(__('auction.errors.payment_deadline_not_expired'));
+            throw AuctionException::domain('payment_deadline_not_expired');
         }
 
         if (trim($overrideReason) === '') {
-            throw new AuctionException(__('auction.errors.winner_default_override_reason_required'));
+            throw AuctionException::domain('winner_default_override_reason_required');
         }
 
         if (! $this->userHasPermission($adminId, self::OVERRIDE_DEADLINE_PERMISSION)) {
-            throw new AuctionException(__('auction.errors.winner_default_override_not_authorized'));
+            throw AuctionException::domain('winner_default_override_not_authorized');
         }
 
         return $settlement->payment_due_at;
     }
 
-    private function supersedePendingSettlementSubmissions(int $settlementId, int $adminId): void
+    private function supersedePendingSettlementSubmissions(int $settlementId, ?int $adminId): void
     {
         foreach ($this->payments->lockPendingReviewSubmissionsForSettlement($settlementId) as $submission) {
             $submission->forceFill([
@@ -225,7 +256,7 @@ final class MarkWinnerDefaultedAction
         Auction $auction,
         ?AuctionDeposit $deposit,
         WinnerDefaultDepositDispositionDTO $disposition,
-        int $adminId
+        ?int $adminId
     ): void {
         if (! $deposit || $disposition->disposition === WinnerDefaultDepositDisposition::NoAction) {
             return;
@@ -240,7 +271,7 @@ final class MarkWinnerDefaultedAction
         };
     }
 
-    private function forfeitDefaultedWinnerDeposit(Auction $auction, AuctionDeposit $deposit, int $adminId): void
+    private function forfeitDefaultedWinnerDeposit(Auction $auction, AuctionDeposit $deposit, ?int $adminId): void
     {
         $forfeited = (int) $deposit->held_amount_minor + (int) $deposit->applied_amount_minor;
         if ($forfeited <= 0) {
@@ -271,7 +302,7 @@ final class MarkWinnerDefaultedAction
         Auction $auction,
         AuctionDeposit $deposit,
         WinnerDefaultDepositDispositionDTO $disposition,
-        int $adminId
+        ?int $adminId
     ): void {
         $available = (int) $deposit->held_amount_minor + (int) $deposit->applied_amount_minor;
         $forfeitAmount = min($available, $disposition->forfeitAmountMinor);
@@ -309,7 +340,7 @@ final class MarkWinnerDefaultedAction
         ]);
     }
 
-    private function markDefaultedWinnerDepositForManualReview(Auction $auction, AuctionDeposit $deposit, int $adminId): void
+    private function markDefaultedWinnerDepositForManualReview(Auction $auction, AuctionDeposit $deposit, ?int $adminId): void
     {
         $deposit->forceFill([
             'hold_reason' => 'defaulted_winner_deposit_manual_review',
@@ -364,7 +395,7 @@ final class MarkWinnerDefaultedAction
         Auction $auction,
         $defaultedSettlement,
         AuctionBid $newBid,
-        int $adminId,
+        ?int $adminId,
         string $reason
     ): Auction {
         $now = Carbon::now();
@@ -397,6 +428,10 @@ final class MarkWinnerDefaultedAction
             ]
         );
 
+        $paymentDueAt = $amountDue > 0
+            ? $now->copy()->addMinutes((int) $snapshot->winner_payment_deadline_minutes)
+            : null;
+
         $newSettlement = $this->settlements->createSettlement(new CreateSettlementDTO(
             auctionId: $auction->id,
             winningBidId: $newBid->id,
@@ -410,9 +445,8 @@ final class MarkWinnerDefaultedAction
             amountPaidMinor: 0,
             remainingAmountMinor: $amountDue,
             currencyCode: $snapshot->currency_code,
-            paymentDueAt: $amountDue > 0
-                ? $now->copy()->addMinutes((int) $snapshot->winner_payment_deadline_minutes)
-                : null,
+            paymentDueAt: $paymentDueAt,
+            paymentGraceEndsAt: $paymentDueAt?->copy()->addMinutes($snapshot->winnerPaymentGracePeriodMinutes()),
             handoverDueAt: $amountDue === 0
                 ? $now->copy()->addMinutes((int) $snapshot->handover_deadline_minutes)
                 : null,

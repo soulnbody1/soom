@@ -35,7 +35,7 @@ final class StartSellerPayoutProcessingAction
             $payout = $this->payouts->lockById($payout->id);
 
             if (! in_array($payout->status, self::ALLOWED_FROM, true)) {
-                throw new AuctionException(__('auction.errors.payout_status_invalid'));
+                throw AuctionException::domain('payout_status_invalid');
             }
 
             $this->rules->ensureNoOpenDispute($payout);

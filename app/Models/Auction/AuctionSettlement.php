@@ -9,6 +9,7 @@ use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 final class AuctionSettlement extends Model
@@ -36,6 +37,9 @@ final class AuctionSettlement extends Model
         'remaining_amount_minor',
         'currency_code',
         'payment_due_at',
+        'payment_grace_ends_at',
+        'payment_reminders_sent',
+        'handover_reminders_sent',
         'handover_due_at',
         'paid_at',
         'seller_handover_confirmed_at',
@@ -47,6 +51,7 @@ final class AuctionSettlement extends Model
         'cancel_reason',
         'defaulted_at',
         'default_reason',
+        'auto_defaulted',
         'overridden_by',
         'overridden_at',
         'override_reason',
@@ -58,6 +63,9 @@ final class AuctionSettlement extends Model
         'is_current' => 'boolean',
         'superseded_at' => 'immutable_datetime',
         'payment_due_at' => 'immutable_datetime',
+        'payment_grace_ends_at' => 'immutable_datetime',
+        'payment_reminders_sent' => 'array',
+        'handover_reminders_sent' => 'array',
         'handover_due_at' => 'immutable_datetime',
         'paid_at' => 'immutable_datetime',
         'seller_handover_confirmed_at' => 'immutable_datetime',
@@ -66,6 +74,7 @@ final class AuctionSettlement extends Model
         'completed_at' => 'immutable_datetime',
         'cancelled_at' => 'immutable_datetime',
         'defaulted_at' => 'immutable_datetime',
+        'auto_defaulted' => 'boolean',
         'overridden_at' => 'immutable_datetime',
         'original_payment_due_at' => 'immutable_datetime',
     ];
@@ -93,5 +102,10 @@ final class AuctionSettlement extends Model
     public function sellerPayout(): HasOne
     {
         return $this->hasOne(AuctionSellerPayout::class, 'settlement_id');
+    }
+
+    public function paymentSubmissions(): HasMany
+    {
+        return $this->hasMany(PaymentSubmission::class, 'settlement_id');
     }
 }

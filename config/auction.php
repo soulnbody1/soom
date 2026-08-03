@@ -20,6 +20,7 @@ return [
         'auction.payouts.view',
         'auction.payouts.manage',
         'auction.dashboard.view',
+        'auction.participants.block',
     ],
 
     'refunds' => [
@@ -59,5 +60,25 @@ return [
     'outbox' => [
         'max_attempts' => (int) env('AUCTION_OUTBOX_MAX_ATTEMPTS', 3),
         'retry_delay_seconds' => (int) env('AUCTION_OUTBOX_RETRY_DELAY_SECONDS', 300),
+    ],
+
+    'deadlines' => [
+        'winner_payment_grace_period_hours' => (int) env('AUCTION_WINNER_PAYMENT_GRACE_PERIOD_HOURS', 24),
+        'winner_payment_reminder_hours_before' => array_values(array_filter(
+            array_map('intval', explode(',', (string) env('AUCTION_WINNER_PAYMENT_REMINDER_HOURS_BEFORE', '24,6,1'))),
+            static fn (int $hour): bool => $hour > 0
+        )),
+        'handover_reminder_hours_before' => array_values(array_filter(
+            array_map('intval', explode(',', (string) env('AUCTION_HANDOVER_REMINDER_HOURS_BEFORE', '24,1'))),
+            static fn (int $hour): bool => $hour > 0
+        )),
+        'seller_deposit_deadline_hours' => (int) env('AUCTION_SELLER_DEPOSIT_DEADLINE_HOURS', 48),
+        'seller_deposit_expiry_lease_minutes' => (int) env('AUCTION_SELLER_DEPOSIT_EXPIRY_LEASE_MINUTES', 15),
+        'review_sla_hours' => (int) env('AUCTION_REVIEW_SLA_HOURS', 24),
+    ],
+
+    'bidding' => [
+        'rate_limit_per_minute' => (int) env('AUCTION_BID_RATE_LIMIT_PER_MINUTE', 30),
+        'rate_limit_per_minute_per_ip' => (int) env('AUCTION_BID_RATE_LIMIT_PER_MINUTE_PER_IP', 120),
     ],
 ];

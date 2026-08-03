@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Notifications;
 
+use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Models\Auction\Auction;
+use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\OutboxMessage;
 use App\Models\User;
 use App\Services\Auction\Support\AuctionNotificationCatalog;
@@ -41,6 +43,13 @@ final class PersonalDeliveryResolver
             'auction.payment_approved',
             'auction.payment_rejected' => $this->payment($message, $payload, $params),
             'auction.finalized' => $this->finalized($payload, $auction, $params),
+            'auction.bidder_lost' => $this->bidderLost($payload, $auction, $params, 'bidder_lost'),
+            'auction.unsold_bidders' => $this->bidderLost($payload, $auction, $params, 'unsold_bidder'),
+            'auction.winner_payment_reminder' => $this->winnerPaymentReminder($payload, $auction, $params),
+            'auction.handover_reminder' => $this->handoverReminder($payload, $auction, $params),
+            'auction.seller_deposit_expired' => [
+                $this->sellerDelivery($auction, 'seller_deposit_expired', $params, AuctionNotificationCatalog::SCREEN_SELLER_AUCTION),
+            ],
             'auction.winner_defaulted' => $this->winnerDefaulted($payload, $auction, $params),
             'auction.alternative_winner_selected' => $this->alternativeWinner($payload, $auction, $params),
             'auction.winner_deposit_forfeited' => $this->depositEvent($payload, 'winner_deposit_forfeited', $params, 'forfeited_amount_minor', $message->event_type),
@@ -214,6 +223,116 @@ final class PersonalDeliveryResolver
         }
 
         return $deliveries;
+    }
+
+    private function bidderLost(array $payload, Auction $auction, array $params, string $group): array
+    {
+        $userIds = array_values(array_unique(array_filter(
+            array_map('intval', (array) ($payload['bidder_ids'] ?? [])),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($userIds === []) {
+            return [];
+        }
+
+        $deposits = AuctionDeposit::where('auction_id', $auction->id)
+            ->where('type', 'bidder')
+            ->whereIn('user_id', $userIds)
+            ->get()
+            ->keyBy('user_id');
+
+        $users = User::whereIn('id', $userIds)->get();
+
+        return $users->map(function (User $user) use ($deposits, $params, $group): array {
+            $deposit = $deposits->get($user->id);
+            $state = $this->depositOutcome($deposit);
+
+            return $this->delivery(
+                $user,
+                "{$group}.{$state}",
+                $params,
+                $state === 'refund_pending'
+                    ? AuctionNotificationCatalog::SCREEN_AUCTION_REFUNDS
+                    : AuctionNotificationCatalog::SCREEN_AUCTION_DETAILS,
+                ['deposit_status' => $deposit?->status?->value],
+            );
+        })->all();
+    }
+
+    private function depositOutcome(?AuctionDeposit $deposit): string
+    {
+        if (! $deposit) {
+            return 'no_deposit';
+        }
+
+        return match ($deposit->status) {
+            AuctionDepositStatus::RefundPending, AuctionDepositStatus::Refunded => 'refund_pending',
+            AuctionDepositStatus::Held => 'held',
+            AuctionDepositStatus::Forfeited => 'forfeited',
+            default => 'no_deposit',
+        };
+    }
+
+    private function winnerPaymentReminder(array $payload, Auction $auction, array $params): array
+    {
+        $settlement = $auction->settlement;
+        $winner = $this->payloads->requiredUser(
+            (int) ($payload['winner_id'] ?? $settlement?->winner_id ?? 0),
+            'auction.winner_payment_reminder'
+        );
+
+        $currency = (string) ($payload['currency_code'] ?? $settlement?->currency_code ?? $auction->currency_code);
+        $dueAt = $settlement?->payment_due_at;
+
+        return [
+            $this->delivery(
+                $winner,
+                'winner_payment_reminder.'.$this->reminderBucket((int) ($payload['hours_before'] ?? 0)),
+                [
+                    ...$params,
+                    'amount' => $this->format->money((int) ($payload['remaining_amount_minor'] ?? $settlement?->remaining_amount_minor ?? 0), $currency),
+                    'currency' => $currency,
+                    'deadline' => $this->format->dateTime($dueAt),
+                ],
+                AuctionNotificationCatalog::SCREEN_AUCTION_PAYMENT,
+                ['deadline' => $dueAt?->toIso8601String(), 'hours_before' => (int) ($payload['hours_before'] ?? 0)],
+            ),
+        ];
+    }
+
+    private function handoverReminder(array $payload, Auction $auction, array $params): array
+    {
+        $audience = (string) ($payload['audience'] ?? 'seller');
+        $settlement = $auction->settlement;
+        $dueAt = $settlement?->handover_due_at;
+
+        $user = $audience === 'winner' ? $settlement?->winner : $auction->seller;
+
+        if (! $user instanceof User) {
+            throw new \RuntimeException('No notification recipient found for auction.handover_reminder.');
+        }
+
+        return [
+            $this->delivery(
+                $user,
+                "handover_reminder.{$audience}.".$this->reminderBucket((int) ($payload['hours_before'] ?? 0)),
+                [...$params, 'deadline' => $this->format->dateTime($dueAt)],
+                $audience === 'winner'
+                    ? AuctionNotificationCatalog::SCREEN_AUCTION_DETAILS
+                    : AuctionNotificationCatalog::SCREEN_SELLER_AUCTION,
+                ['deadline' => $dueAt?->toIso8601String(), 'hours_before' => (int) ($payload['hours_before'] ?? 0)],
+            ),
+        ];
+    }
+
+    private function reminderBucket(int $hoursBefore): string
+    {
+        return match (true) {
+            $hoursBefore <= 0 => 'overdue',
+            $hoursBefore === 1 => 'final',
+            default => 'upcoming',
+        };
     }
 
     private function winnerDefaulted(array $payload, Auction $auction, array $params): array

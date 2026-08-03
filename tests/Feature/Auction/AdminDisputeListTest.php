@@ -129,7 +129,7 @@ final class AdminDisputeListTest extends TestCase
         ]);
 
         $data = $this->actingAs($this->user('admin'), 'sanctum')
-            ->getJson('/api/auctions/'.$auction->public_id)
+            ->getJson('/api/admin/auctions/'.$auction->public_id)
             ->assertOk()
             ->json('data');
 

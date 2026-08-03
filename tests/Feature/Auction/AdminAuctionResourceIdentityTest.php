@@ -55,26 +55,22 @@ final class AdminAuctionResourceIdentityTest extends TestCase
         [$auction, $seller, $bidder] = $this->fullAuction();
 
         $response = $this->actingAs($this->user('admin'), 'sanctum')
-            ->getJson('/api/auctions/'.$auction->public_id)
+            ->getJson('/api/admin/auctions/'.$auction->public_id)
             ->assertOk();
 
         $data = $response->json('data');
 
-        // Seller identity (A-3).
         $this->assertSame($seller->id, $data['seller']['id']);
 
-        // Deposit owner identity (A-5).
         $bidderDeposit = collect($data['deposits'])->firstWhere('type', 'bidder');
         $this->assertNotNull($bidderDeposit);
         $this->assertSame($bidder->id, $bidderDeposit['user']['id']);
         $this->assertSame($bidder->name, $bidderDeposit['user']['name']);
 
-        // Submission submitter identity (A-5).
         $submission = collect($data['payment_submissions'])->first();
         $this->assertNotNull($submission);
         $this->assertSame($bidder->id, $submission['user']['id']);
 
-        // Settlement winner + handover timestamps (A-5).
         $settlement = $data['financial_details']['settlement'];
         $this->assertSame($bidder->id, $settlement['winner']['id']);
         $this->assertSame($bidder->name, $settlement['winner']['name']);
@@ -96,7 +92,6 @@ final class AdminAuctionResourceIdentityTest extends TestCase
 
         $data = $response->json('data');
 
-        // MyAuctionResource path: bidder sees own deposits without the admin-gated user block.
         $this->assertArrayHasKey('my_deposits', $data);
         foreach ($data['my_deposits'] as $deposit) {
             $this->assertArrayNotHasKey('user', $deposit);
@@ -104,8 +99,18 @@ final class AdminAuctionResourceIdentityTest extends TestCase
         foreach ($data['my_payment_submissions'] as $submission) {
             $this->assertArrayNotHasKey('user', $submission);
         }
-        $this->assertArrayNotHasKey('seller', $data);
+
         $this->assertArrayNotHasKey('financial_details', $data);
+        $this->assertArrayNotHasKey('internal_id', $data);
+        $this->assertArrayNotHasKey('deposits', $data);
+        $this->assertArrayNotHasKey('payment_submissions', $data);
+
+        $this->assertArrayHasKey('seller', $data);
+        $this->assertArrayNotHasKey('id', $data['seller']);
+        $this->assertArrayNotHasKey('phone', $data['seller']);
+        $this->assertFalse($data['seller']['is_me']);
+
+        $this->assertNull($data['seller_context']);
     }
 
     public function test_public_view_unchanged_for_guests(): void
@@ -120,6 +125,13 @@ final class AdminAuctionResourceIdentityTest extends TestCase
         $this->assertArrayNotHasKey('payment_submissions', $data);
         $this->assertArrayNotHasKey('financial_details', $data);
         $this->assertArrayNotHasKey('internal_id', $data);
+
+        $this->assertSame([], $data['my_deposits']);
+        $this->assertSame([], $data['my_payment_submissions']);
+        $this->assertNull($data['winner_settlement']);
+        $this->assertNull($data['seller_context']);
+        $this->assertNull($data['current_dispute']);
+        $this->assertSame('authentication_required', $data['my_participation']['blocking_reason']);
     }
 
     // ─── Fixtures ──────────────────────────────────────────────

@@ -8,10 +8,12 @@ use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 final class PayoutDestination extends Model
 {
     use HasPublicId;
+    use SoftDeletes;
 
     protected $fillable = [
         'public_id',

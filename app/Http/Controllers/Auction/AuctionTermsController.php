@@ -7,11 +7,14 @@ namespace App\Http\Controllers\Auction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\CreateTermsVersionRequest;
 use App\Models\Auction\Auction;
+use App\Models\Auction\AuctionConfigurationSnapshot;
+use App\Models\Auction\AuctionTermsAcceptance;
 use App\Models\Auction\AuctionTermsVersion;
 use App\Services\Auction\Actions\CreateAuctionTermsVersionAction;
 use App\Services\Auction\Actions\ListAuctionTermsAction;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -25,6 +28,43 @@ final class AuctionTermsController extends Controller
             $action->execute(),
             __('auction.messages.terms_fetched')
         );
+    }
+
+    public function showForAuction(Request $request, Auction $auction): JsonResponse
+    {
+        if (! Gate::allows('view', $auction)) {
+            return $this->sendError(__('auction.errors.auction_not_found'), 404, 'auction_not_found');
+        }
+
+        $termsVersionId = $this->snapshotTermsVersionId($auction);
+
+        if ($termsVersionId === null) {
+            return $this->sendError(__('auction.errors.terms_missing'), 404, 'terms_missing');
+        }
+
+        $terms = AuctionTermsVersion::find($termsVersionId);
+
+        if (! $terms) {
+            return $this->sendError(__('auction.errors.terms_missing'), 404, 'terms_missing');
+        }
+
+        $userId = $request->user()?->id;
+        $acceptance = $userId === null
+            ? null
+            : AuctionTermsAcceptance::where('auction_id', $auction->id)
+                ->where('user_id', $userId)
+                ->where('terms_version_id', $terms->id)
+                ->first();
+
+        return $this->sendResponse([
+            'id' => $terms->public_id,
+            'version_number' => $terms->version_number,
+            'title' => $terms->title,
+            'body' => $terms->body,
+            'published_at' => $terms->published_at?->toIso8601String(),
+            'accepted' => $userId !== null && $acceptance !== null,
+            'accepted_at' => $acceptance?->accepted_at?->toIso8601String(),
+        ], __('auction.messages.terms_version_fetched'));
     }
 
     public function show(AuctionTermsVersion $terms): JsonResponse
@@ -59,5 +99,15 @@ final class AuctionTermsController extends Controller
             'title' => $terms->title,
             'is_active' => $terms->is_active,
         ], __('auction.messages.terms_version_created'), 201);
+    }
+
+    private function snapshotTermsVersionId(Auction $auction): ?int
+    {
+        $snapshotTermsId = AuctionConfigurationSnapshot::where('auction_id', $auction->id)
+            ->value('terms_version_id');
+
+        return $snapshotTermsId === null
+            ? ($auction->terms_version_id === null ? null : (int) $auction->terms_version_id)
+            : (int) $snapshotTermsId;
     }
 }

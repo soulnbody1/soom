@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
-use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\PlaceBidRequest;
@@ -34,23 +33,19 @@ final class BidController extends Controller
 
     public function store(PlaceBidRequest $request, Auction $auction, PlaceBidAction $action): JsonResponse
     {
-        try {
-            Gate::authorize('bid', $auction);
+        Gate::authorize('bid', $auction);
 
-            $data = $request->validated();
-            $bid = $action->execute(
-                $auction,
-                Auth::id(),
-                $data['amount'],
-                $data['currency_code'],
-                $data['idempotency_key'],
-                $data['client_request_id'] ?? null
-            );
+        $data = $request->validated();
+        $bid = $action->execute(
+            $auction,
+            Auth::id(),
+            $data['amount'],
+            $data['currency_code'],
+            $data['idempotency_key'],
+            $data['client_request_id'] ?? null
+        );
 
-            return $this->sendResponse(new AuctionBidResource($bid), __('auction.messages.bid_accepted'), 201);
-        } catch (AuctionException $exception) {
-            return $this->sendError($exception->getMessage(), 422);
-        }
+        return $this->sendResponse(new AuctionBidResource($bid), __('auction.messages.bid_accepted'), 201);
     }
 
     public function mine(AuctionIndexRequest $request, ListUserBidsAction $action): JsonResponse

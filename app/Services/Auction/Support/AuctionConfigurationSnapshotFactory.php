@@ -50,7 +50,12 @@ final class AuctionConfigurationSnapshotFactory
             'non_winner_deposit_hold_policy' => $nonWinnerPolicy,
             'alternative_candidate_limit' => $candidateLimit,
             'winner_payment_deadline_minutes' => (int) $auction->winner_payment_deadline_hours * 60,
+            'winner_payment_grace_period_minutes' => (int) config('auction.deadlines.winner_payment_grace_period_hours', 24) * 60,
+            'winner_payment_reminder_hours' => $this->reminderHours('auction.deadlines.winner_payment_reminder_hours_before'),
+            'seller_deposit_deadline_minutes' => (int) config('auction.deadlines.seller_deposit_deadline_hours', 48) * 60,
+            'review_sla_minutes' => (int) config('auction.deadlines.review_sla_hours', 24) * 60,
             'handover_deadline_minutes' => (int) $auction->handover_deadline_hours * 60,
+            'handover_reminder_hours' => $this->reminderHours('auction.deadlines.handover_reminder_hours_before'),
             'platform_fee_type' => $platformFeeType,
             'platform_fee_value' => $platformFeeValue,
             'platform_fee_min_minor' => (int) ($configuration['platform_fee_min_minor'] ?? 0),
@@ -65,5 +70,17 @@ final class AuctionConfigurationSnapshotFactory
         $data['snapshot_hash'] = $this->hasher->hash($data);
 
         return $data;
+    }
+
+    private function reminderHours(string $configKey): array
+    {
+        $hours = array_values(array_unique(array_filter(
+            array_map('intval', (array) config($configKey, [])),
+            static fn (int $hour): bool => $hour > 0
+        )));
+
+        rsort($hours);
+
+        return $hours;
     }
 }

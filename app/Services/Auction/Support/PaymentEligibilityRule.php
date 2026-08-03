@@ -45,15 +45,15 @@ final class PaymentEligibilityRule
     public function assertCanSubmitSellerDeposit(Auction $auction, int $userId): void
     {
         if ($auction->status !== AuctionStatus::AwaitingSellerDeposit) {
-            throw new AuctionException(__('auction.errors.seller_deposit_state_not_allowed'));
+            throw AuctionException::domain('seller_deposit_state_not_allowed');
         }
 
         if ($auction->seller_id !== $userId) {
-            throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
+            throw AuctionException::domain('payment_target_owner_mismatch');
         }
 
         if ((int) $this->snapshotReader->forAuction($auction)->seller_deposit_required_minor <= 0) {
-            throw new AuctionException(__('auction.errors.zero_deposit_not_required'));
+            throw AuctionException::domain('zero_deposit_not_required');
         }
     }
 
@@ -63,15 +63,15 @@ final class PaymentEligibilityRule
         $this->assertBidderDeadline($auction, false, null, null);
 
         if ($participant->auction_id !== $auction->id || $participant->user_id !== $userId) {
-            throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
+            throw AuctionException::domain('payment_target_owner_mismatch');
         }
 
         if ($participant->status === AuctionParticipantStatus::Blocked) {
-            throw new AuctionException(__('auction.errors.participant_not_eligible'));
+            throw AuctionException::domain('participant_not_eligible');
         }
 
         if ((int) $this->snapshotReader->forAuction($auction)->bidder_deposit_required_minor <= 0) {
-            throw new AuctionException(__('auction.errors.zero_deposit_not_required'));
+            throw AuctionException::domain('zero_deposit_not_required');
         }
     }
 
@@ -93,7 +93,7 @@ final class PaymentEligibilityRule
         ?int $adminId
     ): ?CarbonInterface {
         if ($submission->status !== PaymentSubmissionStatus::PendingReview) {
-            throw new AuctionException(__('auction.errors.payment_already_processed'));
+            throw AuctionException::domain('payment_already_processed');
         }
 
         return match ($submission->purpose) {
@@ -126,45 +126,45 @@ final class PaymentEligibilityRule
         ?AuctionParticipant $participant = null
     ): void {
         if ($deposit->auction_id !== $auction->id || $deposit->type !== $type) {
-            throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+            throw AuctionException::domain('payment_submission_obligation_mismatch');
         }
 
         if ($deposit->user_id !== $userId) {
-            throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
+            throw AuctionException::domain('payment_target_owner_mismatch');
         }
 
         if ($deposit->currency_code !== $this->snapshotReader->forAuction($auction)->currency_code) {
-            throw new AuctionException(__('auction.errors.payment_currency_mismatch'));
+            throw AuctionException::domain('payment_currency_mismatch');
         }
 
         if ($participant && $deposit->participant_id !== $participant->id) {
-            throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+            throw AuctionException::domain('payment_submission_obligation_mismatch');
         }
 
         if (in_array($deposit->status, self::PAID_DEPOSIT_STATUSES, true)) {
-            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+            throw AuctionException::domain('payment_obligation_already_paid');
         }
 
         if (! in_array($deposit->status, self::PAYABLE_DEPOSIT_STATUSES, true)) {
-            throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+            throw AuctionException::domain('payment_submission_obligation_mismatch');
         }
     }
 
     public function assertPaymentDetails(int $actualAmount, string $actualCurrency, int $requiredAmount, string $requiredCurrency): void
     {
         if ($actualAmount <= 0) {
-            throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
+            throw AuctionException::domain('zero_payment_not_allowed');
         }
 
         if ($actualCurrency !== $requiredCurrency) {
-            throw new AuctionException(__('auction.errors.payment_currency_mismatch'));
+            throw AuctionException::domain('payment_currency_mismatch');
         }
 
         if ($actualAmount !== $requiredAmount) {
-            throw new AuctionException(
+            throw AuctionException::domain(
                 $actualAmount > $requiredAmount
-                    ? __('auction.errors.payment_amount_exceeds_remaining')
-                    : __('auction.errors.payment_amount_mismatch')
+                    ? 'payment_amount_exceeds_remaining'
+                    : 'payment_amount_mismatch'
             );
         }
     }
@@ -172,38 +172,38 @@ final class PaymentEligibilityRule
     public function assertSettlementTarget(Auction $auction, AuctionSettlement $settlement, int $userId): void
     {
         if ($settlement->auction_id !== $auction->id || $settlement->winner_id !== $userId) {
-            throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
+            throw AuctionException::domain('payment_target_owner_mismatch');
         }
 
         if (! $settlement->is_current || $settlement->current_marker !== 1) {
-            throw new AuctionException(__('auction.errors.payment_target_not_current'));
+            throw AuctionException::domain('payment_target_not_current');
         }
 
         if ($auction->winning_bid_id !== null && $auction->winning_bid_id !== $settlement->winning_bid_id) {
-            throw new AuctionException(__('auction.errors.winner_changed'));
+            throw AuctionException::domain('winner_changed');
         }
 
         if ($settlement->status !== SettlementStatus::PaymentPending) {
             if ($settlement->status === SettlementStatus::Paid) {
-                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                throw AuctionException::domain('payment_obligation_already_paid');
             }
 
-            throw new AuctionException(__('auction.errors.payment_target_not_current'));
+            throw AuctionException::domain('payment_target_not_current');
         }
 
         if ((int) $settlement->remaining_amount_minor <= 0) {
-            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+            throw AuctionException::domain('payment_obligation_already_paid');
         }
 
         if ($settlement->currency_code !== $this->snapshotReader->forAuction($auction)->currency_code) {
-            throw new AuctionException(__('auction.errors.payment_currency_mismatch'));
+            throw AuctionException::domain('payment_currency_mismatch');
         }
     }
 
     private function assertSellerDepositApproval(Auction $auction, PaymentSubmission $submission, ?AuctionDeposit $deposit): ?CarbonInterface
     {
         if (! $deposit) {
-            throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+            throw AuctionException::domain('payment_submission_obligation_mismatch');
         }
 
         $this->assertDepositTarget($auction, $deposit, (int) $submission->user_id, 'seller');
@@ -215,7 +215,7 @@ final class PaymentEligibilityRule
         );
 
         if (in_array($auction->status, [AuctionStatus::Cancelled, AuctionStatus::Rejected], true)) {
-            throw new AuctionException(__('auction.errors.payment_approval_auction_not_active'));
+            throw AuctionException::domain('payment_approval_auction_not_active');
         }
 
         $this->assertCanSubmitSellerDeposit($auction, (int) $submission->user_id);
@@ -233,17 +233,17 @@ final class PaymentEligibilityRule
         ?int $adminId
     ): ?CarbonInterface {
         if (! $deposit || ! $participant) {
-            throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+            throw AuctionException::domain('payment_submission_obligation_mismatch');
         }
 
         $this->assertBidderDepositAuctionState($auction);
 
         if ($participant->status === AuctionParticipantStatus::Blocked) {
-            throw new AuctionException(__('auction.errors.participant_not_eligible'));
+            throw AuctionException::domain('participant_not_eligible');
         }
 
         if ($participant->auction_id !== $auction->id || $participant->user_id !== $submission->user_id) {
-            throw new AuctionException(__('auction.errors.payment_target_owner_mismatch'));
+            throw AuctionException::domain('payment_target_owner_mismatch');
         }
 
         $this->assertDepositTarget($auction, $deposit, (int) $submission->user_id, 'bidder', $participant);
@@ -266,7 +266,7 @@ final class PaymentEligibilityRule
         ?int $adminId
     ): ?CarbonInterface {
         if (! $settlement) {
-            throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+            throw AuctionException::domain('payment_submission_obligation_mismatch');
         }
 
         $this->assertSettlementTarget($auction, $settlement, (int) $submission->user_id);
@@ -284,14 +284,14 @@ final class PaymentEligibilityRule
     private function assertBidderDepositAuctionState(Auction $auction): void
     {
         if (! in_array($auction->status, [AuctionStatus::Scheduled, AuctionStatus::Live], true)) {
-            throw new AuctionException(__('auction.errors.bidder_deposit_state_not_allowed'));
+            throw AuctionException::domain('bidder_deposit_state_not_allowed');
         }
     }
 
     private function assertWinnerSettlementAuctionState(Auction $auction): void
     {
         if ($auction->status !== AuctionStatus::PaymentPending) {
-            throw new AuctionException(__('auction.errors.winner_payment_state_not_allowed'));
+            throw AuctionException::domain('winner_payment_state_not_allowed');
         }
     }
 
@@ -328,15 +328,15 @@ final class PaymentEligibilityRule
         ?int $adminId
     ): CarbonInterface {
         if (! $overrideDeadline) {
-            throw new AuctionException(__('auction.errors.payment_deadline_expired'));
+            throw AuctionException::domain('payment_deadline_expired');
         }
 
         if (trim((string) $overrideReason) === '') {
-            throw new AuctionException(__('auction.errors.payment_override_reason_required'));
+            throw AuctionException::domain('payment_override_reason_required');
         }
 
         if (! $adminId || ! $this->userHasPermission($adminId, self::OVERRIDE_DEADLINE_PERMISSION)) {
-            throw new AuctionException(__('auction.errors.payment_override_not_authorized'));
+            throw AuctionException::domain('payment_override_not_authorized');
         }
 
         return $deadline;

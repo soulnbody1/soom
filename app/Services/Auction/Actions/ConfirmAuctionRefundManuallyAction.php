@@ -34,7 +34,7 @@ final class ConfirmAuctionRefundManuallyAction
         $reason = trim($reason);
 
         if ($confirmationReference === '' || $reason === '') {
-            throw new AuctionException(__('auction.errors.refund_manual_confirmation_reason_required'));
+            throw AuctionException::domain('refund_manual_confirmation_reason_required');
         }
 
         return $this->transaction->run(function () use ($refund, $admin, $confirmationReference, $reason, $evidence): RefundTransaction {
@@ -45,7 +45,7 @@ final class ConfirmAuctionRefundManuallyAction
             }
 
             if ($refund->status === RefundTransactionStatus::Cancelled) {
-                throw new AuctionException(__('auction.errors.refund_manual_confirmation_not_allowed'));
+                throw AuctionException::domain('refund_manual_confirmation_not_allowed');
             }
 
             if (
@@ -53,11 +53,11 @@ final class ConfirmAuctionRefundManuallyAction
                 && $refund->lease_expires_at
                 && $refund->lease_expires_at->isFuture()
             ) {
-                throw new AuctionException(__('auction.errors.refund_manual_confirmation_not_allowed'));
+                throw AuctionException::domain('refund_manual_confirmation_not_allowed');
             }
 
             if (! Gate::forUser($admin)->allows('confirmManual', $refund)) {
-                throw new AuctionException(__('auction.errors.refund_manual_confirmation_unauthorized'));
+                throw AuctionException::domain('refund_manual_confirmation_unauthorized');
             }
 
             $refund->forceFill(['provider' => 'manual']);

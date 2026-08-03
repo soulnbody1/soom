@@ -9,5 +9,6 @@ final class AuctionConfigurationSnapshotIncompleteException extends AuctionExcep
     public function __construct(public readonly array $errors = [])
     {
         parent::__construct(__('auction.errors.configuration_snapshot_incomplete'));
+        $this->errorCode = 'configuration_snapshot_incomplete';
     }
 }

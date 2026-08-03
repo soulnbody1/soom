@@ -64,7 +64,7 @@ final class PaymentSubmissionController extends Controller
             $url = Storage::disk($paymentSubmission->receipt_disk)
                 ->temporaryUrl($paymentSubmission->receipt_path, now()->addMinutes(10));
         } catch (\Throwable) {
-            return $this->sendError(__('auction.errors.receipt_url_unavailable'), 404);
+            return $this->sendError(__('auction.errors.receipt_url_unavailable'), 404, 'receipt_url_unavailable');
         }
 
         return $this->sendResponse([

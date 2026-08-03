@@ -15,6 +15,7 @@ use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use Illuminate\Support\Carbon;
 
 final class ReviewAuctionAction
 {
@@ -47,6 +48,13 @@ final class ReviewAuctionAction
                 ? AuctionStatus::AwaitingSellerDeposit
                 : AuctionStatus::Scheduled;
 
+            if ($targetStatus === AuctionStatus::AwaitingSellerDeposit && $auction->seller_deposit_due_at === null) {
+                $auction->forceFill([
+                    'seller_deposit_due_at' => Carbon::now()->addMinutes($snapshot->sellerDepositDeadlineMinutes()),
+                ]);
+                $this->auctions->save($auction);
+            }
+
             return $this->stateMachine->transition(
                 $auction,
                 $targetStatus,
@@ -76,7 +84,7 @@ final class ReviewAuctionAction
     public function reject(Auction $auction, int $adminId, string $reason): Auction
     {
         if (trim($reason) === '') {
-            throw new AuctionException(__('auction.errors.rejection_reason_required'));
+            throw AuctionException::domain('rejection_reason_required');
         }
 
         return $this->transaction->run(function () use ($auction, $adminId, $reason): Auction {

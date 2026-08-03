@@ -32,6 +32,6 @@ final class FinancialObligationKey
             return "settlement:{$submission->settlement_id}";
         }
 
-        throw new AuctionException(__('auction.errors.payment_submission_obligation_mismatch'));
+        throw AuctionException::domain('payment_submission_obligation_mismatch');
     }
 }

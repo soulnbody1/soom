@@ -24,6 +24,12 @@ final class AdminAuctionIndexRequest extends FormRequest
             'ends_to' => ['nullable', 'date', 'after_or_equal:ends_from'],
             'sort' => ['nullable', Rule::in(['created_at', 'starts_at', 'ends_at'])],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+            'phase' => ['nullable', Rule::in(['live', 'upcoming', 'finished'])],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'overdue_payment' => ['nullable', 'boolean'],
+            'overdue_handover' => ['nullable', 'boolean'],
+            'has_dispute' => ['nullable', 'boolean'],
+            'awaiting_seller_deposit' => ['nullable', 'boolean'],
         ];
     }
 
@@ -45,6 +51,17 @@ final class AdminAuctionIndexRequest extends FormRequest
             'ends_to' => $this->validated('ends_to'),
             'sort' => $this->validated('sort'),
             'direction' => $this->validated('direction'),
+            'phase' => $this->validated('phase'),
+            'currency' => $this->validated('currency'),
+            'overdue_payment' => $this->flagFilter('overdue_payment'),
+            'overdue_handover' => $this->flagFilter('overdue_handover'),
+            'has_dispute' => $this->flagFilter('has_dispute'),
+            'awaiting_seller_deposit' => $this->flagFilter('awaiting_seller_deposit'),
         ], fn ($value): bool => $value !== null && $value !== '');
+    }
+
+    private function flagFilter(string $key): ?bool
+    {
+        return $this->filled($key) ? $this->boolean($key) : null;
     }
 }

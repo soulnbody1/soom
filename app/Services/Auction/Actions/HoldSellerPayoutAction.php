@@ -26,14 +26,14 @@ final class HoldSellerPayoutAction
     public function hold(AuctionSellerPayout $payout, User $admin, string $reason): AuctionSellerPayout
     {
         if (trim($reason) === '') {
-            throw new AuctionException(__('auction.errors.payout_reason_required'));
+            throw AuctionException::domain('payout_reason_required');
         }
 
         return $this->transaction->run(function () use ($payout, $admin, $reason): AuctionSellerPayout {
             $payout = $this->payouts->lockById($payout->id);
 
             if (! in_array($payout->status, [SellerPayoutStatus::Pending, SellerPayoutStatus::Processing], true)) {
-                throw new AuctionException(__('auction.errors.payout_status_invalid'));
+                throw AuctionException::domain('payout_status_invalid');
             }
 
             $payout->forceFill([
@@ -63,11 +63,11 @@ final class HoldSellerPayoutAction
             $payout = $this->payouts->lockById($payout->id);
 
             if ($payout->status !== SellerPayoutStatus::OnHold) {
-                throw new AuctionException(__('auction.errors.payout_status_invalid'));
+                throw AuctionException::domain('payout_status_invalid');
             }
 
             if ($this->disputes->hasOpenDispute((int) $payout->auction_id)) {
-                throw new AuctionException(__('auction.errors.payout_blocked_by_dispute'));
+                throw AuctionException::domain('payout_blocked_by_dispute');
             }
 
             $payout->forceFill([

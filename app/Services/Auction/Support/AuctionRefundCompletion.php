@@ -42,18 +42,18 @@ final class AuctionRefundCompletion
         }
 
         if ($expectedProcessingToken !== null && $refund->processing_token !== $expectedProcessingToken) {
-            throw new AuctionException(__('auction.errors.refund_processing_token_mismatch'));
+            throw AuctionException::domain('refund_processing_token_mismatch');
         }
 
         if ($this->refunds->providerRefundIdExists($refund->provider, $providerRefundId, $refund->id)) {
-            throw new AuctionException(__('auction.errors.duplicate_provider_refund'));
+            throw AuctionException::domain('duplicate_provider_refund');
         }
 
         $deposit = $refund->deposit_id ? $this->deposits->lockForRefund($refund->deposit_id) : null;
         $payment = $this->lockPayment($refund, $deposit);
 
         if (! $deposit && ! $payment) {
-            throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+            throw AuctionException::domain('refund_exceeds_available');
         }
 
         if ($refund->obligation_type === 'settlement' && $refund->obligation_id) {
@@ -63,11 +63,11 @@ final class AuctionRefundCompletion
         $allocation = DepositRefundAllocation::fromRefund($refund);
         $amount = $allocation->totalAmountMinor();
         if ($amount <= 0 || $amount !== (int) $refund->amount_minor) {
-            throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+            throw AuctionException::domain('refund_exceeds_available');
         }
 
         if ($payment && ($payment->status !== PaymentTransactionStatus::Succeeded || $amount > (int) $payment->amount_minor)) {
-            throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+            throw AuctionException::domain('refund_exceeds_available');
         }
 
         if ($deposit) {
@@ -83,7 +83,7 @@ final class AuctionRefundCompletion
                 $allocation->heldAmountMinor > $available->heldAmountMinor
                 || $allocation->appliedAmountMinor > $available->appliedAmountMinor
             ) {
-                throw new AuctionException(__('auction.errors.refund_exceeds_available'));
+                throw AuctionException::domain('refund_exceeds_available');
             }
         }
 

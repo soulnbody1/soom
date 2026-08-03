@@ -70,6 +70,15 @@ final class FinalizeAuctionAction
                 $this->nonWinnerDeposits->execute($auction, 'unsold');
                 $this->sellerDepositDisposition->execute($auction, 'unsold', null, 'system', 'reserve not met or no bids');
 
+                $bidderIds = $this->bids->distinctBidderIds($auction->id);
+
+                if ($bidderIds !== []) {
+                    $this->audit->outbox('auction.unsold_bidders', $auction, [
+                        'auction_public_id' => $auction->public_id,
+                        'bidder_ids' => $bidderIds,
+                    ]);
+                }
+
                 return $auction->refresh();
             }
 
@@ -89,6 +98,10 @@ final class FinalizeAuctionAction
                 ? SettlementStatus::PaymentPending
                 : SettlementStatus::Paid;
 
+            $paymentDueAt = $amountDue > 0
+                ? $now->copy()->addMinutes((int) $snapshot->winner_payment_deadline_minutes)
+                : null;
+
             $settlement = $this->settlements->createSettlement(new CreateSettlementDTO(
                 auctionId: $auction->id,
                 winningBidId: $winningBid->id,
@@ -102,9 +115,8 @@ final class FinalizeAuctionAction
                 amountPaidMinor: 0,
                 remainingAmountMinor: $amountDue,
                 currencyCode: $snapshot->currency_code,
-                paymentDueAt: $amountDue > 0
-                    ? $now->copy()->addMinutes((int) $snapshot->winner_payment_deadline_minutes)
-                    : null,
+                paymentDueAt: $paymentDueAt,
+                paymentGraceEndsAt: $paymentDueAt?->copy()->addMinutes($snapshot->winnerPaymentGracePeriodMinutes()),
                 handoverDueAt: $handoverDueAt,
                 paidAt: $amountDue === 0 ? $now : null,
             ));
@@ -166,6 +178,15 @@ final class FinalizeAuctionAction
                 'settlement_public_id' => $settlement->public_id,
                 'winner_id' => $winningBid->bidder_id,
             ]);
+
+            $losingBidderIds = $this->bids->distinctBidderIds($auction->id, (int) $winningBid->bidder_id);
+
+            if ($losingBidderIds !== []) {
+                $this->audit->outbox('auction.bidder_lost', $auction, [
+                    'auction_public_id' => $auction->public_id,
+                    'bidder_ids' => $losingBidderIds,
+                ]);
+            }
 
             return $auction->refresh()->load('settlement');
         });

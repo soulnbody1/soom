@@ -63,7 +63,7 @@ final class CancelAuctionFinanciallyAction
     public function execute(AuctionCancellationContextDTO $context): Auction
     {
         if (trim($context->reasonText) === '') {
-            throw new AuctionException(__('auction.errors.cancellation_reason_required'));
+            throw AuctionException::domain('cancellation_reason_required');
         }
 
         return $this->transaction->run(function () use ($context): Auction {
@@ -160,7 +160,7 @@ final class CancelAuctionFinanciallyAction
     private function assertCancellationAllowed(Auction $auction): void
     {
         if (! in_array($auction->status, self::CANCELLABLE_STATUSES, true)) {
-            throw new AuctionException(__('auction.errors.auction_cancellation_not_allowed'));
+            throw AuctionException::domain('auction_cancellation_not_allowed');
         }
     }
 

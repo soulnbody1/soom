@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\DTO\Auction\ParticipationStateDTO;
 use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\Category;
 use App\Models\City;
@@ -23,6 +24,8 @@ final class Auction extends Model
     use HasFactory;
     use HasPublicId;
     use SoftDeletes;
+
+    public ?ParticipationStateDTO $participationState = null;
 
     protected $fillable = [
         'public_id',
@@ -60,6 +63,8 @@ final class Auction extends Model
         'current_leading_bid_id',
         'winning_bid_id',
         'published_at',
+        'seller_deposit_due_at',
+        'seller_deposit_deadline_processed_at',
         'started_at',
         'ended_at',
         'finalized_at',
@@ -81,6 +86,8 @@ final class Auction extends Model
         'ends_at' => 'immutable_datetime',
         'last_extended_at' => 'immutable_datetime',
         'published_at' => 'immutable_datetime',
+        'seller_deposit_due_at' => 'immutable_datetime',
+        'seller_deposit_deadline_processed_at' => 'immutable_datetime',
         'started_at' => 'immutable_datetime',
         'ended_at' => 'immutable_datetime',
         'finalized_at' => 'immutable_datetime',
@@ -186,6 +193,11 @@ final class Auction extends Model
     public function settlements(): HasMany
     {
         return $this->hasMany(AuctionSettlement::class);
+    }
+
+    public function paymentSubmissions(): HasMany
+    {
+        return $this->hasMany(PaymentSubmission::class);
     }
 
     public function metric(): HasOne

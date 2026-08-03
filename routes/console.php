@@ -10,5 +10,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 app(Schedule::class)->command('reels:cleanup')->hourly();
 app(Schedule::class)->command('auction:run-operations')->everyMinute()->withoutOverlapping();
+app(Schedule::class)->command('auction:run-deadlines')->everyMinute()->withoutOverlapping();
 app(Schedule::class)->job(new DispatchAuctionOutboxJob)->everyMinute()->withoutOverlapping();
 app(Schedule::class)->command('auction:reconcile')->everyFifteenMinutes()->withoutOverlapping();

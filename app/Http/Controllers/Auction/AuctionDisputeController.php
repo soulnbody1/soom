@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Controllers\Controller;
+use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Repositories\Auction\AuctionDisputeRepository;
 use App\Traits\ApiResponseTrait;
@@ -16,6 +18,30 @@ use Illuminate\Validation\Rule;
 final class AuctionDisputeController extends Controller
 {
     use ApiResponseTrait;
+
+    public function forAuction(Request $request, Auction $auction): JsonResponse
+    {
+        $this->assertCanReadDisputes($request, $auction);
+
+        $rows = AuctionDispute::where('auction_id', $auction->id)
+            ->orderByDesc('opened_at')
+            ->get()
+            ->map(fn (AuctionDispute $dispute): array => $this->userPayload($dispute))
+            ->all();
+
+        return $this->sendResponse($rows, __('auction.messages.disputes_fetched'));
+    }
+
+    public function showForAuction(Request $request, Auction $auction, AuctionDispute $dispute): JsonResponse
+    {
+        $this->assertCanReadDisputes($request, $auction);
+
+        if ((int) $dispute->auction_id !== (int) $auction->id) {
+            return $this->sendError(__('auction.errors.dispute_not_available'), 404, 'dispute_not_available');
+        }
+
+        return $this->sendResponse($this->userPayload($dispute), __('auction.messages.disputes_fetched'));
+    }
 
     public function index(Request $request, AuctionDisputeRepository $disputes): JsonResponse
     {
@@ -53,5 +79,29 @@ final class AuctionDisputeController extends Controller
             ]);
 
         return $this->sendResponse($paginator, __('auction.messages.disputes_fetched'));
+    }
+
+    private function assertCanReadDisputes(Request $request, Auction $auction): void
+    {
+        $user = $request->user();
+        $isAdmin = Gate::forUser($user)->allows('viewAny', AuctionDispute::class);
+        $isSeller = (int) $auction->seller_id === (int) $user->id;
+        $isWinner = (int) ($auction->settlement?->winner_id ?? 0) === (int) $user->id;
+
+        if (! $isAdmin && ! $isSeller && ! $isWinner) {
+            throw AuctionException::domain('forbidden', [], 403);
+        }
+    }
+
+    private function userPayload(AuctionDispute $dispute): array
+    {
+        return [
+            'id' => $dispute->public_id,
+            'status' => $dispute->status,
+            'reason' => $dispute->reason,
+            'opened_at' => $dispute->opened_at?->toIso8601String(),
+            'resolved_at' => $dispute->resolved_at?->toIso8601String(),
+            'resolution_note' => $dispute->resolution_note,
+        ];
     }
 }

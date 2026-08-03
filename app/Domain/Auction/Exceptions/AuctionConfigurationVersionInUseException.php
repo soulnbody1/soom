@@ -9,5 +9,6 @@ final class AuctionConfigurationVersionInUseException extends AuctionException
     public function __construct()
     {
         parent::__construct(__('auction.errors.configuration_version_in_use'));
+        $this->errorCode = 'configuration_version_in_use';
     }
 }

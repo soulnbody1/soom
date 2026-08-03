@@ -2,6 +2,11 @@
 
 return [
     'messages' => [
+        'payout_destination_archived' => 'The payout destination has been removed.',
+        'participant_blocked' => 'The participant has been blocked.',
+        'participant_unblocked' => 'The participant has been unblocked.',
+        'support_contact_fetched' => 'Support contact details fetched.',
+
         'auctions_fetched' => 'Auctions fetched.',
         'admin_auctions_fetched' => 'Admin auctions fetched.',
         'auction_fetched' => 'Auction fetched.',
@@ -35,6 +40,7 @@ return [
         'terms_version_created' => 'Auction terms version created.',
         'terms_version_fetched' => 'Auction terms version fetched.',
         'participants_fetched' => 'Auction participants fetched.',
+        'operational_settings_fetched' => 'Operational settings fetched.',
         'activity_fetched' => 'Auction activity fetched.',
         'status_history_fetched' => 'Auction status history fetched.',
         'configuration_versions_fetched' => 'Configuration versions fetched.',
@@ -54,6 +60,15 @@ return [
         'dashboard_fetched' => 'Auction dashboard metrics fetched.',
     ],
     'errors' => [
+        'participant_block_reason_required' => 'A reason is required to block a participant.',
+        'participant_not_found' => 'The participant was not found in this auction.',
+        'participant_block_winner_not_allowed' => 'The winner cannot be blocked after the settlement is created.',
+        'payout_destination_in_use' => 'A payout destination attached to an in-flight payout cannot be removed.',
+        'payout_destination_default_required' => 'Set another payout destination before removing the default one.',
+        'unauthenticated' => 'Please sign in.',
+        'not_found' => 'The requested resource was not found.',
+        'too_many_requests' => 'Too many attempts. Please try again shortly.',
+        'handover_blocked_by_dispute' => 'Handover cannot be confirmed while a dispute is open.',
         'auction_not_found' => 'Auction not found.',
         'forbidden' => 'Forbidden.',
         'settlement_must_be_paid' => 'Settlement must be paid before handover.',
@@ -81,6 +96,9 @@ return [
         'rejection_reason_required' => 'Rejection reason is required.',
         'default_reason_required' => 'Default reason is required.',
         'payment_deadline_not_expired' => 'Winner payment deadline has not expired.',
+        'payment_grace_period_not_expired' => 'Winner payment grace period has not expired.',
+        'winner_default_blocked_by_pending_payment' => 'A payment proof is under review, so the winner cannot be marked defaulted right now.',
+        'winner_default_actor_required' => 'Marking a winner defaulted manually requires an actor.',
         'invalid_transition' => 'Auction cannot transition from :from to :to.',
         'dispute_reason_required' => 'Dispute reason is required.',
         'dispute_not_available' => 'Auction dispute is not available.',
@@ -154,6 +172,28 @@ return [
         'winner_receipt_confirmed' => 'winner receipt confirmed',
         'seller_submitted_review' => 'seller submitted auction for review',
     ],
+    'refund_statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'succeeded' => 'Refunded',
+        'failed' => 'Refund failed',
+        'manual_review' => 'Manual review',
+        'cancelled' => 'Cancelled',
+    ],
+
+    'deposit_hold_reasons' => [
+        'alternative_winner_candidate' => 'Your deposit is held because you are an alternative winner candidate.',
+        'seller_deposit_manual_review' => 'The deposit is under manual review.',
+        'seller_deposit_keep_held' => 'The deposit stays held until the process completes.',
+        'winner_payment_pending' => 'Your deposit is held until the winner pays.',
+    ],
+
+    'payout_hold_reasons' => [
+        'open_dispute' => 'The payout is on hold because a dispute is open.',
+        'missing_destination' => 'No payout destination has been set.',
+        'manual_review' => 'The payout is under manual review.',
+    ],
+
     'statuses' => [
         'draft' => 'Draft',
         'pending_review' => 'Pending Review',
@@ -282,6 +322,90 @@ return [
         'finalized_seller' => [
             'title' => 'A winner was selected',
             'body' => 'A winner was selected for auction ":auction" at :amount :currency. We will notify you once payment is confirmed.',
+        ],
+        'bidder_lost' => [
+            'refund_pending' => [
+                'title' => 'You did not win',
+                'body' => 'Auction ":auction" has ended and your bid was not the winning one. Your deposit is queued for refund and you can follow its status from the refunds page.',
+            ],
+            'held' => [
+                'title' => 'You did not win',
+                'body' => 'Auction ":auction" has ended and your bid was not the winning one. Your deposit is still held temporarily until the winner completes payment, and we will notify you once it is released.',
+            ],
+            'forfeited' => [
+                'title' => 'You did not win',
+                'body' => 'Auction ":auction" has ended and your bid was not the winning one. You can review your deposit details on the auction page.',
+            ],
+            'no_deposit' => [
+                'title' => 'You did not win',
+                'body' => 'Auction ":auction" has ended and your bid was not the winning one. Thank you for participating, and feel free to browse other auctions.',
+            ],
+        ],
+        'unsold_bidder' => [
+            'refund_pending' => [
+                'title' => 'The auction ended without a sale',
+                'body' => 'Auction ":auction" ended without a completed sale. Your deposit is queued for refund and you can follow its status from the refunds page.',
+            ],
+            'held' => [
+                'title' => 'The auction ended without a sale',
+                'body' => 'Auction ":auction" ended without a completed sale. We will notify you once your held deposit is released.',
+            ],
+            'forfeited' => [
+                'title' => 'The auction ended without a sale',
+                'body' => 'Auction ":auction" ended without a completed sale. You can review your deposit details on the auction page.',
+            ],
+            'no_deposit' => [
+                'title' => 'The auction ended without a sale',
+                'body' => 'Auction ":auction" ended without a completed sale. Thank you for participating, and feel free to browse other auctions.',
+            ],
+        ],
+        'winner_payment_reminder' => [
+            'upcoming' => [
+                'title' => 'Payment deadline reminder',
+                'body' => ':amount :currency remains due for auction ":auction" before :deadline. Please complete the payment on time.',
+            ],
+            'final' => [
+                'title' => 'Final payment deadline reminder',
+                'body' => 'The payment deadline for auction ":auction" ends at :deadline. The remaining amount is :amount :currency, please complete the payment now to avoid losing the win.',
+            ],
+            'overdue' => [
+                'title' => 'Payment deadline has passed',
+                'body' => 'The payment deadline for auction ":auction" passed on :deadline and the payment is still incomplete. You are now within the grace period, please pay :amount :currency immediately before the win is cancelled.',
+            ],
+        ],
+        'handover_reminder' => [
+            'seller' => [
+                'upcoming' => [
+                    'title' => 'Handover deadline reminder',
+                    'body' => 'Please hand over the item for auction ":auction" to the winner before :deadline and confirm the handover in the app.',
+                ],
+                'final' => [
+                    'title' => 'Final handover deadline reminder',
+                    'body' => 'The handover deadline for auction ":auction" ends at :deadline. Please complete the handover and confirm it in the app.',
+                ],
+                'overdue' => [
+                    'title' => 'Handover is overdue',
+                    'body' => 'The handover deadline for auction ":auction" passed on :deadline and the handover is still unconfirmed. Please contact the winner and complete the handover, or open a dispute if you are facing a problem.',
+                ],
+            ],
+            'winner' => [
+                'upcoming' => [
+                    'title' => 'Receipt confirmation reminder',
+                    'body' => 'Please confirm receipt of the item for auction ":auction" before :deadline once you receive it from the seller.',
+                ],
+                'final' => [
+                    'title' => 'Final receipt confirmation reminder',
+                    'body' => 'The receipt confirmation deadline for auction ":auction" ends at :deadline. Please confirm receipt in the app.',
+                ],
+                'overdue' => [
+                    'title' => 'Receipt confirmation is overdue',
+                    'body' => 'The receipt confirmation deadline for auction ":auction" passed on :deadline. Please confirm receipt in the app, or open a dispute if you did not receive the item.',
+                ],
+            ],
+        ],
+        'seller_deposit_expired' => [
+            'title' => 'Auction cancelled: security deposit deadline passed',
+            'body' => 'The seller security deposit for auction ":auction" was not received within the deadline, so the auction was cancelled and never published. You can create a new auction at any time.',
         ],
         'winner_defaulted_winner' => [
             'title' => 'Payment deadline expired',

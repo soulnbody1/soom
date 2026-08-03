@@ -73,7 +73,7 @@ final class ReviewPaymentSubmissionAction
                 $settlement = $this->payments->lockSubmissionSettlement($submission);
                 $currentSettlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
                 if (! $currentSettlement || $currentSettlement->id !== $settlement->id) {
-                    throw new AuctionException(__('auction.errors.payment_target_not_current'));
+                    throw AuctionException::domain('payment_target_not_current');
                 }
             }
 
@@ -90,12 +90,12 @@ final class ReviewPaymentSubmissionAction
 
             $obligationKey = FinancialObligationKey::forSubmission($submission);
             if ($this->payments->lockSucceededTransactionForObligation($obligationKey)) {
-                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                throw AuctionException::domain('payment_obligation_already_paid');
             }
 
             $providerTransactionId = $this->trustedProviderTransactionId($submission, $providerTransactionId);
             if ($this->payments->providerTransactionIdExists('manual', $providerTransactionId, $submission->id)) {
-                throw new AuctionException(__('auction.errors.duplicate_provider_transaction'));
+                throw AuctionException::domain('duplicate_provider_transaction');
             }
 
             $submission->forceFill([
@@ -135,11 +135,11 @@ final class ReviewPaymentSubmissionAction
                 );
             } catch (QueryException $exception) {
                 if ($this->isProviderTransactionCollision($exception)) {
-                    throw new AuctionException(__('auction.errors.duplicate_provider_transaction'));
+                    throw AuctionException::domain('duplicate_provider_transaction');
                 }
 
                 if ($this->isPaymentUniquenessCollision($exception)) {
-                    throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                    throw AuctionException::domain('payment_obligation_already_paid');
                 }
 
                 throw $exception;
@@ -221,7 +221,7 @@ final class ReviewPaymentSubmissionAction
     public function reject(PaymentSubmission $submission, int $adminId, string $note): PaymentSubmission
     {
         if (trim($note) === '') {
-            throw AuctionException::paymentRejected(__('auction.errors.payment_rejection_reason_required'));
+            throw AuctionException::paymentRejected('payment_rejection_reason_required');
         }
 
         return $this->transaction->run(function () use ($submission, $adminId, $note): PaymentSubmission {

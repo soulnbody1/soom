@@ -29,7 +29,13 @@ final class AuctionBidHistoryQuery
      */
     public function paginateByUser(int $bidderId, int $perPage): LengthAwarePaginator
     {
-        return AuctionBid::with(['auction.media', 'bidder'])
+        return AuctionBid::with([
+            'auction.media',
+            'auction.category',
+            'auction.currentLeadingBid',
+            'auction.settlement',
+            'bidder',
+        ])
             ->where('bidder_id', $bidderId)
             ->latest('id')
             ->paginate($perPage);

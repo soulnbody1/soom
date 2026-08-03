@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\PayoutDestinationRequest;
 use App\Models\Auction\PayoutDestination;
 use App\Repositories\Auction\PayoutDestinationRepository;
+use App\Services\Auction\Actions\ArchivePayoutDestinationAction;
 use App\Services\Auction\Actions\SavePayoutDestinationAction;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
@@ -36,12 +37,26 @@ final class PayoutDestinationController extends Controller
     public function update(PayoutDestinationRequest $request, PayoutDestination $payoutDestination, SavePayoutDestinationAction $action): JsonResponse
     {
         if ((int) $payoutDestination->user_id !== (int) $request->user()->id) {
-            return $this->sendError(__('auction.errors.payout_destination_not_found'), 404);
+            return $this->sendError(__('auction.errors.payout_destination_not_found'), 404, 'payout_destination_not_found');
         }
 
         $destination = $action->execute((int) $request->user()->id, $request->validated(), $payoutDestination);
 
         return $this->sendResponse($this->payload($destination), __('auction.messages.payout_destination_saved'));
+    }
+
+    public function destroy(
+        Request $request,
+        PayoutDestination $payoutDestination,
+        ArchivePayoutDestinationAction $action
+    ): JsonResponse {
+        if ((int) $payoutDestination->user_id !== (int) $request->user()->id) {
+            return $this->sendError(__('auction.errors.payout_destination_not_found'), 404, 'payout_destination_not_found');
+        }
+
+        $action->execute($payoutDestination, (int) $request->user()->id);
+
+        return $this->sendEmptyResponse(__('auction.messages.payout_destination_archived'));
     }
 
     private function payload(PayoutDestination $destination): array

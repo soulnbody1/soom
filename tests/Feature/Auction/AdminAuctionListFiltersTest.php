@@ -98,26 +98,26 @@ final class AdminAuctionListFiltersTest extends TestCase
 
     public function test_date_range_filters(): void
     {
-        $this->makeAuction(['starts_at' => now()->addDays(1), 'ends_at' => now()->addDays(2), 'original_ends_at' => now()->addDays(2)]);
-        $this->makeAuction(['starts_at' => now()->addDays(10), 'ends_at' => now()->addDays(12), 'original_ends_at' => now()->addDays(12)]);
+        $near = $this->makeAuction(['starts_at' => now()->addDays(201), 'ends_at' => now()->addDays(202), 'original_ends_at' => now()->addDays(202)]);
+        $far = $this->makeAuction(['starts_at' => now()->addDays(210), 'ends_at' => now()->addDays(212), 'original_ends_at' => now()->addDays(212)]);
 
         $response = $this->actingAs($this->user('admin'), 'sanctum')
-            ->getJson('/api/admin/auctions?starts_from='.now()->addDays(5)->toDateString())
+            ->getJson('/api/admin/auctions?starts_from='.now()->addDays(205)->toDateString())
             ->assertOk();
 
-        $this->assertSame(1, $response->json('total'));
+        $this->assertSame([$far->public_id], array_column($response->json('data'), 'id'));
 
         $ends = $this->actingAs($this->user('admin'), 'sanctum')
-            ->getJson('/api/admin/auctions?ends_to='.now()->addDays(5)->toDateString())
+            ->getJson('/api/admin/auctions?ends_from='.now()->addDays(200)->toDateString().'&ends_to='.now()->addDays(205)->toDateString())
             ->assertOk();
 
-        $this->assertSame(1, $ends->json('total'));
+        $this->assertSame([$near->public_id], array_column($ends->json('data'), 'id'));
     }
 
     public function test_sort_by_ends_at_ascending_and_descending(): void
     {
-        $late = $this->makeAuction(['ends_at' => now()->addDays(9), 'original_ends_at' => now()->addDays(9)]);
-        $early = $this->makeAuction(['ends_at' => now()->addDays(1), 'original_ends_at' => now()->addDays(1)]);
+        $late = $this->makeAuction(['ends_at' => now()->addDays(309), 'original_ends_at' => now()->addDays(309)]);
+        $early = $this->makeAuction(['ends_at' => now()->addDays(2), 'original_ends_at' => now()->addDays(2)]);
 
         $asc = $this->actingAs($this->user('admin'), 'sanctum')
             ->getJson('/api/admin/auctions?sort=ends_at&direction=asc')

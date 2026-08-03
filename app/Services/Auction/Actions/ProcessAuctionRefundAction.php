@@ -56,7 +56,7 @@ final class ProcessAuctionRefundAction
                 RefundTransactionStatus::Cancelled,
                 RefundTransactionStatus::ManualReview,
             ], true)) {
-                throw new AuctionException(__('auction.errors.refund_not_processable'));
+                throw AuctionException::domain('refund_not_processable');
             }
 
             if (
@@ -64,7 +64,7 @@ final class ProcessAuctionRefundAction
                 && $refund->next_retry_at
                 && $refund->next_retry_at->isFuture()
             ) {
-                throw new AuctionException(__('auction.errors.refund_not_processable'));
+                throw AuctionException::domain('refund_not_processable');
             }
 
             if (
@@ -72,7 +72,7 @@ final class ProcessAuctionRefundAction
                 && $refund->lease_expires_at
                 && $refund->lease_expires_at->isFuture()
             ) {
-                throw new AuctionException(__('auction.errors.refund_lease_already_acquired'));
+                throw AuctionException::domain('refund_lease_already_acquired');
             }
 
             $token = (string) Str::uuid();
@@ -108,7 +108,7 @@ final class ProcessAuctionRefundAction
             $refund = $this->refunds->lockForConfirmation($refundId);
 
             if ($refund->processing_token !== $processingToken) {
-                throw new AuctionException(__('auction.errors.refund_processing_token_mismatch'));
+                throw AuctionException::domain('refund_processing_token_mismatch');
             }
 
             return match ($result->outcome) {

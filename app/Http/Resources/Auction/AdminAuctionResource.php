@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Auction;
 
+use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\Auction\Enums\SettlementStatus;
+use App\Models\Auction\AuctionConfigurationSnapshot;
+use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
-
 
 final class AdminAuctionResource extends JsonResource
 {
@@ -35,7 +39,7 @@ final class AdminAuctionResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'status' => $this->status->value,
-            'status_label' => __('auction.statuses.' . $this->status->value),
+            'status_label' => __('auction.statuses.'.$this->status->value),
             'currency_code' => $this->currency_code,
             'starting_amount' => MoneyResource::make($this->starting_amount_minor, $this->currency_code),
             'reserve_amount' => $this->reserve_amount_minor !== null
@@ -64,6 +68,10 @@ final class AdminAuctionResource extends JsonResource
                 'last_extended_at' => $this->last_extended_at?->toIso8601String(),
             ],
             'configuration_version_id' => $this->configuration_version_id,
+            'deadlines' => $this->deadlines(),
+            'operational_flags' => $this->operationalFlags(),
+            'next_admin_action' => $this->nextAdminAction(),
+            'configuration_snapshot' => $this->configurationSnapshotPayload(),
             'published_at' => $this->published_at?->toIso8601String(),
             'started_at' => $this->started_at?->toIso8601String(),
             'ended_at' => $this->ended_at?->toIso8601String(),
@@ -147,6 +155,118 @@ final class AdminAuctionResource extends JsonResource
         }
 
         return $data;
+    }
+
+    private function settlementRecord(): ?AuctionSettlement
+    {
+        return $this->relationLoaded('settlement') ? $this->settlement : null;
+    }
+
+    private function snapshotRecord(): ?AuctionConfigurationSnapshot
+    {
+        return $this->relationLoaded('configurationSnapshot') ? $this->configurationSnapshot : null;
+    }
+
+    private function deadlines(): array
+    {
+        $settlement = $this->settlementRecord();
+        $snapshot = $this->snapshotRecord();
+
+        return [
+            'seller_deposit_due_at' => $this->seller_deposit_due_at?->toIso8601String(),
+            'seller_deposit_deadline_processed_at' => $this->seller_deposit_deadline_processed_at?->toIso8601String(),
+            'winner_payment_due_at' => $settlement?->payment_due_at?->toIso8601String(),
+            'winner_payment_grace_ends_at' => $settlement?->payment_grace_ends_at?->toIso8601String(),
+            'handover_due_at' => $settlement?->handover_due_at?->toIso8601String(),
+            'winner_payment_reminder_hours' => $snapshot?->winnerPaymentReminderHours() ?? [],
+            'handover_reminder_hours' => $snapshot?->handoverReminderHours() ?? [],
+            'review_sla_minutes' => $snapshot?->review_sla_minutes,
+        ];
+    }
+
+    private function operationalFlags(): array
+    {
+        $settlement = $this->settlementRecord();
+        $now = Carbon::now();
+
+        return [
+            'is_seller_deposit_overdue' => $this->status === AuctionStatus::AwaitingSellerDeposit
+                && $this->seller_deposit_due_at !== null
+                && $now->greaterThan($this->seller_deposit_due_at),
+            'is_payment_overdue' => $settlement !== null
+                && $settlement->status === SettlementStatus::PaymentPending
+                && $settlement->payment_due_at !== null
+                && $now->greaterThan($settlement->payment_due_at),
+            'is_payment_grace_expired' => $settlement !== null
+                && $settlement->status === SettlementStatus::PaymentPending
+                && $settlement->payment_grace_ends_at !== null
+                && $now->greaterThan($settlement->payment_grace_ends_at),
+            'is_handover_overdue' => $settlement !== null
+                && $settlement->handover_completed_at === null
+                && $settlement->handover_due_at !== null
+                && $now->greaterThan($settlement->handover_due_at),
+            'has_open_dispute' => $this->relationLoaded('disputes')
+                ? $this->disputes->contains(fn ($dispute): bool => $dispute->resolved_at === null)
+                : null,
+        ];
+    }
+
+    private function nextAdminAction(): ?string
+    {
+        $flags = $this->operationalFlags();
+        $settlement = $this->settlementRecord();
+
+        return match (true) {
+            $flags['has_open_dispute'] === true => 'resolve_dispute',
+            $this->status === AuctionStatus::PendingReview => 'review_auction',
+            $flags['is_seller_deposit_overdue'] === true => 'cancel_unfunded_auction',
+            $flags['is_payment_grace_expired'] === true => 'mark_winner_defaulted',
+            $flags['is_handover_overdue'] === true => 'follow_up_handover',
+            $settlement?->status === SettlementStatus::Completed => 'release_seller_payout',
+            default => null,
+        };
+    }
+
+    private function configurationSnapshotPayload(): ?array
+    {
+        $snapshot = $this->snapshotRecord();
+
+        if (! $snapshot) {
+            return null;
+        }
+
+        return [
+            'source_configuration_version_id' => $snapshot->source_configuration_version_id,
+            'terms_version_id' => $snapshot->terms_version_id,
+            'snapshot_hash' => $snapshot->snapshot_hash,
+            'finalized_at' => $snapshot->finalized_at?->toIso8601String(),
+            'currency_code' => $snapshot->currency_code,
+            'minimum_bid_increment' => MoneyResource::make((int) $snapshot->minimum_bid_increment_minor, (string) $snapshot->currency_code),
+            'seller_deposit_required' => MoneyResource::make((int) $snapshot->seller_deposit_required_minor, (string) $snapshot->currency_code),
+            'bidder_deposit_required' => MoneyResource::make((int) $snapshot->bidder_deposit_required_minor, (string) $snapshot->currency_code),
+            'auto_extend_enabled' => (bool) $snapshot->auto_extend_enabled,
+            'auto_extend_window_seconds' => (int) $snapshot->auto_extend_window_seconds,
+            'auto_extend_duration_seconds' => (int) $snapshot->auto_extend_duration_seconds,
+            'maximum_extensions' => (int) $snapshot->maximum_extensions,
+            'winner_payment_deadline_minutes' => (int) $snapshot->winner_payment_deadline_minutes,
+            'winner_payment_grace_period_minutes' => $snapshot->winnerPaymentGracePeriodMinutes(),
+            'seller_deposit_deadline_minutes' => $snapshot->sellerDepositDeadlineMinutes(),
+            'handover_deadline_minutes' => (int) $snapshot->handover_deadline_minutes,
+            'review_sla_minutes' => $snapshot->review_sla_minutes,
+            'non_winner_deposit_hold_policy' => $snapshot->non_winner_deposit_hold_policy,
+            'alternative_candidate_limit' => (int) $snapshot->alternative_candidate_limit,
+            'alternative_winner_enabled' => (bool) $snapshot->alternative_winner_enabled,
+            'winner_default_deposit_policy' => (array) $snapshot->winner_default_deposit_policy,
+            'seller_deposit_policy' => (array) $snapshot->seller_deposit_policy,
+            'platform_fee' => [
+                'type' => $snapshot->platform_fee_type,
+                'value' => (int) $snapshot->platform_fee_value,
+                'min' => MoneyResource::make((int) $snapshot->platform_fee_min_minor, (string) $snapshot->currency_code),
+                'max' => $snapshot->platform_fee_max_minor !== null
+                    ? MoneyResource::make((int) $snapshot->platform_fee_max_minor, (string) $snapshot->currency_code)
+                    : null,
+            ],
+        ];
     }
 
     private function paymentSubmissions(): Collection

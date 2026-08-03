@@ -30,14 +30,14 @@ final class CancelAuctionRefundAction
     {
         $reason = trim($reason);
         if ($reason === '') {
-            throw new AuctionException(__('auction.errors.refund_cancellation_reason_required'));
+            throw AuctionException::domain('refund_cancellation_reason_required');
         }
 
         return $this->transaction->run(function () use ($refund, $actor, $reason): RefundTransaction {
             $refund = $this->refunds->lockForConfirmation($refund->id);
 
             if (! Gate::forUser($actor)->allows('cancel', $refund)) {
-                throw new AuctionException(__('auction.errors.refund_cancellation_unauthorized'));
+                throw AuctionException::domain('refund_cancellation_unauthorized');
             }
 
             if ($refund->status === RefundTransactionStatus::Cancelled) {
@@ -47,11 +47,11 @@ final class CancelAuctionRefundAction
             }
 
             if ($refund->status === RefundTransactionStatus::Succeeded) {
-                throw new AuctionException(__('auction.errors.refund_cancellation_not_allowed'));
+                throw AuctionException::domain('refund_cancellation_not_allowed');
             }
 
             if ($refund->status === RefundTransactionStatus::Processing) {
-                throw new AuctionException(__('auction.errors.refund_cancellation_not_allowed'));
+                throw AuctionException::domain('refund_cancellation_not_allowed');
             }
 
             if (! in_array($refund->status, [
@@ -59,7 +59,7 @@ final class CancelAuctionRefundAction
                 RefundTransactionStatus::Failed,
                 RefundTransactionStatus::ManualReview,
             ], true)) {
-                throw new AuctionException(__('auction.errors.refund_cancellation_not_allowed'));
+                throw AuctionException::domain('refund_cancellation_not_allowed');
             }
 
             $refund->forceFill([

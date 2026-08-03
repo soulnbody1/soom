@@ -8,6 +8,7 @@ use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
+use App\Repositories\Auction\AuctionDisputeRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
@@ -23,6 +24,7 @@ final class ConfirmAuctionReceiptByWinnerAction
         private readonly AuctionAudit $audit,
         private readonly AuctionRepository $auctions,
         private readonly AuctionSettlementRepository $settlements,
+        private readonly AuctionDisputeRepository $disputes,
         private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
         private readonly ResolveSellerDepositDispositionAction $sellerDepositDisposition,
         private readonly CreateSellerPayoutAction $sellerPayout,
@@ -35,11 +37,15 @@ final class ConfirmAuctionReceiptByWinnerAction
             $settlement = $this->settlements->lockSettlement($auction->id);
 
             if ($settlement->winner_id !== $winnerId || $auction->status !== AuctionStatus::HandoverPending) {
-                throw new AuctionException(__('auction.errors.auction_not_found'));
+                throw AuctionException::domain('auction_not_found');
             }
 
             if ($settlement->seller_handover_confirmed_at === null) {
-                throw new AuctionException(__('auction.errors.seller_handover_required'));
+                throw AuctionException::domain('seller_handover_required');
+            }
+
+            if ($this->disputes->hasOpenDispute($auction->id)) {
+                throw AuctionException::domain('handover_blocked_by_dispute');
             }
 
             $now = Carbon::now();

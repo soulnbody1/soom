@@ -55,7 +55,7 @@ final class SubmitPaymentSubmissionAction
         );
 
         if ($existing) {
-            return $existing;
+            return $existing->load(['paymentMethod', 'deposit', 'settlement']);
         }
 
         $method = $this->payments->findActivePaymentMethod($paymentMethodPublicId);
@@ -73,7 +73,7 @@ final class SubmitPaymentSubmissionAction
                 [$deposit, $settlement, $amount] = $this->target($auction, $userId, $purpose);
 
                 if ($amount <= 0) {
-                    throw new AuctionException(__('auction.errors.zero_payment_not_allowed'));
+                    throw AuctionException::domain('zero_payment_not_allowed');
                 }
 
                 $obligationKey = $deposit
@@ -177,7 +177,7 @@ final class SubmitPaymentSubmissionAction
             $participant = $this->participants->lockParticipant($auction->id, $userId);
 
             if (! $participant) {
-                throw new AuctionException(__('auction.errors.registration_required'));
+                throw AuctionException::domain('registration_required');
             }
 
             $this->eligibility->assertCanSubmitBidderDeposit($auction, $participant, $userId);
@@ -207,7 +207,7 @@ final class SubmitPaymentSubmissionAction
         $settlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
 
         if (! $settlement) {
-            throw new AuctionException(__('auction.errors.settlement_payment_unavailable'));
+            throw AuctionException::domain('settlement_payment_unavailable');
         }
 
         $this->eligibility->assertCanSubmitWinnerSettlement($auction, $settlement, $userId);
@@ -218,7 +218,7 @@ final class SubmitPaymentSubmissionAction
     private function ensurePaymentSubmissionCanBeCreated($deposit, $settlement, string $obligationKey): void
     {
         if ($this->payments->lockSucceededTransactionForObligation($obligationKey)) {
-            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+            throw AuctionException::domain('payment_obligation_already_paid');
         }
 
         if ($deposit) {
@@ -229,22 +229,22 @@ final class SubmitPaymentSubmissionAction
                 AuctionDepositStatus::Refunded,
                 AuctionDepositStatus::Forfeited,
             ], true)) {
-                throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+                throw AuctionException::domain('payment_obligation_already_paid');
             }
 
             if ($this->payments->findPendingReviewSubmissionForDeposit($deposit->id)) {
-                throw new AuctionException(__('auction.errors.active_payment_submission_exists'));
+                throw AuctionException::domain('active_payment_submission_exists');
             }
 
             return;
         }
 
         if ((int) $settlement->remaining_amount_minor <= 0) {
-            throw new AuctionException(__('auction.errors.payment_obligation_already_paid'));
+            throw AuctionException::domain('payment_obligation_already_paid');
         }
 
         if ($this->payments->findPendingReviewSubmissionForSettlement($settlement->id)) {
-            throw new AuctionException(__('auction.errors.active_payment_submission_exists'));
+            throw AuctionException::domain('active_payment_submission_exists');
         }
     }
 }

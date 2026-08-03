@@ -27,7 +27,12 @@ final class AuctionConfigurationSnapshot extends Model
         'non_winner_deposit_hold_policy',
         'alternative_candidate_limit',
         'winner_payment_deadline_minutes',
+        'winner_payment_grace_period_minutes',
+        'winner_payment_reminder_hours',
+        'seller_deposit_deadline_minutes',
+        'review_sla_minutes',
         'handover_deadline_minutes',
+        'handover_reminder_hours',
         'platform_fee_type',
         'platform_fee_value',
         'platform_fee_min_minor',
@@ -53,7 +58,12 @@ final class AuctionConfigurationSnapshot extends Model
         'bidder_deposit_required_minor' => 'integer',
         'alternative_candidate_limit' => 'integer',
         'winner_payment_deadline_minutes' => 'integer',
+        'winner_payment_grace_period_minutes' => 'integer',
+        'winner_payment_reminder_hours' => 'array',
+        'seller_deposit_deadline_minutes' => 'integer',
+        'review_sla_minutes' => 'integer',
         'handover_deadline_minutes' => 'integer',
+        'handover_reminder_hours' => 'array',
         'platform_fee_value' => 'integer',
         'platform_fee_min_minor' => 'integer',
         'platform_fee_max_minor' => 'integer',
@@ -126,5 +136,47 @@ final class AuctionConfigurationSnapshot extends Model
     public function winnerDefaultDepositForfeitAmount(): int
     {
         return (int) ($this->winner_default_deposit_policy['forfeit_amount_minor'] ?? 0);
+    }
+
+    public function winnerPaymentReminderHours(): array
+    {
+        return $this->normalizedReminderHours(
+            $this->winner_payment_reminder_hours,
+            'auction.deadlines.winner_payment_reminder_hours_before'
+        );
+    }
+
+    public function handoverReminderHours(): array
+    {
+        return $this->normalizedReminderHours(
+            $this->handover_reminder_hours,
+            'auction.deadlines.handover_reminder_hours_before'
+        );
+    }
+
+    public function winnerPaymentGracePeriodMinutes(): int
+    {
+        return (int) ($this->winner_payment_grace_period_minutes
+            ?? config('auction.deadlines.winner_payment_grace_period_hours', 24) * 60);
+    }
+
+    public function sellerDepositDeadlineMinutes(): int
+    {
+        return (int) ($this->seller_deposit_deadline_minutes
+            ?? config('auction.deadlines.seller_deposit_deadline_hours', 48) * 60);
+    }
+
+    private function normalizedReminderHours(mixed $frozen, string $configKey): array
+    {
+        $hours = is_array($frozen) && $frozen !== [] ? $frozen : (array) config($configKey, []);
+
+        $hours = array_values(array_unique(array_filter(
+            array_map('intval', $hours),
+            static fn (int $hour): bool => $hour > 0
+        )));
+
+        rsort($hours);
+
+        return $hours;
     }
 }

@@ -2,10 +2,10 @@
 
 namespace App\Traits;
 
-use Illuminate\Pagination\AbstractPaginator;
+use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-
+use Illuminate\Pagination\AbstractPaginator;
 
 trait ApiResponseTrait
 {
@@ -31,24 +31,20 @@ trait ApiResponseTrait
             $response['data'] = $data;
         }
 
-        if (!empty($extra)) {
+        if (! empty($extra)) {
             $response = array_merge($response, $extra);
         }
 
         return response()->json($response, $status);
     }
 
-
     public function sendEmptyResponse(string $message = '', int $status = 200): JsonResponse
     {
         return $this->sendResponse([], $message, $status);
     }
 
-    public function sendError(string $message = '', int $status = 400): JsonResponse
+    public function sendError(string $message = '', int $status = 400, ?string $code = null): JsonResponse
     {
-        return response()->json([
-            'success' => false,
-            'message' => $message,
-        ], $status);
+        return ApiErrorResponse::make($message, $code ?? 'auction_error', $status);
     }
 }
