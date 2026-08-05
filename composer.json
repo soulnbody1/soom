@@ -69,7 +69,8 @@
             "@php artisan test"
         ],
         "test:auction": "@php artisan test tests/Feature/Auction tests/Unit/Auction",
-        "test:auction:mysql": "@php artisan test --configuration=phpunit.mysql.xml"
+        "test:auction:mysql": "@php artisan test --configuration=phpunit.mysql.xml",
+        "test:content-review": "@php artisan test tests/Feature/ContentReview tests/Unit/ContentReview"
     },
     "extra": {
         "laravel": {

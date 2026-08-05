@@ -1,0 +1,197 @@
+<?php
+
+return [
+    'messages' => [
+        'review_requested' => 'تم طلب مراجعة المحتوى.',
+        'review_cancelled' => 'تم إلغاء مراجعة المحتوى.',
+        'review_forced_manual' => 'تم تحويل المحتوى إلى المراجعة اليدوية.',
+        'settings_published' => 'تم نشر إعدادات مراجعة المحتوى.',
+        'policy_published' => 'تم نشر سياسة مراجعة المحتوى.',
+        'provider_tested' => 'تم فحص الاتصال بمزود المراجعة.',
+        'review_fetched' => 'تم جلب مراجعة المحتوى.',
+        'reviews_fetched' => 'تم جلب مراجعات المحتوى.',
+        'metrics_fetched' => 'تم جلب مؤشرات مراجعة المحتوى.',
+        'no_review' => 'لا توجد مراجعة آلية لهذا المحتوى.',
+    ],
+
+    'errors' => [
+        'provider_timeout' => 'لم يستجب مزود المراجعة في الوقت المحدد.',
+        'provider_rate_limited' => 'مزود المراجعة يحد من عدد الطلبات حاليًا.',
+        'provider_unavailable' => 'مزود المراجعة غير متاح.',
+        'provider_auth_failed' => 'رفض مزود المراجعة بيانات الاعتماد.',
+        'invalid_structured_output' => 'أعاد مزود المراجعة نتيجة لا تطابق العقد المطلوب.',
+        'content_unavailable' => 'تعذر تجهيز المحتوى للمراجعة.',
+        'image_fetch_failed' => 'تعذرت قراءة صورة أو أكثر للمراجعة.',
+        'budget_exhausted' => 'تم استنفاد ميزانية المراجعة الآلية.',
+        'circuit_open' => 'تم إيقاف المراجعة الآلية مؤقتًا لأن الخدمة غير مستقرة.',
+        'policy_missing' => 'لا توجد سياسة مراجعة فعالة منشورة لهذا النوع من المحتوى.',
+        'subject_not_reviewable' => 'هذا المحتوى ليس في حالة قابلة للمراجعة.',
+        'content_changed' => 'تم تغيير المحتوى بعد بدء هذه المراجعة.',
+        'unknown_error' => 'فشلت المراجعة الآلية لسبب غير متوقع.',
+        'content_review_override_not_allowed' => 'تجاوز توصية الذكاء الاصطناعي يتطلب صلاحية مخصصة.',
+        'review_not_cancellable' => 'يمكن إلغاء المراجعة في حالة الانتظار أو التنفيذ فقط.',
+        'review_already_decided' => 'تم اتخاذ القرار في هذه المراجعة بالفعل.',
+        'subject_type_not_supported' => 'نوع المحتوى هذا غير مدعوم في نظام المراجعة.',
+        'settings_invalid' => 'إعدادات المراجعة المرسلة غير صالحة.',
+        'policy_invalid' => 'سياسة المراجعة المرسلة غير صالحة.',
+        'policy_in_use' => 'لا يمكن تعديل إصدار سياسة تم استخدامه بالفعل.',
+        'settings_in_use' => 'لا يمكن تعديل إصدار إعدادات تم استخدامه بالفعل.',
+        'automatic_decision_not_allowed' => 'الوضع الحالي لا يسمح بالقرارات التلقائية.',
+        'review_not_found' => 'لا توجد مراجعة آلية.',
+        'review_not_retryable' => 'لا يمكن إعادة المحاولة إلا لمراجعة فاشلة لمحتوى لم يتغير.',
+        'review_stale' => 'تغيّر المحتوى بعد تنفيذ هذه المراجعة، فلم تعد نتيجتها صالحة للاستخدام.',
+        'review_manual_mode' => 'المراجعة الآلية معطلة لهذا النوع من المحتوى.',
+        'provider_not_configured' => 'لا يوجد مزود مراجعة مهيأ.',
+        'version_conflict' => 'تم نشر إصدار آخر في نفس اللحظة. أعد تحميل الصفحة وحاول مرة أخرى.',
+        'subject_not_found' => 'المحتوى المطلوب مراجعته غير موجود.',
+    ],
+
+    'subject_types' => [
+        'auction' => 'مزاد',
+    ],
+
+    'modes' => [
+        'manual' => 'مراجعة يدوية',
+        'ai_assisted' => 'مراجعة بمساعدة الذكاء الاصطناعي',
+        'ai_automatic' => 'مراجعة آلية بالذكاء الاصطناعي',
+        'shadow' => 'وضع الظل',
+    ],
+
+    'statuses' => [
+        'queued' => 'في الانتظار',
+        'running' => 'قيد التنفيذ',
+        'completed' => 'مكتملة',
+        'failed' => 'فاشلة',
+        'cancelled' => 'ملغاة',
+        'superseded' => 'لم تعد صالحة',
+    ],
+
+    'outcomes' => [
+        'auto_approved' => 'تمت الموافقة تلقائيًا',
+        'auto_rejected' => 'تم الرفض تلقائيًا',
+        'escalated_to_human' => 'تعذر إكمال المراجعة التلقائية وتم تحويل المحتوى للمراجعة اليدوية',
+        'advisory_only' => 'نتيجة استرشادية فقط',
+        'no_decision' => 'لم يتم تطبيق أي قرار',
+    ],
+
+    'recommendations' => [
+        'approve' => 'يوصي بالموافقة',
+        'reject' => 'يوصي بالرفض',
+        'needs_human' => 'يتطلب مراجعة موظف',
+    ],
+
+    'risk_levels' => [
+        'low' => 'منخفضة',
+        'medium' => 'متوسطة',
+        'high' => 'عالية',
+        'critical' => 'حرجة',
+    ],
+
+    'severities' => [
+        'low' => 'منخفضة',
+        'medium' => 'متوسطة',
+        'high' => 'عالية',
+        'critical' => 'حرجة',
+    ],
+
+    'triggers' => [
+        'submitted_for_review' => 'إرسال للمراجعة',
+        'admin_manual' => 'بطلب من موظف',
+        'admin_retry' => 'إعادة محاولة بواسطة موظف',
+        'sweeper' => 'إعادة جدولة تلقائية',
+    ],
+
+    'actor_types' => [
+        'admin' => 'موظف',
+        'ai' => 'الذكاء الاصطناعي',
+        'system' => 'النظام',
+    ],
+
+    'relations' => [
+        'none' => 'لا توجد توصية سابقة',
+        'confirmed' => 'أكد التوصية',
+        'overridden' => 'تجاوز التوصية',
+        'unavailable' => 'لم تتوفر توصية',
+    ],
+
+    'decisions' => [
+        'approved' => 'تمت الموافقة',
+        'rejected' => 'تم الرفض',
+        'escalated' => 'تم التحويل للمراجعة اليدوية',
+        'recommended' => 'تم تسجيل توصية',
+    ],
+
+    'reasons' => [
+        'mode_does_not_apply_decisions' => 'الوضع الحالي لا يطبق القرارات الآلية',
+        'provider_failure' => 'لم تكتمل المراجعة الآلية',
+        'deterministic_hard_failure' => 'فشلت قاعدة إلزامية في المحتوى',
+        'model_requested_human' => 'طلبت المراجعة الآلية تدخل موظف',
+        'policy_requires_human' => 'السياسة تتطلب مراجعة موظف لهذه الفئة',
+        'rule_model_disagreement' => 'قواعد النظام والمراجعة الآلية غير متطابقتين',
+        'assisted_mode' => 'وضع المساعدة يسجل توصية فقط',
+        'subject_not_automation_eligible' => 'هذا المحتوى غير مؤهل للقرارات التلقائية',
+        'high_confidence_critical_violation' => 'تم رصد مخالفة حرجة بثقة عالية',
+        'high_confidence_clean' => 'لم يتم رصد أي مخالفة بثقة عالية',
+        'grey_zone' => 'نتيجة غير حاسمة',
+        'forced_manual_review' => 'قام موظف بتحويل هذا المحتوى إلى المراجعة اليدوية',
+        'superseded_before_apply' => 'لم تعد النتيجة صالحة قبل تطبيقها',
+        'mode_became_more_restrictive' => 'أصبح وضع المراجعة أكثر تقييدًا قبل تطبيق النتيجة',
+        'content_changed' => 'تم تغيير المحتوى قبل تطبيق النتيجة',
+        'subject_not_reviewable' => 'لم يعد المحتوى في حالة قابلة للمراجعة',
+        'content_unavailable' => 'تعذر إعادة تجهيز المحتوى لاتخاذ القرار',
+        'circuit_open' => 'تم إيقاف المراجعة الآلية مؤقتًا لأن الخدمة غير مستقرة',
+        'budget_exhausted' => 'تم استنفاد ميزانية المراجعة الآلية',
+        'policy_missing' => 'لا توجد سياسة مراجعة فعالة منشورة',
+        'subject_type_not_supported' => 'نوع المحتوى هذا غير مدعوم في نظام المراجعة',
+    ],
+
+    'violations' => [
+        'prohibited_item' => 'سلعة محظورة',
+        'misleading_description' => 'وصف مضلل',
+        'contact_info_in_content' => 'بيانات تواصل داخل المحتوى',
+        'price_manipulation' => 'تلاعب في السعر',
+        'missing_images' => 'صور ناقصة',
+        'image_mismatch' => 'الصور لا تطابق الوصف',
+        'offensive_language' => 'ألفاظ غير لائقة',
+        'duplicate_listing' => 'إعلان مكرر',
+        'incomplete_information' => 'معلومات ناقصة',
+    ],
+
+    'rules' => [
+        'min_description_length' => 'الحد الأدنى لطول الوصف',
+        'require_at_least_one_image' => 'مطلوب صورة واحدة على الأقل',
+        'forbid_contact_patterns' => 'لا يسمح ببيانات التواصل داخل المحتوى',
+        'reserve_must_not_exceed_starting_multiplier' => 'السعر الاحتياطي غير متناسب مع سعر البداية',
+    ],
+
+    'notifications' => [
+        'content_review.escalated' => [
+            'title' => 'محتوى يحتاج مراجعة يدوية',
+            'body' => 'تعذر إكمال المراجعة التلقائية للمحتوى ":subject" ويحتاج مراجعة موظف.',
+        ],
+        'content_review.auto_decided' => [
+            'title' => 'تم تطبيق قرار تلقائي',
+            'body' => 'طبقت المراجعة الآلية قرارًا على المحتوى ":subject".',
+        ],
+        'content_review.failed' => [
+            'title' => 'تكرر فشل المراجعة الآلية',
+            'body' => 'فشلت المراجعة الآلية للمحتوى ":subject" بعد استنفاد كل المحاولات.',
+        ],
+        'content_review.circuit_open' => [
+            'title' => 'تم إيقاف المراجعة الآلية مؤقتًا',
+            'body' => 'تم إيقاف المراجعة الآلية مؤقتًا لأن الخدمة غير مستقرة.',
+        ],
+        'content_review.provider_unavailable' => [
+            'title' => 'مزود المراجعة غير مستقر',
+            'body' => 'تم إيقاف المراجعة الآلية مؤقتًا بسبب تكرار الفشل في الخدمة.',
+        ],
+        'content_review.budget_exhausted' => [
+            'title' => 'تم استنفاد ميزانية المراجعة',
+            'body' => 'تم بلوغ حد ميزانية المراجعة الآلية، وستتحول المراجعات إلى المراجعة اليدوية.',
+        ],
+        'content_review.stale' => [
+            'title' => 'نتيجة المراجعة لم تعد صالحة',
+            'body' => 'تم تغيير محتوى ":subject" ولذلك لم تعد النتيجة الآلية صالحة.',
+        ],
+    ],
+];

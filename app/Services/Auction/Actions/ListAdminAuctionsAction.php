@@ -13,8 +13,8 @@ final class ListAdminAuctionsAction
         private readonly AdminAuctionQuery $query,
     ) {}
 
-    public function execute(array $filters, int $perPage): LengthAwarePaginator
+    public function execute(array $filters, int $perPage, bool $withContentReview = false): LengthAwarePaginator
     {
-        return $this->query->paginate($filters, $perPage);
+        return $this->query->paginate($filters, $perPage, $withContentReview);
     }
 }

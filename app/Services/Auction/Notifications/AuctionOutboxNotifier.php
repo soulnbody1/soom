@@ -8,7 +8,7 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\OutboxMessage;
 use App\Services\Auction\Support\AuctionNotificationCatalog;
 
-final class AuctionOutboxNotifier
+final class AuctionOutboxNotifier implements OutboxNotifier
 {
     public function __construct(
         private readonly PersonalNotificationSender $personal,

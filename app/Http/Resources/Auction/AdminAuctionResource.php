@@ -6,9 +6,13 @@ namespace App\Http\Resources\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
+use App\Domain\ContentReview\Enums\ReviewableSubjectType;
+use App\Http\Resources\ContentReview\ContentReviewResource;
 use App\Models\Auction\AuctionConfigurationSnapshot;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
+use App\Models\ContentReview\ContentReview;
+use App\Services\ContentReview\Support\ContentReviewActionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -142,6 +146,10 @@ final class AdminAuctionResource extends JsonResource
             }
         }
 
+        if ($user && Gate::forUser($user)->allows('viewAny', ContentReview::class)) {
+            $data['ai_review'] = $this->aiReviewBlock($request);
+        }
+
         if ($canResolveDisputes) {
             $data['disputes'] = $this->whenLoaded('disputes', fn () => $this->disputes->map(fn ($dispute): array => [
                 'id' => $dispute->public_id,
@@ -155,6 +163,31 @@ final class AdminAuctionResource extends JsonResource
         }
 
         return $data;
+    }
+
+    private function aiReviewBlock(Request $request): array
+    {
+        $review = $this->relationLoaded('activeContentReview') ? $this->activeContentReview : null;
+        $mode = ContentReviewResource::resolvedMode($request, ReviewableSubjectType::Auction);
+
+        return [
+            'enabled' => config('content_review.enabled') === true,
+            'mode' => $mode->value,
+            'mode_label' => __('content_review.modes.'.$mode->value),
+            'current' => $review === null ? null : (new ContentReviewResource($review))->toArray($request),
+            'available_actions' => app(ContentReviewActionResolver::class)->for($request->user(), $review, $mode),
+        ];
+    }
+
+    private function awaitsAiReview(): bool
+    {
+        if (! $this->relationLoaded('activeContentReview')) {
+            return false;
+        }
+
+        $review = $this->activeContentReview;
+
+        return $review !== null && $review->status->isPending();
     }
 
     private function settlementRecord(): ?AuctionSettlement
@@ -218,6 +251,7 @@ final class AdminAuctionResource extends JsonResource
 
         return match (true) {
             $flags['has_open_dispute'] === true => 'resolve_dispute',
+            $this->status === AuctionStatus::PendingReview && $this->awaitsAiReview() => 'awaiting_ai_review',
             $this->status === AuctionStatus::PendingReview => 'review_auction',
             $flags['is_seller_deposit_overdue'] === true => 'cancel_unfunded_auction',
             $flags['is_payment_grace_expired'] === true => 'mark_winner_defaulted',

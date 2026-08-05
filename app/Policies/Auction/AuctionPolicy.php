@@ -35,6 +35,16 @@ final class AuctionPolicy
             && in_array($auction->status, [AuctionStatus::Draft, AuctionStatus::Rejected], true);
     }
 
+    public function reopen(User $user, Auction $auction): bool
+    {
+        return $user->id === $auction->seller_id;
+    }
+
+    public function update(User $user, Auction $auction): bool
+    {
+        return $user->id === $auction->seller_id;
+    }
+
     public function review(User $user, Auction $auction): bool
     {
         return $this->hasAuctionPermission($user, 'auction.review');

@@ -12,6 +12,8 @@ return [
         'auction_fetched' => 'Auction fetched.',
         'auction_created' => 'Auction created.',
         'auction_submitted' => 'Auction submitted for review.',
+        'auction_updated' => 'Auction updated.',
+        'auction_reopened' => 'Auction reopened for editing.',
         'auction_reviewed' => 'Auction reviewed.',
         'auction_cancelled' => 'Auction cancelled.',
         'participant_registered' => 'Participant registered.',
@@ -91,6 +93,12 @@ return [
         'bid_currency_mismatch' => 'Bid currency does not match auction currency.',
         'bid_below_minimum' => 'Bid amount is below the required minimum.',
         'seller_only_submit_review' => 'Only the seller can submit this auction.',
+        'seller_only_reopen_auction' => 'Only the seller can reopen this auction.',
+        'seller_only_update_auction' => 'Only the seller can update this auction.',
+        'auction_not_reopenable' => 'Only a rejected auction can be reopened for editing.',
+        'auction_not_editable' => 'Only a draft auction can be edited.',
+        'auction_amount_required_on_currency_change' => 'Changing the currency requires resubmitting the auction amounts.',
+        'auction_amount_invalid' => 'The auction amount is invalid for the selected currency.',
         'invalid_auction_times' => 'Auction start and end times must be valid before review.',
         'active_terms_required' => 'An active auction terms version is required.',
         'rejection_reason_required' => 'Rejection reason is required.',
@@ -171,6 +179,7 @@ return [
         'seller_handover_confirmed' => 'seller handover confirmed',
         'winner_receipt_confirmed' => 'winner receipt confirmed',
         'seller_submitted_review' => 'seller submitted auction for review',
+        'seller_reopened_rejected_auction' => 'seller reopened the rejected auction for editing',
     ],
     'refund_statuses' => [
         'pending' => 'Pending',
@@ -213,6 +222,8 @@ return [
     ],
     'validation' => [
         'reserve_below_starting' => 'The reserve amount cannot be lower than the starting amount.',
+        'ends_at_after_starts_at' => 'The end time must be after the start time.',
+        'amount_required_on_currency_change' => 'Resubmit the amount when the currency changes.',
     ],
     'notifications' => [
         'status' => [

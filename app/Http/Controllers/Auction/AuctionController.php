@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Auction;
 use App\Domain\Auction\Enums\AuctionParticipantStatus;
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\DTO\Auction\CreateAuctionInputDTO;
+use App\DTO\Auction\UpdateDraftAuctionInputDTO;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AdminAuctionIndexRequest;
 use App\Http\Requests\Auction\AuctionIndexRequest;
@@ -17,6 +18,7 @@ use App\Http\Requests\Auction\PaymentSubmissionRequest;
 use App\Http\Requests\Auction\ResolveAuctionDisputeRequest;
 use App\Http\Requests\Auction\ReviewAuctionRequest;
 use App\Http\Requests\Auction\StoreAuctionRequest;
+use App\Http\Requests\Auction\UpdateDraftAuctionRequest;
 use App\Http\Resources\Auction\AdminAuctionResource;
 use App\Http\Resources\Auction\AuctionParticipantResource;
 use App\Http\Resources\Auction\PaymentSubmissionResource;
@@ -25,6 +27,7 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\PaymentSubmission;
+use App\Models\ContentReview\ContentReview;
 use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Services\Auction\Actions\AcceptAuctionTermsAction;
 use App\Services\Auction\Actions\BlockAuctionParticipantAction;
@@ -39,10 +42,12 @@ use App\Services\Auction\Actions\LoadAuctionDetailsAction;
 use App\Services\Auction\Actions\MarkWinnerDefaultedAction;
 use App\Services\Auction\Actions\OpenAuctionDisputeAction;
 use App\Services\Auction\Actions\RegisterParticipantAction;
+use App\Services\Auction\Actions\ReopenRejectedAuctionAction;
 use App\Services\Auction\Actions\ResolveAuctionDisputeAction;
 use App\Services\Auction\Actions\ReviewAuctionAction;
 use App\Services\Auction\Actions\SubmitAuctionForReviewAction;
 use App\Services\Auction\Actions\SubmitPaymentSubmissionAction;
+use App\Services\Auction\Actions\UpdateDraftAuctionAction;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\ParticipationStateResolver;
 use App\Traits\ApiResponseTrait;
@@ -76,7 +81,11 @@ final class AuctionController extends Controller
         Gate::authorize('viewAny', Auction::class);
 
         return $this->sendResponse(
-            AdminAuctionResource::collection($action->execute($request->filters(), $request->perPage())),
+            AdminAuctionResource::collection($action->execute(
+                $request->filters(),
+                $request->perPage(),
+                Gate::allows('viewAny', ContentReview::class)
+            )),
             __('auction.messages.admin_auctions_fetched')
         );
     }
@@ -143,6 +152,22 @@ final class AuctionController extends Controller
             __('auction.messages.auction_created'),
             201
         );
+    }
+
+    public function update(UpdateDraftAuctionRequest $request, Auction $auction, UpdateDraftAuctionAction $action): JsonResponse
+    {
+        Gate::authorize('update', $auction);
+
+        $input = UpdateDraftAuctionInputDTO::fromValidated($request->validated());
+
+        return $this->auctionResponse($action->execute($auction, $input, Auth::id()), __('auction.messages.auction_updated'));
+    }
+
+    public function reopen(Auction $auction, ReopenRejectedAuctionAction $action): JsonResponse
+    {
+        Gate::authorize('reopen', $auction);
+
+        return $this->auctionResponse($action->execute($auction, Auth::id()), __('auction.messages.auction_reopened'));
     }
 
     public function submitForReview(Auction $auction, SubmitAuctionForReviewAction $action): JsonResponse
@@ -403,6 +428,10 @@ final class AuctionController extends Controller
 
         if (Gate::forUser($user)->allows('resolveDispute', $auction)) {
             $relations[] = 'disputes';
+        }
+
+        if (Gate::forUser($user)->allows('viewAny', ContentReview::class)) {
+            $relations[] = 'activeContentReview.decisions.decidedBy:id,name';
         }
 
         $auction->load($relations);

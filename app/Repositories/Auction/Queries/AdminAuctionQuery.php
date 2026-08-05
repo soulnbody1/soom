@@ -31,9 +31,13 @@ final class AdminAuctionQuery
      * Paginate all auctions for admin dashboard with server-side filters.
      * Replaces ListAdminAuctionsAction query.
      */
-    public function paginate(array $filters, int $perPage): LengthAwarePaginator
+    public function paginate(array $filters, int $perPage, bool $withContentReview = false): LengthAwarePaginator
     {
-        return Auction::with(self::RELATIONS)
+        $relations = $withContentReview
+            ? array_merge(self::RELATIONS, ['activeContentReview.decisions.decidedBy:id,name'])
+            : self::RELATIONS;
+
+        return Auction::with($relations)
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($filters['category_id'] ?? null, fn (Builder $query, $categoryId) => $query->where('category_id', (int) $categoryId))
             ->when($filters['seller_id'] ?? null, fn (Builder $query, $sellerId) => $query->where('seller_id', (int) $sellerId))

@@ -6,10 +6,13 @@ namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Domain\ContentReview\Enums\ReviewableSubjectType;
+use App\Domain\ContentReview\Enums\ReviewTrigger;
 use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionRepository;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\ContentReview\Actions\RequestContentReviewAction;
 
 final class SubmitAuctionForReviewAction
 {
@@ -17,6 +20,7 @@ final class SubmitAuctionForReviewAction
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
         private readonly AuctionRepository $auctions,
+        private readonly RequestContentReviewAction $contentReview,
     ) {}
 
     public function execute(Auction $auction, int $sellerId): Auction
@@ -36,13 +40,22 @@ final class SubmitAuctionForReviewAction
                 throw AuctionException::domain('active_terms_required');
             }
 
-            return $this->stateMachine->transition(
+            $submitted = $this->stateMachine->transition(
                 $auction,
                 AuctionStatus::PendingReview,
                 $sellerId,
                 'user',
                 __('auction.audit.seller_submitted_review')
             );
+
+            $this->contentReview->execute(
+                ReviewableSubjectType::Auction,
+                (int) $submitted->id,
+                ReviewTrigger::SubmittedForReview,
+                $sellerId,
+            );
+
+            return $submitted;
         });
     }
 }

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\DTO\Auction\ParticipationStateDTO;
 use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\Category;
 use App\Models\City;
+use App\Models\ContentReview\ContentReview;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\User;
@@ -146,6 +148,13 @@ final class Auction extends Model
     public function configurationSnapshot(): HasOne
     {
         return $this->hasOne(AuctionConfigurationSnapshot::class);
+    }
+
+    public function activeContentReview(): HasOne
+    {
+        return $this->hasOne(ContentReview::class, 'subject_id')
+            ->where('subject_type', ReviewableSubjectType::Auction->value)
+            ->where('current_marker', 1);
     }
 
     public function media(): HasMany

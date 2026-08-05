@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Auction\Actions;
 
 use App\Repositories\Auction\AuctionOutboxRepository;
-use App\Services\Auction\Notifications\AuctionOutboxNotifier;
+use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\Auction\Support\AuctionNotificationCatalog;
+use App\Services\ContentReview\Notifications\ContentReviewNotificationCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -15,12 +16,13 @@ final class DispatchOutboxMessagesAction
 {
     public function __construct(
         private readonly AuctionOutboxRepository $outbox,
-        private readonly AuctionOutboxNotifier $notifier,
+        private readonly OutboxNotifier $notifier,
     ) {}
 
     public static function supports(string $eventType): bool
     {
-        return AuctionNotificationCatalog::supports($eventType);
+        return AuctionNotificationCatalog::supports($eventType)
+            || ContentReviewNotificationCatalog::supports($eventType);
     }
 
     public function execute(int $limit = 100): int

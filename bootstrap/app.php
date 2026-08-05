@@ -2,10 +2,13 @@
 
 use App\Domain\Auction\Exceptions\AuctionErrorCodeCatalog;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Domain\ContentReview\Exceptions\ContentReviewErrorCodeCatalog;
+use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Http\Middleware\ApiMaintenanceMode;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Responses\ApiErrorResponse;
 use App\Models\Auction\Auction;
+use App\Models\ContentReview\ContentReview;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -45,6 +48,18 @@ return Application::configure(basePath: dirname(__DIR__))
             $code = $exception->getErrorCode()
                 ?? app(AuctionErrorCodeCatalog::class)->codeFor($exception->getMessage())
                 ?? 'auction_error';
+
+            return ApiErrorResponse::make($exception->getMessage(), $code, $exception->getStatusCode());
+        });
+
+        $exceptions->render(function (ContentReviewException $exception, $request) use ($wantsJson) {
+            if (! $wantsJson($request)) {
+                return null;
+            }
+
+            $code = $exception->getErrorCode()
+                ?? app(ContentReviewErrorCodeCatalog::class)->codeFor($exception->getMessage())
+                ?? 'content_review_error';
 
             return ApiErrorResponse::make($exception->getMessage(), $code, $exception->getStatusCode());
         });
@@ -91,9 +106,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return $exception->getModel() === Auction::class
-                ? ApiErrorResponse::make(__('auction.errors.auction_not_found'), 'auction_not_found', 404)
-                : ApiErrorResponse::make(__('auction.errors.not_found'), 'not_found', 404);
+            return match ($exception->getModel()) {
+                Auction::class => ApiErrorResponse::make(__('auction.errors.auction_not_found'), 'auction_not_found', 404),
+                ContentReview::class => ApiErrorResponse::make(__('content_review.errors.review_not_found'), 'review_not_found', 404),
+                default => ApiErrorResponse::make(__('auction.errors.not_found'), 'not_found', 404),
+            };
         });
 
         $exceptions->render(function (NotFoundHttpException $exception, $request) use ($wantsJson) {
@@ -103,9 +120,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return $previous->getModel() === Auction::class
-                ? ApiErrorResponse::make(__('auction.errors.auction_not_found'), 'auction_not_found', 404)
-                : ApiErrorResponse::make(__('auction.errors.not_found'), 'not_found', 404);
+            return match ($previous->getModel()) {
+                Auction::class => ApiErrorResponse::make(__('auction.errors.auction_not_found'), 'auction_not_found', 404),
+                ContentReview::class => ApiErrorResponse::make(__('content_review.errors.review_not_found'), 'review_not_found', 404),
+                default => ApiErrorResponse::make(__('auction.errors.not_found'), 'not_found', 404),
+            };
         });
 
         $exceptions->render(function (ThrottleRequestsException $exception, $request) use ($wantsJson) {

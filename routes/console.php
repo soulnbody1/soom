@@ -13,3 +13,4 @@ app(Schedule::class)->command('auction:run-operations')->everyMinute()->withoutO
 app(Schedule::class)->command('auction:run-deadlines')->everyMinute()->withoutOverlapping();
 app(Schedule::class)->job(new DispatchAuctionOutboxJob)->everyMinute()->withoutOverlapping();
 app(Schedule::class)->command('auction:reconcile')->everyFifteenMinutes()->withoutOverlapping();
+app(Schedule::class)->command('content-review:dispatch-pending')->everyMinute()->withoutOverlapping();

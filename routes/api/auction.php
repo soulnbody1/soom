@@ -49,6 +49,8 @@ Route::middleware(['auth:sanctum', 'role:admin,user', AttachServerTime::class])-
 
     Route::prefix('auctions')->group(function () {
         Route::post('/', [AuctionController::class, 'store']);
+        Route::patch('/{auction}', [AuctionController::class, 'update']);
+        Route::post('/{auction}/reopen', [AuctionController::class, 'reopen']);
         Route::post('/{auction}/submit-review', [AuctionController::class, 'submitForReview']);
         Route::post('/{auction}/seller-deposit', [AuctionController::class, 'submitSellerDeposit']);
         Route::post('/{auction}/register', [AuctionController::class, 'register']);

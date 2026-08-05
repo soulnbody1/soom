@@ -12,6 +12,8 @@ return [
         'auction_fetched' => 'تم جلب المزاد.',
         'auction_created' => 'تم إنشاء المزاد.',
         'auction_submitted' => 'تم إرسال المزاد للمراجعة.',
+        'auction_updated' => 'تم تحديث المزاد.',
+        'auction_reopened' => 'تمت إعادة فتح المزاد للتعديل.',
         'auction_reviewed' => 'تمت مراجعة المزاد.',
         'auction_cancelled' => 'تم إلغاء المزاد.',
         'participant_registered' => 'تم تسجيل المشارك.',
@@ -93,6 +95,12 @@ return [
         'bid_currency_mismatch' => 'عملة المزايدة لا تطابق عملة المزاد.',
         'bid_below_minimum' => 'قيمة المزايدة أقل من الحد الأدنى المطلوب.',
         'seller_only_submit_review' => 'يمكن للبائع فقط إرسال هذا المزاد.',
+        'seller_only_reopen_auction' => 'يمكن للبائع فقط إعادة فتح هذا المزاد.',
+        'seller_only_update_auction' => 'يمكن للبائع فقط تعديل هذا المزاد.',
+        'auction_not_reopenable' => 'يمكن إعادة فتح المزاد المرفوض فقط للتعديل.',
+        'auction_not_editable' => 'يمكن تعديل المزاد في حالة المسودة فقط.',
+        'auction_amount_required_on_currency_change' => 'تغيير العملة يتطلب إعادة إرسال مبالغ المزاد.',
+        'auction_amount_invalid' => 'مبلغ المزاد غير صالح للعملة المختارة.',
         'invalid_auction_times' => 'يجب أن تكون أوقات بداية ونهاية المزاد صالحة قبل المراجعة.',
         'active_terms_required' => 'يجب وجود نسخة شروط مزاد نشطة.',
         'rejection_reason_required' => 'سبب الرفض مطلوب.',
@@ -171,6 +179,7 @@ return [
         'seller_handover_confirmed' => 'تم تأكيد التسليم من البائع',
         'winner_receipt_confirmed' => 'تم تأكيد الاستلام من الفائز',
         'seller_submitted_review' => 'أرسل البائع المزاد للمراجعة',
+        'seller_reopened_rejected_auction' => 'أعاد البائع فتح المزاد المرفوض للتعديل',
     ],
     'refund_statuses' => [
         'pending' => 'قيد الانتظار',
@@ -213,6 +222,8 @@ return [
     ],
     'validation' => [
         'reserve_below_starting' => 'لا يمكن أن يكون سعر الاحتياطي أقل من سعر البداية.',
+        'ends_at_after_starts_at' => 'يجب أن يكون وقت النهاية بعد وقت البداية.',
+        'amount_required_on_currency_change' => 'أعد إرسال المبلغ عند تغيير العملة.',
     ],
     'notifications' => [
         'status' => [

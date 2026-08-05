@@ -1,6 +1,8 @@
 # AI Content Review — Engineering & Implementation Plan
 
-**Status:** planning only. No project code, migration, or configuration was created or modified to produce this document.
+**Status:** approved as the execution reference. The **preliminary phase is complete and green** — see below. Decisions D1-D7 were approved by the product owner; the notes recorded against each of them at the end of this document are binding.
+
+**Preliminary Phase (done, shipped before Batch 1).** The rejected-auction dead end is closed. `POST /api/soom/auctions/{auction}/reopen` moves `rejected → draft` over the existing state-machine edge, and `PATCH /api/soom/auctions/{auction}` edits draft auctions only. The supported loop is `rejected → reopen → draft → update → submit-review → pending_review`. No auction status was added and `AuctionStateMachine::ALLOWED` was not modified. Covered by `AuctionReopenAndUpdateTest` (16 tests) and `AuctionReopenConcurrencyMysqlTest` (a real two-process race).
 **Backend root:** `C:\Users\pc\Desktop\SB\soom` (Laravel 12, PHP 8.2, API-only, Sanctum)
 **Dashboard root:** `C:\Users\pc\Desktop\SB\soom-dashboard` (Next.js 15 App Router, React 19, TanStack Query v5, next-intl `ar` default / RTL)
 
@@ -26,7 +28,7 @@ We are adding an AI review layer whose **first** consumer is auction pre-approva
 
 1. `auction_status_history.changed_by` is `nullable()->constrained('users')->nullOnDelete()` and `actor_type` is `string(20)` defaulting to `'system'` — recording the AI as an actor needs **no migration on any existing table**. Verified: `database/migrations/2025_06_12_090000_create_auctions_table.php:425-437` and `app/Repositories/Auction/AuctionAuditRepository.php:68-87` (which already accepts `?int $actorId`).
 2. `auction_configuration_snapshots.created_by` is `nullable()` with `nullOnDelete()` — an AI-approved auction can mint the immutable snapshot with a null creator. Verified: `database/migrations/2026_07_13_060000_create_auction_configuration_snapshots.php:38,48`.
-3. **Auctions are immutable after creation.** There is no update/edit endpoint and no `UpdateAuctionAction` anywhere in `app/`. `routes/api/auction.php` exposes `store`, status-changing posts, and `DELETE {auction}` (cancel) only; media is written only by `CreateAuctionAction:83`. Content drift during review is therefore *practically* impossible today. We still implement content hashing — it is cheap, it is the correct guard for direct DB edits and for the future ads use case, and it makes the "stale result" requirement real rather than theatrical.
+3. **A rejected auction can now be corrected and resubmitted.** The preliminary phase (shipped before Batch 1) added `POST /api/soom/auctions/{auction}/reopen` (`rejected → draft`) and `PATCH /api/soom/auctions/{auction}` (draft-only edit), closing the gap that previously made rejection a dead end. Auction content is therefore **mutable while in `draft`**, which makes content hashing a live correctness requirement rather than a theoretical one: an auction that was reviewed, rejected, edited, and resubmitted must never be judged by the result of the previous version.
 4. The project already owns every primitive we need: a transactional **outbox** (`outbox_messages` + `AuctionOutboxRepository::leaseNextPending`), an **append-only versioned settings** pattern (`auction_configuration_versions` + `CreateConfigurationVersionAction`), an **immutable hashed snapshot** pattern (`AuctionConfigurationSnapshotHasher`), a **provider-interface + adapter + container binding** pattern (`AuctionRefundProcessorInterface` → `ManualReviewRefundProcessor`, bound at `AppServiceProvider:35`), a deadlock-retrying **transaction runner** (`AuctionTransaction`), and a **`current_marker`** uniqueness idiom (`AuctionSettlement`). We reuse all six rather than inventing new ones.
 
 **Blast radius on existing code is deliberately tiny:** one behaviour-preserving refactor (`ReviewAuctionAction` gains transaction-free `…Locked()` entry points), one type-hint in `DispatchOutboxMessagesAction`, one additive block in `AdminAuctionResource`, one hook at the end of `SubmitAuctionForReviewAction`, plus wiring in `AppServiceProvider`, `routes/api.php`, and `routes/console.php`. Everything else is new files.
@@ -54,6 +56,28 @@ POST /api/soom/auctions/{auction}/submit-review
 
 There is **no FormRequest** and no request body on this endpoint. `{auction}` binds by `public_id` via `app/Models/Auction/Concerns/HasPublicId.php`.
 
+Two sibling seller endpoints were added by the preliminary phase and sit in the same route group
+(`routes/api/auction.php:53-54`):
+
+```
+PATCH /api/soom/auctions/{auction}
+  → AuctionController::update            Gate::authorize('update')  → AuctionPolicy::update (seller only)
+  → UpdateDraftAuctionRequest            every field `sometimes`; cross-checks amounts, currency, schedule
+  → UpdateDraftAuctionAction             AuctionTransaction → lockForStateChange → status must be Draft
+                                         (else AuctionException::domain('auction_not_editable'))
+                                         → atomic media replacement → activity log `auction.updated`
+                                           carrying only the changed field names
+
+POST /api/soom/auctions/{auction}/reopen
+  → AuctionController::reopen            Gate::authorize('reopen')  → AuctionPolicy::reopen (seller only)
+  → ReopenRejectedAuctionAction          AuctionTransaction → lockForStateChange → status must be Rejected
+                                         (else AuctionException::domain('auction_not_reopenable'))
+                                         → transition(→ Draft, actorId=sellerId, actorType='user')
+```
+
+Neither endpoint enqueues a review, and neither submits the auction — the seller must call
+`submit-review` explicitly, which is what produces a fresh `content_reviews` row.
+
 ### 2.2 State machine
 
 `app/Services/Auction/Support/AuctionStateMachine.php`
@@ -63,7 +87,15 @@ There is **no FormRequest** and no request body on this endpoint. `{auction}` bi
 - `transition()` (L96-144): guard (L108, throws `AuctionException::invalidTransition`) → no-op when `from === to` (L112) → timestamp side effects via `match` (L119-129; **nothing is set for `PendingReview` or `Rejected`**) → `forceFill()->save()` → `audit->statusChanged(...)` → if target ∈ `NOTIFIABLE_STATUSES` then `audit->outbox('auction.status_changed', …)` → `$auction->refresh()`.
 - The signature is **already actor-agnostic**: `transition(Auction $auction, AuctionStatus $to, ?int $actorId, string $actorType, ?string $reason = null, array $metadata = [])`. No change is needed here to record an AI actor.
 
-**Gap found (pre-existing).** `AuctionPolicy::submitForReview` permits status `Rejected`, but `ALLOWED['rejected']` contains only `[draft, cancelled]` — and no endpoint performs `rejected → draft`. **Resubmission of a rejected auction is currently dead.** We do not fix this (out of scope), but the plan must not assume it works.
+**Gap found, and closed before Batch 1.** `AuctionPolicy::submitForReview` permits status `Rejected`, but `ALLOWED['rejected']` contains only `[draft, cancelled]`, and until the preliminary phase no endpoint performed `rejected → draft`, so resubmission was unreachable. The preliminary phase added the `reopen` endpoint, which uses the **existing** `rejected → draft` edge (no state-machine change), plus a draft-only `PATCH` edit endpoint. The supported correction loop is now:
+
+```
+rejected ──reopen──► draft ──PATCH update──► draft ──submit-review──► pending_review
+```
+
+`AuctionStateMachine::ALLOWED` was **not** modified: `rejected → pending_review` is still not a legal
+direct edge, and the loop deliberately routes through `draft` so every correction cycle is visible in
+`auction_status_history`. This is the flow the AI review system attaches to.
 
 ### 2.3 Admin decides
 
@@ -193,8 +225,8 @@ return $user->role === 'admin' && in_array($permission, config('auction.admin_pe
 | C7 | Every job runs on the `default` queue. No `onQueue`, no `backoff()`, no `retryUntil`, no Horizon anywhere in `app/Jobs`. | AI calls would compete with `DispatchAuctionOutboxJob`, auction finalization, refunds, payments. → a dedicated `content-review` queue plus a documented worker change. |
 | C8 | Settings are split in two: env-only `config/auction.php` (exposed read-only by `AuctionOperationalSettingsController` with `'source' => 'environment'`) and DB-versioned `auction_configuration_versions`. There is no generic settings table. | Mode / thresholds / kill switch need a DB home, and there is a proven append-only pattern to copy rather than invent. |
 | C9 | `config('auction.deadlines.review_sla_hours')` (`config/auction.php:77`) is frozen into snapshots as `review_sla_minutes` but **never enforced** by any job or query. | Dead config. Do not build on it, and do not confuse it with AI timeouts. |
-| C10 | `rejected → pending_review` is not in `ALLOWED`, and no endpoint performs `rejected → draft`. Resubmission is dead. | The "resubmit a rejected auction" scenario cannot be exercised end-to-end today; the plan must not depend on it. |
-| C11 | Auctions are immutable post-creation (no update action, no PUT/PATCH route). | Content drift is theoretical today. Hashing is still implemented, but it is honestly a correctness guard for the future, not the headline safety mechanism. |
+| C10 | ~~`rejected → pending_review` is not in `ALLOWED`, and no endpoint performs `rejected → draft`.~~ **Closed by the preliminary phase** via `POST /soom/auctions/{auction}/reopen`, which uses the existing `rejected → draft` edge. | The "resubmit a rejected auction" scenario is now fully exercisable end-to-end and is covered by `AuctionReopenAndUpdateTest`. Every rejection — human or AI — is actionable by the seller. |
+| C11 | ~~Auctions are immutable post-creation.~~ **Closed by the preliminary phase** via `PATCH /soom/auctions/{auction}`, which edits **draft auctions only**. Auctions in `pending_review` and every later status remain immutable. | Content drift is now real, but only through the `draft` state. A review is always requested at the `draft → pending_review` boundary, so the hash is computed against content that cannot change while the review is in flight — unless an out-of-band edit occurs, which the hash still catches. Content hashing is a first-class correctness guard, not a speculative one. |
 | C12 | `tests/Unit/Auction/AuctionCodeQualityTest.php` forbids `\b(float\|double)\b` anywhere under `app/{Domain,Services,Models,Http/Controllers,Http/Requests,Http/Resources}/Auction`; forbids `new AuctionException(__(`; forbids five legacy table-name strings across `app/`, `routes/`, `tests/`; forbids conditional keys in `UserAuctionResource`. | Confidence must be an **integer 0-100**; cost an **integer `cost_micros`**. `AuctionReviewSubjectAdapter` lives under `app/Services/Auction/` and is therefore subject to the float ban. Exceptions must use static factories. |
 | C13 | `phpunit.xml` runs on `sqlite` `:memory:` with `QUEUE_CONNECTION=sync` and `CACHE_STORE=array`; `phpunit.mysql.xml` targets a persistent `*_testing` MySQL database; tests use neither `RefreshDatabase` nor `DatabaseTransactions`, and `tests/TestCase.php::guardAgainstNonTestingDatabase()` enforces the database name. | New tests must follow the same conventions, must use `Queue::fake()` for queue assertions, must not assume Redis, and must never point at `soom_pr`. |
 | C14 | In the admin group, `Route::get('/{auction}', …)` is the **last** route in the `admin/auctions` prefix (`routes/api/auction.php:104`) — a catch-all. | New static admin paths must not be added under `admin/auctions`. Our new routes use the separate `admin/content-reviews` and `admin/content-review` prefixes, so there is no conflict. |
@@ -636,6 +668,14 @@ Media are loaded with a single eager `with('media')` (no N+1). Hashing the stora
 - The hash is recomputed immediately before any decision is applied. On mismatch, the review is marked `superseded` (`current_marker = NULL`, `superseded_at` set), a `content_review.stale` event is emitted, and the subject escalates to human review.
 - `is_stale` is exposed in the admin API so the dashboard can show «النتيجة لم تعد صالحة — يلزم إعادة المراجعة» and disable the "act on the AI recommendation" affordance.
 - A new review request for the same subject supersedes the previous active one **inside the same transaction** that inserts the new row; the unique index on `(subject_type, subject_id, current_marker)` makes two simultaneously-active rows impossible even under a race.
+- **The reopen/edit loop is the primary source of hash changes.** When a seller reopens a rejected
+  auction, edits it, and resubmits, `submit-review` calls `RequestContentReviewAction`, which
+  supersedes the previous review and inserts a new row carrying the **new** `content_hash`. The
+  previous AI verdict is therefore never applied to, and never displayed as current for, the edited
+  content: the superseded attempt stays in the history panel labelled as belonging to an older
+  version, and `ai_review.current` points at the new attempt. An admin acting on a stale result is
+  additionally blocked by the `is_stale` flag and by the hash re-check inside
+  `ApplyContentReviewDecisionAction`.
 
 ---
 
@@ -643,7 +683,9 @@ Media are loaded with a single eager `with('media')` (no N+1). Hashing the stora
 
 **A new named queue, `content-review`.** Today every job runs on `default` (verified: no `onQueue`, no `$queue` property, and no `backoff()` anywhere in `app/Jobs`). AI work must never compete with `DispatchAuctionOutboxJob`, auction finalization, refunds, payouts, or bid handling.
 
-> **Deployment requirement — must appear in the release notes.** The worker command becomes `php artisan queue:work --queue=default,content-review`, or a second dedicated worker is started for `content-review`. Until that happens, reviews sit in `queued` and the sweeper keeps re-dispatching them. **The auction flow is completely unaffected** — that is the intended failure mode, not an outage.
+> **Deployment requirement — must appear in the release notes.** Production runs **two separate workers**: `php artisan queue:work --queue=default` for critical work and `php artisan queue:work --queue=content-review` for AI reviews. A single worker consuming `default,content-review` is for local development only — in production it reintroduces the head-of-line coupling this queue exists to prevent and removes the ability to stop AI work without stopping payments. Until the second worker is running, reviews sit in `queued` and the sweeper keeps re-dispatching them. **The auction flow is completely unaffected** — that is the intended failure mode, not an outage.
+>
+> The cache-backed components below (circuit breaker, budget guard, concurrency limiter) require a cache that is shared across worker processes and supports atomic locks. Verified for this project: `CACHE_STORE=database` → `Illuminate\Cache\DatabaseStore`, which implements `LockProvider` over the existing `cache_locks` table. See D3.
 
 `app/Jobs/ContentReview/ProcessContentReviewJob.php`:
 
@@ -836,9 +878,9 @@ Admin → POST /admin/auctions/{id}/review {action: 'reject', reason: '…'}
 | 6 | Needs human | R4 / R5 / R11 → `escalated_to_human`, auction untouched, admin alert | `EscalationTest` |
 | 7 | Transient failure then success | attempt 1 `failed(provider_timeout)` → backoff → attempt 2 `completed`; two rows, one cost each | `RetryTest` |
 | 8 | Permanent failure | attempts exhausted → `failed` → `escalated_to_human` + alert; the auction is still `pending_review` | `RetryTest::exhausted` |
-| 9 | Content edited during review | hash mismatch at apply time → `superseded` + escalate + `content_review.stale`. *(Not reachable through the API today — C11 — so the test mutates the row directly.)* | `StaleContentTest` |
-| 10 | Content edited after approval, before publish | approval already minted an immutable snapshot, and `Auction::booted()` blocks changing `configuration_version_id`; the review is marked `superseded` and no re-decision occurs | `StaleContentTest::after_approval` |
-| 11 | Rejected auction resubmitted | a new review row is created for the new submission and the old one is superseded. *(Blocked upstream by C10, so this is asserted at the action level, not over HTTP.)* | `ResubmitTest` |
+| 9 | Content edited during review | hash mismatch at apply time → `superseded` + escalate + `content_review.stale`. Reachable only out-of-band, because `PATCH` is draft-only while a review runs against `pending_review`; the test therefore mutates the row directly to prove the guard fires. | `StaleContentTest` |
+| 10 | Content edited after approval, before publish | `PATCH` is rejected with `auction_not_editable` (status is no longer `draft`); approval already minted an immutable snapshot and `Auction::booted()` blocks changing `configuration_version_id`. Any out-of-band change marks the review `superseded` with no re-decision. | `StaleContentTest::after_approval` |
+| 11 | Rejected auction reopened, edited, resubmitted | full HTTP journey: reject → `reopen` (`rejected → draft`) → `PATCH` (new content, new hash) → `submit-review`. The old review is superseded, a **new** review row is inserted with the new `content_hash`, and the previous verdict is never applied to the new content. The rejection reason and the whole status history are preserved. | `ResubmitAfterRejectionTest` + `AuctionReopenAndUpdateTest` |
 | 12 | Admin decides while the AI is running | the admin path wins by locking `auctions`; the AI apply step reads a status ≠ `pending_review` → `no_decision` + `superseded` | `ContentReviewConcurrencyMysqlTest` (two OS processes, modelled on `AuctionConfigurationSnapshotMysqlTest:43`) |
 | 13 | AI result lands after an admin decision | the same guard; nothing is mutated and the review is marked `superseded` | same test |
 | 14 | The job runs twice | lease + status guard + `ShouldBeUnique` + the unique `(subject, hash, attempt)` index → the second run is a no-op, with no second cost and no second notification | `IdempotencyTest` |
@@ -1184,7 +1226,7 @@ Every settings resource **whitelists** its output fields, and `SecretLeakageTest
 | Unit — architecture | `ContentReviewArchitectureTest.php` | the §7 hard rules, scanned the same way `AuctionCodeQualityTest` scans |
 | Feature — flow | `ManualModeTest`, `AiAssistedFlowTest`, `AiAutomaticApproveTest`, `AiAutomaticRejectTest`, `EscalationTest`, `ShadowModeTest` | scenarios 1-6 |
 | Feature — failure | `RetryTest`, `KillSwitchTest`, `BudgetGuardTest`, `CircuitBreakerTest`, `ImageHandlingTest` | scenarios 7, 8, 16-18 |
-| Feature — integrity | `StaleContentTest`, `IdempotencyTest`, `ModeChangeTest`, `ResubmitTest` | scenarios 9-11, 14, 15 |
+| Feature — integrity | `StaleContentTest`, `IdempotencyTest`, `ModeChangeTest`, `ResubmitAfterRejectionTest` | scenarios 9-11, 14, 15. `ResubmitAfterRejectionTest` drives the whole HTTP loop reject → reopen → PATCH → submit-review and asserts a new `content_reviews` row with a **different** `content_hash`, the old row `superseded`, and the previous verdict never applied |
 | Feature — queue | `ContentReviewQueueTest` | dispatched `afterCommit`, on queue `content-review`, `ShouldBeUnique` honoured, the sweeper re-dispatches an orphaned `queued` row, the limiter releases without consuming an attempt |
 | Feature — outbox | `ContentReviewOutboxTest` | the router sends `content_review.events` to the new notifier and `auction.events` to the old one **byte-identically**; an unknown topic dead-letters |
 | Feature — provider contract | `ProviderContractTest` | §11, including "the key never appears in the exception message" |
@@ -1265,8 +1307,9 @@ New composer script: `"test:content-review": "@php artisan test --filter=Content
 
 - Any ad review feature: no `ReviewableSubjectType::Ad`, no ad adapter, no ad endpoint, no ad screen. The design supports it; this work does not implement it.
 - Any user-app or mobile change beyond what already happens (status transitions and existing notifications).
-- Fixing C10 (`rejected → pending_review` is unreachable) and C9 (`review_sla_hours` is never enforced) — both documented, neither fixed here.
-- An auction edit/update endpoint.
+- C9 (`review_sla_hours` is frozen into snapshots but never enforced) — documented, not fixed.
+- Widening the edit window beyond `draft`: `PATCH` deliberately refuses `pending_review` and every later status.
+- Editing an auction *while* an AI review is in flight (the seller must reopen to `draft` first, which only rejection allows).
 - Multi-provider voting or ensembles, model fine-tuning, embeddings, or corpus-wide duplicate-listing detection.
 - Automated seller appeals, and "request more information" as a first-class auction state (see Decision D6).
 - Replacing the manual review path, or removing an admin's ability to decide anything.
@@ -1591,19 +1634,31 @@ Legend: **N** = new, **M** = modify. Paths are repo-relative. Backend root `C:\U
 *Recommended:* keep `content_review_policies` and `content_review_settings` separate. *Why:* they have different lifecycles — a kill-switch flip must not mint a new *policy* version and thereby pollute the "which policy version decided this" audit trail — and separate `manage` permissions fall out naturally. *Alternative:* one table with two JSON columns; one fewer table, but every operational tweak creates a new policy version and the permission split disappears. *Impact:* one migration. **Blocking for Batch 2.**
 
 **D3 — Adding a `content-review` queue.**
-*Recommended:* yes, with the documented worker change. *Why:* without it, a slow provider directly delays auction finalization, outbox dispatch, refunds, and payouts — the exact coupling the requirements forbid. *Alternative:* stay on `default` — zero operations change, real risk of head-of-line blocking. *Impact:* one deployment/supervisor change. **Blocking for Batch 4** — the code works either way, but shipping without the worker change means reviews sit queued.
+*Recommended:* yes, with the documented worker change. *Why:* without it, a slow provider directly delays auction finalization, outbox dispatch, refunds, and payouts — the exact coupling the requirements forbid. *Alternative:* stay on `default` — zero operations change, real risk of head-of-line blocking. *Impact:* one deployment/supervisor change. **Approved, with a hard deployment constraint:** production runs **two separate workers**, not one worker consuming both queues.
+
+```
+# critical work — unchanged
+php artisan queue:work --queue=default
+
+# AI review work — separate process, separately restartable and killable
+php artisan queue:work --queue=content-review
+```
+
+A single `--queue=default,content-review` worker is acceptable only for local development; in production it reintroduces exactly the head-of-line coupling this decision exists to prevent, and it removes the ability to stop AI work without stopping payments.
+
+**Shared-cache verification (required before wiring, done).** The circuit breaker, budget guard, and concurrency limiter coordinate through the cache, so they are only correct if the cache is shared across worker processes and supports atomic locks. Verified against this project: `.env` sets `CACHE_STORE=database`, which resolves to `Illuminate\Cache\DatabaseStore`; that store implements `Illuminate\Contracts\Cache\LockProvider` and is backed by the `cache_locks` table created by `database/migrations/0001_01_01_000001_create_cache_table.php`. Both workers point at the same MySQL database, so the locks and counters **are** genuinely distributed. If the deployment ever moves to `CACHE_STORE=file` or `array`, these three components silently degrade to per-process state — in that case they must be treated as per-worker only, and the budget guard in particular must be re-pointed at a direct `SUM(cost_micros)` query rather than a cached value.
 
 **D4 — Default permission grants.**
 *Recommended:* the `admin` role implicitly gets `content_review.view`, `content_review.run`, and `content_review.cancel` only; `settings.manage`, `policy.manage`, `force_manual`, `override`, and `costs.view` are granted per user through `users.auction_permissions`. *Why:* the requirement explicitly states that not every admin should be able to change AI settings. *Alternative:* grant everything to `admin` — simpler, weaker control. *Impact:* one array in `config/content_review.php` plus an onboarding note. **Not blocking** — trivially changed later.
 
 **D5 — Auto-reject in `ai_automatic`.**
-*Recommended:* enabled, but only for a *critical* violation whose code is in `policy.auto_reject_categories`, at or above `min_confidence_reject` (default 90), and only for automation-eligible subjects. *Why:* clearly prohibited items (weapons, drugs, adult content, stolen goods) are the cheapest and highest-agreement class, and a rejection is fully reversible by an admin. *Alternative:* auto-**approve** only, never auto-reject — safer against false positives on a seller's listing, but leaves the highest-volume obvious cases to humans. *Impact:* rule R9 plus the policy defaults. **Not blocking** — can be disabled at any time by emptying `auto_reject_categories`, with no deploy.
+*Recommended:* enabled, but only for a *critical* violation whose code is in `policy.auto_reject_categories`, at or above `min_confidence_reject` (default 90), and only for automation-eligible subjects. *Why:* clearly prohibited items (weapons, drugs, adult content, stolen goods) are the cheapest and highest-agreement class, and a rejection is fully reversible by an admin. *Alternative:* auto-**approve** only, never auto-reject — safer against false positives on a seller's listing, but leaves the highest-volume obvious cases to humans. *Impact:* rule R9 plus the policy defaults. **Approved, with a launch constraint:** the capability ships, but `auto_reject_categories` **ships empty** and automatic rejection is **not enabled in production at launch**. The rollout is shadow → assisted, and auto-reject is turned on only after measured results and an explicit policy publication. Building it is now safe because a rejected seller can reopen, correct, and resubmit.
 
 **D6 — "Request more information from the seller".**
-*Recommended:* **defer.** *Why:* it needs either a new auction status or a new seller-facing flow, and the current state machine cannot even resubmit a rejected auction (C10) — so it would ship broken. *Alternative:* implement now as a rejection carrying a structured "fixable" reason: no new status, the seller sees the reason, but cannot actually resubmit. *Impact:* one event, one notification key, one admin action. **Not blocking** — listed in §34; revisit after C10 is fixed separately.
+*Recommended:* **defer. Approved as deferred.** *Why:* it would need either a new auction status or a new seller-facing flow. Its main original justification has partly disappeared: now that the reopen/edit/resubmit loop exists, a rejection carrying a specific, actionable reason already gives the seller a working correction path, which covers most of what "request more information" was for. *Alternative:* implement later as a distinct rejection sub-reason. *Impact:* one event, one notification key, one admin action. **Out of scope for this version** (§34).
 
 **D7 — Backfilling existing `pending_review` auctions.**
-*Recommended:* provide `content-review:backfill --dry-run` but **never** run it automatically. *Why:* an unbounded backfill against a live provider is the single easiest way to blow the budget on day one. *Alternative:* auto-enqueue everything on first enable. *Impact:* one command in Batch 9. **Not blocking.**
+*Recommended:* provide `content-review:backfill --dry-run` but **never** run it automatically. *Why:* an unbounded backfill against a live provider is the single easiest way to blow the budget on day one. *Alternative:* auto-enqueue everything on first enable. *Impact:* one command in Batch 9. **Approved:** the command is built with `--dry-run` as the default, is never scheduled, and never modifies an existing auction without an explicit operator invocation.
 
 ---
 
