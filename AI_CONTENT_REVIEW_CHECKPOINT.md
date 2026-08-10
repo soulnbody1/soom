@@ -1,7 +1,7 @@
 # AI Content Review — Checkpoint
 
-Last updated: 2026-08-06
-Branch: `soom-auctions` · No commit, no push performed.
+Last updated: 2026-08-10
+Backend branch: `soom-auctions` · Dashboard branch: `main` · No commit, no push performed.
 
 ## Status
 
@@ -12,11 +12,14 @@ Branch: `soom-auctions` · No commit, no push performed.
 | 2 — tables, models, repositories, seeder | Done |
 | 3 — analysis core, providers | Done |
 | 4 — adapter, actions, job, sweeper, guards | Done |
-| 5 — admin API, permissions, outbox router | **Done in this session** |
-| 6 — dashboard (read-only) | **Not started — next** |
-| 7 — `ai_assisted` + override guard | Not started |
+| 5 — admin API, permissions, outbox router | Done |
+| 6 — dashboard (read-only + operational UI) | **Done in this session** |
+| 7 — `ai_assisted` + override guard | **Not started — next** |
 | 8 — `ai_automatic` + image cache | Not started |
 | 9 — observability, docs, rollout | Not started |
+
+**The backend was not touched in this session.** `git status` in `C:\Users\pc\Desktop\SB\soom`
+is clean; every change lives in `C:\Users\pc\Desktop\SB\soom-dashboard`.
 
 ---
 
@@ -239,18 +242,164 @@ planted `sk-ant-leak-canary` and for `api_key` / `raw_response` / `policy_instru
 
 ---
 
-## NEXT TASK (start of Batch 6)
+## Batch 6 — what shipped (dashboard only)
 
-Dashboard, read-only, in `C:\Users\pc\Desktop\SB\soom-dashboard`. Before writing any component,
-read `src/lib/AxiosBase.ts`, `src/lib/types.ts`, `src/hooks/useTypedTranslation.ts` (its
-`TranslationKey` union is derived from `ar.json`, so every new string must land in **both**
-`ar.json` and `en.json` or the build fails), and the existing auction query hooks.
+All paths below are relative to `C:\Users\pc\Desktop\SB\soom-dashboard`.
 
-Build: the `ai_review` card in the auction detail, attempt history, stale banner, settings read view,
-policy versions read view, provider health, and the loading / empty / error / permission / conflict
-states. Gate technical and cost rows on the presence of the `technical` and `cost` keys — the API
-omits them entirely when the permission is missing. No raw JSON on screen.
+### New files
+```
+src/app/dashboard/auctions/lib/contentReviewTypes.ts             (API contract types)
+src/app/dashboard/auctions/lib/useContentReviewLabels.ts         (safe dynamic-key labels)
+src/app/dashboard/auctions/hooks/useContentReviewQueries.ts      (9 read endpoints)
+src/app/dashboard/auctions/hooks/useContentReviewMutations.ts    (7 write endpoints)
+src/app/dashboard/auctions/components/contentReview/AiReviewPanel.tsx
+src/app/dashboard/auctions/components/contentReview/AiReviewSummaryCell.tsx
+src/app/dashboard/auctions/components/contentReview/ContentReviewActions.tsx
+src/app/dashboard/auctions/components/contentReview/ContentReviewBadges.tsx
+src/app/dashboard/auctions/components/contentReview/ContentReviewDecisions.tsx
+src/app/dashboard/auctions/components/contentReview/ContentReviewFindings.tsx
+src/app/dashboard/auctions/components/contentReview/ContentReviewHistory.tsx
+src/app/dashboard/auctions/[auctionId]/components/AiReviewTab.tsx
+src/app/dashboard/auctions/settings/components/ContentReviewSettingsTab.tsx
+src/app/dashboard/auctions/settings/components/ContentReviewSettingsForm.tsx
+src/app/dashboard/auctions/settings/components/ContentReviewPolicyTab.tsx
+src/app/dashboard/auctions/settings/components/ContentReviewPolicyForm.tsx
+src/app/dashboard/auctions/settings/components/ContentReviewPolicyDetailDialog.tsx
+src/app/dashboard/auctions/settings/components/ProviderHealthCard.tsx
+src/app/dashboard/auctions/settings/components/contentReviewForm.helpers.ts
+src/app/dashboard/auctions/__tests__/contentReviewFixtures.tsx       (harness, not a test file)
+src/app/dashboard/auctions/__tests__/contentReviewErrors.test.ts     (13)
+src/app/dashboard/auctions/__tests__/AiReviewPanel.test.tsx          (16)
+src/app/dashboard/auctions/__tests__/ContentReviewActions.test.tsx   (13)
+src/app/dashboard/auctions/__tests__/ContentReviewHistory.test.tsx    (9)
+src/app/dashboard/auctions/__tests__/contentReviewForms.test.tsx     (19)
+src/app/dashboard/auctions/__tests__/contentReviewSettings.test.tsx  (13)
+```
 
-Then run `npx tsc --noEmit`, `npm run lint`, `npx vitest run`, `npm run build`.
+### Modified files
+```
+src/app/dashboard/auctions/lib/types.ts        (ai_review on AdminAuction, awaiting_ai_review,
+                                                ContentReviewApiErrorCode folded into AuctionErrorCode)
+src/app/dashboard/auctions/lib/constants.ts    (contentReviewKeys, badge tone maps, enum lists,
+                                                microsToAmount / durationLabel / waitMillis)
+src/app/dashboard/auctions/lib/errors.ts       (CONTENT_REVIEW_ERROR_CODES, getContentReviewErrorCode,
+                                                isContentReviewConflict / isContentReviewUnavailable;
+                                                the conflict codes now feed isStaleStateError)
+src/app/dashboard/auctions/components/QueryStates.tsx  (PermissionDenied; QueryError routes 403 to it)
+src/app/dashboard/auctions/[auctionId]/page.tsx        (AI review tab, mounted only when gated)
+src/app/dashboard/auctions/review/page.tsx             (AI summary column, mounted only when gated)
+src/app/dashboard/auctions/settings/page.tsx           (two new tabs)
+src/i18n/languages/{ar,en}.json                        (auction.contentReview — 283 keys each,
+                                                        + auction.nextAction.awaitingAiReview)
+src/test/setup.ts                                      (afterEach(cleanup) — see below)
+```
 
-**The overall task is NOT complete.** Batches 6–9 remain.
+### Key decisions
+
+- **The panel reads the embedded `ai_review` block, not a second request.** `AdminAuctionResource`
+  already serializes `ai_review.current` for `content_review.view` holders, so the detail page has
+  the active attempt in hand. Issuing `GET …/current` again would double the round trips and could
+  disagree with the row the page is already showing. `useCurrentContentReview` still exists and is
+  exported for callers that do not hold the auction payload.
+- **Permission gating is the *absence of a key*, never a client-side role check.** The dashboard has
+  no permission list — `src/lib/getUserPermissions.ts` is dead code from an unrelated product. So:
+  no `ai_review` ⇒ the tab trigger and the queue column are not mounted at all; no `technical` ⇒ no
+  provider/model/version rows; no `cost` ⇒ no token/cost rows; no `budget` in the health payload ⇒
+  no budget block. A 403 on the settings/policy queries renders `PermissionDenied` (a plain "not
+  available" notice), not a retryable error.
+- **Labels are translated client-side from the code, not echoed from the server.** Every resource
+  ships a `*_label` rendered in the *API's* locale, which is not necessarily the operator's. The
+  dashboard carries its own dictionary mirroring `lang/{ar,en}/content_review.php` and uses the
+  server label only as a fallback for codes it does not know — a policy may define arbitrary
+  violation codes. `useContentReviewLabels` does this with next-intl's `t.has()` so an unknown key
+  degrades instead of throwing. Proven by a test that plants `"SERVER SIDE LABEL"` and asserts it
+  never reaches the DOM.
+- **`auction.contentReview.violations` is the code dictionary; the section heading is
+  `violationsTitle`.** Both were briefly the same key, and the object silently won. Worth knowing
+  before adding a scalar whose name collides with a group.
+- **Batch 6 wires three action controls: retry, cancel, force-manual.** `run` and `override` can
+  both appear in `available_actions`; neither gets a control here. `override` is the Batch 7 assisted
+  decision and wiring it now would ship half of that flow. `run` was left out because the approved
+  Batch 6 scope names exactly three actions — the API function exists if it is wanted later.
+- **Conflicts keep the dialog open, other failures close it.** 409/422 render the translated stable
+  code inside the dialog while the mutation's `onSettled` refreshes the panel behind it, so the
+  operator reads *why* the action was refused against already-current data. Anything else toasts and
+  closes.
+- **Invalidation is scoped to one subject.** A retry/cancel/force-manual invalidates
+  `["content-review","reviews",subjectType,subjectId]`, the review's own detail key,
+  `["auctions","detail",id]` and `["auctions","list"]` — and provably not the settings or policy
+  caches. Publishing settings additionally clears the whole `content-review` root, because the
+  resolved mode feeds every panel and the health card.
+- **No new list filters.** `AdminAuctionQuery` exposes no content-review filter, and filtering an
+  already-paginated page in the browser would misreport the totals. The review queue gained a
+  read-only AI column instead.
+- **Health does not poll.** `refetchInterval: false`, `refetchOnWindowFocus: false`, a 60 s stale
+  time and an explicit refresh button. A dashboard that re-asked every few seconds would add load
+  exactly when the provider is already unhealthy. A test asserts the interval is `false` and that
+  one mount issues one request.
+- **The model field is free text.** The publish request validates `settings.model` against
+  `array_keys(config('content_review.pricing.models'))`, and no endpoint exposes that list. Inventing
+  a hardcoded list in the dashboard would drift from config, so the server's `Rule::in` stays the
+  authority and its 422 surfaces as a field error.
+- **The policy form has no JSON textarea.** Every server constraint has a control that can express
+  it: locales and analyzed fields are checkbox groups, thresholds are bounded number inputs, and the
+  auto-reject / human-review lists are *selections over* the prohibited list — so the "must be a
+  subset" rule cannot be violated by construction. Dropping a prohibited category also drops it from
+  both derived lists.
+- **`src/test/setup.ts` now runs `afterEach(cleanup)`.** `vitest.config.ts` leaves `globals: false`,
+  so React Testing Library could not install its own cleanup hook and every render leaked into the
+  next test — the existing suites papered over it with manual `unmount()` calls. Fixed once,
+  centrally; all pre-existing tests still pass.
+
+### Redaction boundary (dashboard side)
+No raw JSON, prompt, chain of thought, raw provider response, storage path, image bytes or API key
+is rendered anywhere. `AiReviewPanel.test.tsx` plants `api_key: "sk-ant-leak-canary"`,
+`raw_response.chain_of_thought` and `policy_instructions` on the review object and asserts none of
+them appear in `container.innerHTML`; `contentReviewSettings.test.tsx` sweeps the whole settings
+surface for `api_key` / `sk-ant` / `secret`; the settings form asserts it renders no password input.
+
+---
+
+## Verification (Batch 6)
+
+Run in `C:\Users\pc\Desktop\SB\soom-dashboard`:
+
+- `npx tsc --noEmit` → **clean** (exit 0).
+- `npx next lint` → **no errors and no warnings in any new or modified file**. The warnings it
+  prints are pre-existing `no-img-element` / `exhaustive-deps` in unrelated modules.
+- `npx vitest run` → **11 files, 117 tests, 0 failures** (was 5 files / 54 tests before this batch;
+  +6 files / +63 tests).
+- `npm run build` → **succeeds**, 20 routes generated.
+
+Backend: **not modified**, so no backend test run applies. `git status` in `soom` is clean and the
+Batch 5 numbers stand unchanged (`628 passed / 25 skipped / 0 failed` on sqlite; MySQL 357 tests with
+the same 26 pre-existing data-leak failures as the `HEAD` baseline).
+
+---
+
+## NEXT TASK (start of Batch 7)
+
+Batch 7 is **backend + dashboard together** and was deliberately not started: it does not fit in the
+remaining context of this session, and the standing instruction is not to leave a batch half done.
+
+Scope, unchanged:
+
+- Show the AI recommendation to the reviewer at decision time.
+- Confirm the recommendation, or decide against it.
+- `relation_to_recommendation` = `confirmed` | `overridden`; override reason mandatory.
+- Record the real admin (`decided_by_type = admin`, `decided_by_id` = the actual user).
+  Never fabricate a user for AI: `actor_type = ai`, `changed_by = null`,
+  `decided_by_type = ai`, `decided_by_id = null`.
+- A manual decision is final; a late AI result must not change the auction
+  (`ApplyContentReviewDecisionAction` already returns early on `decided_at !== null` — extend, do
+  not duplicate, that guard).
+- Audit + outbox + notifications, confirmation dialogs, conflict handling, permission checks.
+- Test the race between an admin decision and an arriving AI result.
+
+Starting points already in place: `content_review.override` exists as a permission and is already
+surfaced in `available_actions`; `ContentReviewActions.tsx` filters it out with a comment marking it
+as Batch 7; `DecisionRelation` and `ContentReviewDecisionRecord` are fully typed on both sides.
+`content_review.confirm` was intentionally never added — confirming is authorised by the existing
+`auction.review` / `auction.approve`.
+
+**The overall task is NOT complete.** Batches 7–9 remain.
