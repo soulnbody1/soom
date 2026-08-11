@@ -1321,6 +1321,28 @@ New composer script: `"test:content-review": "@php artisan test --filter=Content
 
 Nine batches. Each is independently deployable and leaves the system in a working state. Every batch before 6 is invisible in production.
 
+### Execution status
+
+This document remains the plan. The table below records only *what shipped*, batch by batch; the
+narrative of each batch's decisions lives in `AI_CONTENT_REVIEW_CHECKPOINT.md`, and the operational
+detail lives in `AI_CONTENT_REVIEW_RUNBOOK.md`.
+
+| Batch | Status | Notes on divergence from the plan |
+|---|---|---|
+| Preliminary — reopen / update draft / resubmit | ✅ | Pre-existing. |
+| 1 — contracts, enums, config, permissions | ✅ | — |
+| 2 — tables, models, repositories, seeder | ✅ | — |
+| 3 — analysis core, providers | ✅ | — |
+| 4 — adapter, actions, job, sweeper, guards | ✅ | — |
+| 5 — admin API, permissions, outbox router | ✅ | The outbox router lives in a neutral `App\Services\Outbox` namespace, not under `Services/ContentReview/Notifications`, so the architecture test's "no auction reference" rule holds. The metrics endpoint moved to Batch 9. |
+| 6 — dashboard, read-only | ✅ | — |
+| 7 — `ai_assisted`, human decision, override guard | ✅ | `content_review.confirm` was not added; confirming is authorised by the subject policy. Only override carries its own permission. |
+| 8 — `ai_automatic`, automation gates, image cache | ✅ | M6 adds one nullable JSON column (`content_reviews.image_review`) so analyzed-vs-cached counts are renderable. |
+| 9 — observability, alerts, operations, docs | ✅ | M7 adds `queue_delay_ms` and `image_cache_hits` so queue-delay percentiles and the image cache hit ratio are exact SQL aggregates instead of JSON scans. A tenth permission, `content_review.metrics.view`, gates the metrics endpoint. `content-review:reconcile` and `content-review:sweep-alerts` were added beyond the plan's list. |
+
+Production defaults after Batch 9 are unchanged from Batch 1: `CONTENT_REVIEW_ENABLED=false`,
+seeded `mode=manual`, seeded `auto_reject_categories=[]`.
+
 ### Batch 1 — Contracts, enums, config, permissions *(no DB, no behaviour)*
 
 **Goal.** Land the vocabulary and the boundaries so later batches are pure fill-in.
@@ -1422,12 +1444,14 @@ Nine batches. Each is independently deployable and leaves the system in a workin
 ### Batch 9 — Observability, alerts, docs, optional extras
 
 **Goal.** Operate it.
-**New.** `app/Services/ContentReview/Support/ContentReviewLogContext.php`; alert rate limiting in `AdminAlertRecipientResolver`; `app/Console/Commands/ContentReview/BackfillContentReviews.php` (opt-in, `--dry-run` by default); `docs/CONTENT_REVIEW_OPERATIONS.md`.
+**New.** `app/Services/ContentReview/Support/ContentReviewLogContext.php`; alert rate limiting in `AdminAlertRecipientResolver`; `app/Console/Commands/ContentReview/BackfillContentReviews.php` (opt-in, `--dry-run` by default); the operations runbook.
 **Modified.** The metrics endpoint gains alert-threshold fields; the dashboard status header gains alert states.
 **Tests.** `LogRedactionTest`, `AlertRateLimitTest`, `MetricsAccuracyTest`, `BackfillCommandTest`.
 **Depends on.** 8. **Risk.** None. **Rollback.** Revert.
 **Done when.** Every metric in §28 is served and rendered, and the runbook covers all four rollback levers.
 **Verify.** `composer test` · the dashboard build gates
+
+**As built.** Migration M7 adds `content_reviews.queue_delay_ms` and `content_reviews.image_cache_hits`; `ContentReviewMetricsRepository` + `ContentReviewMetricsReporter` + `ContentReviewMetricsController` serve `GET /api/admin/content-review/metrics` behind a new `content_review.metrics.view` permission; `ContentReviewAlertMonitor` evaluates six edge-triggered alert conditions with a recovery event, swept by `content-review:sweep-alerts`; `ContentReviewWorkerHeartbeat` records the last job actually processed (never a "worker online" claim); `content-review:reconcile` reports crash debris and applies two idempotent repairs; the dashboard gains a Metrics tab. The runbook is `AI_CONTENT_REVIEW_RUNBOOK.md` at the repository root, alongside the other operational documents, rather than under `docs/` — the project has no `docs/` directory. Tests: `LogRedactionTest`, `AlertRateLimitTest`, `ContentReviewMetricsApiTest` (the plan's `MetricsAccuracyTest`), `BackfillCommandTest`, `ReconciliationTest`, `KillSwitchTest`.
 
 ---
 

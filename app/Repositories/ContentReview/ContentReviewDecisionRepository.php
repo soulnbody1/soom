@@ -50,6 +50,11 @@ final class ContentReviewDecisionRepository
             ->exists();
     }
 
+    public function orphanCount(): int
+    {
+        return ContentReviewDecision::whereNull('review_id')->count();
+    }
+
     public function forSubject(ReviewableSubjectType $subjectType, int $subjectId): Collection
     {
         return ContentReviewDecision::with('decidedBy:id,name')

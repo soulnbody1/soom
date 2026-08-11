@@ -3,6 +3,7 @@
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Http\Controllers\ContentReview\ContentReviewController;
 use App\Http\Controllers\ContentReview\ContentReviewHealthController;
+use App\Http\Controllers\ContentReview\ContentReviewMetricsController;
 use App\Http\Controllers\ContentReview\ContentReviewPolicyController;
 use App\Http\Controllers\ContentReview\ContentReviewSettingsController;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +35,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/content-review'
     Route::get('/policies/active', [ContentReviewPolicyController::class, 'active']);
     Route::get('/policies/{contentReviewPolicy}', [ContentReviewPolicyController::class, 'show']);
     Route::post('/policies', [ContentReviewPolicyController::class, 'store']);
+
+    Route::get('/metrics', [ContentReviewMetricsController::class, 'show']);
 
     Route::get('/health', [ContentReviewHealthController::class, 'show']);
     Route::post('/provider/test', [ContentReviewHealthController::class, 'test'])

@@ -18,6 +18,19 @@ Jobs:
 
 Use Redis queue workers in production and configure failed job monitoring.
 
+## AI Content Review
+
+The content review subsystem runs on its own queue and its own worker process, so a stalled provider
+cannot starve the auction jobs above:
+
+- `php artisan queue:work --queue=content-review --tries=3 --timeout=120`
+- Scheduler: `content-review:dispatch-pending` every minute, `content-review:sweep-alerts` every
+  five minutes.
+- `CACHE_STORE` must be `database` or `redis`; the circuit breaker, budget guard, concurrency
+  limiter, alert state and worker heartbeat are shared atomic cache operations.
+
+Full operational detail is in `AI_CONTENT_REVIEW_RUNBOOK.md`.
+
 ## Storage
 
 - Auction media and payment receipts use the `spaces` disk.

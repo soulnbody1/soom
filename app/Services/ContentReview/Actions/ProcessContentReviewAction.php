@@ -28,6 +28,7 @@ use App\Services\ContentReview\Support\ContentReviewCircuitBreaker;
 use App\Services\ContentReview\Support\ContentReviewConcurrencyLimiter;
 use App\Services\ContentReview\Support\ContentReviewImageLoader;
 use App\Services\ContentReview\Support\ContentReviewImageScreener;
+use App\Services\ContentReview\Support\ContentReviewLogContext;
 use App\Services\ContentReview\Support\DeterministicContentChecks;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
 use App\Services\ContentReview\Support\ProviderCallGuard;
@@ -38,6 +39,7 @@ use App\Services\ContentReview\Support\ReviewPromptRenderer;
 use App\Services\ContentReview\Support\ReviewSubjectRegistry;
 use App\Services\ContentReview\Support\StructuredReviewResultValidator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -69,6 +71,7 @@ final class ProcessContentReviewAction
         private readonly ProviderHealthJournal $health,
         private readonly ContentReviewEventPublisher $events,
         private readonly DecideContentReviewAction $decide,
+        private readonly ContentReviewLogContext $logContext,
     ) {}
 
     public function execute(string $publicId): string
@@ -222,6 +225,7 @@ final class ProcessContentReviewAction
 
         $this->persistResult($review, $response, $result, $checks, $policy);
         $this->persistImageSummary($review, $content, $policy, $plan, $merged);
+        $this->logCompleted($review->refresh());
         $this->events->publish($review->refresh(), 'content_review.completed');
 
         $this->decide->execute($review->refresh(), $result, $checks, $policy, null);
@@ -327,6 +331,7 @@ final class ProcessContentReviewAction
 
         $this->reviews->update($review, [
             'images_analyzed' => min(255, $summary->analyzed),
+            'image_cache_hits' => min(255, $summary->cacheHits),
             'image_review' => $summary->toArray(),
         ]);
     }
@@ -429,8 +434,27 @@ final class ProcessContentReviewAction
             'completed_at' => Carbon::now(),
         ]);
 
+        $this->logFailure($review->refresh(), 'provider_failure');
         $this->events->publish($review->refresh(), 'content_review.failed');
         $this->decide->executeWithoutResult($review->refresh(), $checks, $code);
+    }
+
+    private function logCompleted(ContentReview $review): void
+    {
+        Log::info('content_review.completed', $this->logContext->forReview($review, [
+            'stage' => 'analysis',
+            'queue_delay_ms' => $review->queue_delay_ms === null ? null : (int) $review->queue_delay_ms,
+            'images_analyzed' => (int) $review->images_analyzed,
+            'image_cache_hits' => (int) $review->image_cache_hits,
+        ]));
+    }
+
+    private function logFailure(ContentReview $review, string $stage): void
+    {
+        Log::warning('content_review.failed', $this->logContext->forReview($review, [
+            'stage' => $stage,
+            'attempt_limit' => (int) $review->max_attempts,
+        ]));
     }
 
     private function guardFailure(
@@ -451,6 +475,7 @@ final class ProcessContentReviewAction
         ]);
 
         $refreshed = $review->refresh();
+        $this->logFailure($refreshed, $reasonCode);
 
         if ($code === ContentReviewErrorCode::CircuitOpen) {
             $this->events->publishOperational('content_review.circuit_open', [

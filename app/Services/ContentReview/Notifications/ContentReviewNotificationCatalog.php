@@ -12,26 +12,37 @@ final class ContentReviewNotificationCatalog
 
     public const SCREEN_REVIEW_HEALTH = 'admin_review_health';
 
+    public const SCOPE_SUBJECT = 'subject';
+
+    public const SCOPE_GLOBAL = 'global';
+
+    public const SCOPE_ALERT = 'alert';
+
     /**
      * admin: delivered to employees holding content_review.view.
-     * subject_scoped: rate limited per (event, subject); otherwise rate limited per event globally.
+     * scope: the rate limiting key — per (event, subject), per event globally, or per
+     * (event, alert code) for the shared recovery event.
      *
      * A failed attempt is recorded but not alerted: in a decision-applying mode it is
      * always followed by content_review.escalated, and alerting on both would notify
      * twice for one piece of news.
      */
     private const EVENTS = [
-        'content_review.queued' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.completed' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.escalated' => ['admin' => true, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.auto_decided' => ['admin' => true, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.stale' => ['admin' => true, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.confirmed' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.overridden' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.failed' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
-        'content_review.provider_unavailable' => ['admin' => true, 'subject_scoped' => false, 'screen' => self::SCREEN_REVIEW_HEALTH],
-        'content_review.circuit_open' => ['admin' => true, 'subject_scoped' => false, 'screen' => self::SCREEN_REVIEW_HEALTH],
-        'content_review.budget_exhausted' => ['admin' => true, 'subject_scoped' => false, 'screen' => self::SCREEN_REVIEW_HEALTH],
+        'content_review.queued' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.completed' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.escalated' => ['admin' => true, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.auto_decided' => ['admin' => true, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.stale' => ['admin' => true, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.confirmed' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.overridden' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.failed' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.provider_unavailable' => ['admin' => true, 'scope' => self::SCOPE_GLOBAL, 'screen' => self::SCREEN_REVIEW_HEALTH],
+        'content_review.circuit_open' => ['admin' => true, 'scope' => self::SCOPE_GLOBAL, 'screen' => self::SCREEN_REVIEW_HEALTH],
+        'content_review.budget_exhausted' => ['admin' => true, 'scope' => self::SCOPE_GLOBAL, 'screen' => self::SCREEN_REVIEW_HEALTH],
+        'content_review.queue_delay_high' => ['admin' => true, 'scope' => self::SCOPE_GLOBAL, 'screen' => self::SCREEN_REVIEW_HEALTH],
+        'content_review.invalid_output_spike' => ['admin' => true, 'scope' => self::SCOPE_GLOBAL, 'screen' => self::SCREEN_REVIEW_HEALTH],
+        'content_review.escalation_backlog' => ['admin' => true, 'scope' => self::SCOPE_GLOBAL, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.recovered' => ['admin' => true, 'scope' => self::SCOPE_ALERT, 'screen' => self::SCREEN_REVIEW_HEALTH],
     ];
 
     public static function supports(string $eventType): bool
@@ -46,7 +57,12 @@ final class ContentReviewNotificationCatalog
 
     public static function isSubjectScoped(string $eventType): bool
     {
-        return self::EVENTS[$eventType]['subject_scoped'] ?? false;
+        return self::scope($eventType) === self::SCOPE_SUBJECT;
+    }
+
+    public static function scope(string $eventType): string
+    {
+        return self::EVENTS[$eventType]['scope'] ?? self::SCOPE_GLOBAL;
     }
 
     public static function screen(string $eventType): string

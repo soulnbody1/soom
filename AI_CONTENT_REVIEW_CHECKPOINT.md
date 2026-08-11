@@ -15,8 +15,8 @@ Backend branch: `soom-auctions` · Dashboard branch: `main` · No commit, no pus
 | 5 — admin API, permissions, outbox router | Done |
 | 6 — dashboard (read-only + operational UI) | Done |
 | 7 — `ai_assisted` confirm / override | Done |
-| 8 — `ai_automatic` + image cache | **Done in this session** |
-| 9 — observability, docs, rollout | **Not started — next** |
+| 8 — `ai_automatic` + image cache | Done |
+| 9 — observability, alerts, operations, docs | **Done in this session — the plan is complete** |
 
 Batch 7 touched **both** repositories. Batches 1–6 were not re-implemented and nothing was
 refactored beyond what the new contract required.
@@ -729,11 +729,194 @@ The intended order is unchanged: **Manual → Shadow → Assisted → a narrow A
 
 ---
 
-## NEXT TASK (start of Batch 9)
+## Batch 9 — what shipped
 
-Observability and rollout: `ContentReviewLogContext`, the metrics endpoint from §28, alert thresholds
-in the dashboard status header, `BackfillContentReviews` (opt-in, `--dry-run` by default) and
-`docs/CONTENT_REVIEW_OPERATIONS.md` covering the four rollback levers. Tests named in the plan:
-`LogRedactionTest`, `AlertRateLimitTest`, `MetricsAccuracyTest`, `BackfillCommandTest`.
+### Backend — new files
+```
+database/migrations/2026_08_11_100000_add_observability_columns_to_content_reviews_table.php  (M7)
+app/DTO/ContentReview/MetricsRange.php
+app/Repositories/ContentReview/ContentReviewMetricsRepository.php
+app/Services/ContentReview/Support/ContentReviewLogContext.php
+app/Services/ContentReview/Support/ContentReviewMetricsReporter.php
+app/Services/ContentReview/Support/ContentReviewAlertMonitor.php
+app/Services/ContentReview/Support/ContentReviewWorkerHeartbeat.php
+app/Services/ContentReview/Actions/BackfillContentReviewsAction.php
+app/Services/ContentReview/Actions/ReconcileContentReviewsAction.php
+app/Http/Requests/ContentReview/ContentReviewMetricsRequest.php
+app/Http/Controllers/ContentReview/ContentReviewMetricsController.php
+app/Console/Commands/ContentReview/BackfillContentReviews.php
+app/Console/Commands/ContentReview/ReconcileContentReviews.php
+app/Console/Commands/ContentReview/SweepContentReviewAlerts.php
+tests/Feature/ContentReview/LogRedactionTest.php                (5)
+tests/Feature/ContentReview/AlertRateLimitTest.php              (8)
+tests/Feature/ContentReview/ContentReviewMetricsApiTest.php    (16)
+tests/Feature/ContentReview/BackfillCommandTest.php             (8)
+tests/Feature/ContentReview/ReconciliationTest.php             (10)
+tests/Feature/ContentReview/KillSwitchTest.php                  (8)
+AI_CONTENT_REVIEW_RUNBOOK.md
+```
 
-**The overall task is NOT complete.** Batch 9 remains.
+### Backend — modified files
+```
+config/content_review.php                       (metrics, alerts thresholds, heartbeat, backfill,
+                                                 reconcile blocks; content_review.metrics.view)
+routes/api/content_review.php                   (GET /admin/content-review/metrics)
+routes/console.php                              (content-review:sweep-alerts every five minutes)
+app/Policies/ContentReview/ContentReviewPolicy.php               (viewMetrics)
+app/Domain/ContentReview/Enums/ReviewTrigger.php                 (Backfill)
+app/Models/ContentReview/ContentReview.php                       (2 new columns)
+app/Repositories/ContentReview/ContentReviewRepository.php       (queue_delay_ms on lease,
+                                                                  reconcile + backfill queries)
+app/Repositories/ContentReview/ContentReviewDecisionRepository.php  (orphanCount)
+app/Services/ContentReview/Support/ContentReviewHealthReporter.php  (recent rates, heartbeat,
+                                                                     unpriced counts, utilization)
+app/Services/ContentReview/Actions/ProcessContentReviewAction.php   (structured logging, cache hits)
+app/Services/ContentReview/Actions/RequestContentReviewAction.php   (mode ceiling)
+app/Services/ContentReview/Contracts/ReviewSubjectAdapter.php       (reviewableSubjectIds)
+app/Services/Auction/ContentReview/AuctionReviewSubjectAdapter.php  (reviewableSubjectIds)
+app/Services/ContentReview/Notifications/ContentReviewNotificationCatalog.php  (4 events, scopes)
+app/Services/ContentReview/Notifications/AdminAlertRecipientResolver.php       (scoped cooldown)
+app/Services/Outbox/ContentReviewOutboxNotifier.php                            (alert scope key)
+app/Jobs/ContentReview/ProcessContentReviewJob.php                             (heartbeat)
+lang/{ar,en}/content_review.php                 (alerts group, backfill trigger, 4 notifications)
+tests/Unit/ContentReview/EnumContractTest.php   (permission count 9 → 10)
+.env.example · README.md · AUCTION_DEPLOYMENT_AND_OPERATIONS.md
+AI_CONTENT_REVIEW_IMPLEMENTATION_PLAN.md        (execution status table + Batch 9 "as built")
+```
+
+### The new endpoint
+```
+GET /api/admin/content-review/metrics            content_review.metrics.view
+    ?range=today|7d|30d  or  ?date_from=Y-m-d&date_to=Y-m-d  (capped at 92 days)
+    cost block additionally requires content_review.costs.view
+```
+
+### Key decisions
+
+- **M7 adds two columns rather than deriving the numbers.** Queue delay was only expressible as
+  `started_at − queued_at`, whose SQL differs between sqlite and MySQL, and the image cache hit
+  count lived inside the `image_review` JSON. Both would have forced either dialect-specific raw SQL
+  or a JSON scan on every metrics request. `queue_delay_ms` is written once when the worker first
+  leases the review; `image_cache_hits` is written beside the existing `images_analyzed`. Both are
+  additive, nullable/defaulted and reversible, and both make their metric an ordinary indexed
+  aggregate.
+- **Percentiles are exact, not sampled.** One `COUNT` plus one `OFFSET … LIMIT 1` read per
+  percentile, bounded by the requested range. Sampling by taking the first N rows would have biased
+  p95 toward whatever the insertion order happened to be, and ordering-then-truncating would have
+  cut off the exact tail p95 measures. The whole aggregate block is cached for
+  `CONTENT_REVIEW_METRICS_CACHE_SECONDS` (60 by default), so a dashboard refresh costs nothing.
+- **`cost_micros = NULL` is never read as zero.** A completed review whose model is absent from the
+  pricing table is counted as `unpriced_reviews`, and both the range block and each budget period
+  carry `totals_complete`. The dashboard renders an explicit warning and the runbook says the totals
+  are a lower bound. Folding a null into a `SUM` as zero would have quietly understated spend
+  exactly when the pricing table is the thing that is wrong.
+- **A tenth permission, `content_review.metrics.view`.** Volume, cost trend and override rate are a
+  different disclosure from "read this one review", and requirement 2 asked for an independent
+  permission. It is absent from `role_admin_permissions`, so no admin inherits it. The cost sub-block
+  still needs `content_review.costs.view` on top.
+- **Alerts are edge-triggered with an explicit recovery event.** State lives in the cache per alert
+  code: an alert publishes once when the condition turns on, again only after
+  `CONTENT_REVIEW_ALERT_REPEAT_SECONDS` while it stays on, and exactly one
+  `content_review.recovered` when it clears. Publishing on every sweep would have meant a
+  notification every five minutes for a single open circuit.
+- **The notification catalogue gained a third scope.** Cooldowns were keyed per subject or globally
+  per event; `content_review.recovered` is one event type shared by six alert codes, so two alerts
+  clearing within the cooldown would have produced one notification. `SCOPE_ALERT` keys the cooldown
+  on `(event, alert_code)`. `isSubjectScoped()` still answers the same question for existing callers.
+- **`ContentReviewAlertMonitor::states()` is read-only and `sweep()` is the only writer.** The
+  metrics endpoint renders alert state on every request; if reading it could publish, every
+  dashboard visit would be a potential notification source. Only the scheduled command sweeps.
+- **The worker heartbeat records what happened, not what is true now.** `ProcessContentReviewJob`
+  stamps `content_review:worker:last_job_at` when it starts. The API exposes
+  `last_job_processed_at` and `seconds_since_last_job` and nothing else — there is no
+  `worker_online` field anywhere, because an empty queue is not evidence of a running worker and
+  this system has no way to prove one exists. The dashboard prints "never observed" for a null and
+  carries a note saying exactly that. A test pins it.
+- **The backfill caps the mode instead of forcing it.** `RequestContentReviewAction` gained an
+  optional `$modeCeiling` that only ever *lowers* the resolved mode. So a platform in
+  `ai_automatic` produces shadow reviews for historical content — analyzed, never auto-decided —
+  and a platform in `manual` still produces nothing at all, even with `--execute`. There is no flag
+  that raises the ceiling. `--execute` is additionally refused while the kill switch is off, and any
+  subject that already has a review row of any kind is skipped.
+- **Reconciliation repairs two things and reports four.** Releasing an expired lease and clearing
+  `current_marker` on a cancelled or superseded row are both idempotent and strictly narrower than a
+  decision. Reviews queued past the stale window, completed rows with no application state, subjects
+  with more than one active review, and decisions with no review row are counted and printed for an
+  admin — guessing at any of them would mean the reconciler applying a verdict.
+- **Neither new command is scheduled**, and both default to a dry run. Two tests assert their names
+  do not appear in `routes/console.php`.
+- **`ContentReviewLogContext` is an allowlist, not a denylist.** It builds the fifteen §28 review
+  fields itself and intersects any extra context against a fixed key list, dropping non-scalars.
+  `LogRedactionTest` plants `api_key`, `prompt`, `raw_response.chain_of_thought` and the content hash
+  and asserts none of them survives, then runs a real review and asserts no log record anywhere
+  contains the auction title, description, hash or the planted `sk-ant-leak-canary`.
+- **`KillSwitchTest` was added even though it is not new behaviour.** Requirement 14 asked for the
+  guarantee to be tested explicitly, and it had only ever been covered indirectly. It pins all eight
+  properties, including the one that matters most: a review already in flight when the switch is
+  thrown finishes its analysis and escalates to a human rather than applying an automatic decision.
+
+### Dashboard — new files
+```
+src/app/dashboard/auctions/settings/components/ContentReviewMetricsTab.tsx
+src/app/dashboard/auctions/__tests__/contentReviewMetrics.test.tsx          (15)
+```
+
+### Dashboard — modified files
+```
+src/app/dashboard/auctions/lib/contentReviewTypes.ts      (metrics, alerts, queue snapshot,
+                                                            recent rates, budget additions)
+src/app/dashboard/auctions/lib/constants.ts               (metrics key, ranges, percentLabel)
+src/app/dashboard/auctions/lib/useContentReviewLabels.ts  (alerts group)
+src/app/dashboard/auctions/hooks/useContentReviewQueries.ts  (useContentReviewMetrics)
+src/app/dashboard/auctions/settings/components/ProviderHealthCard.tsx  (recent rate, heartbeat)
+src/app/dashboard/auctions/settings/page.tsx              (Metrics tab)
+src/app/dashboard/auctions/__tests__/contentReviewFixtures.tsx  (metrics fixtures)
+src/i18n/languages/{ar,en}.json                           (+57 keys each)
+```
+
+### Dashboard key decisions
+
+- **KPIs first, detail after.** Six tiles — reviews, provider success, escalation rate, automatic
+  decision rate, p95 duration, override rate — then the active alerts, then volume, reliability,
+  queue, human decisions and finally cost. No charts: every number here is a scalar or a rate, and a
+  bar chart of six statuses would carry less information than the six numbers.
+- **Only active alerts render.** A cleared alert is not news; when none is firing the strip says so
+  in one line.
+- **The metrics query does not poll.** `refetchInterval: false`, a 60 s stale time, an explicit
+  refresh button, and `keepPreviousData` so switching range does not blank the screen. The server
+  already caches the aggregate for a minute; a self-refreshing dashboard would only defeat it.
+- **Permission gating stays "the key is absent".** No `cost` block in the payload ⇒ no cost card. A
+  403 on the metrics query renders `PermissionDenied`, not a retryable error.
+- **Alert and failure codes are translated client side**, like every other content-review label.
+
+---
+
+## Verification (Batch 9)
+
+Backend (`C:\Users\pc\Desktop\SB\soom`):
+
+- `php artisan test` → **787 passed, 34 skipped, 0 failed** (was 732/34 after Batch 8; **+55 tests**).
+- `php artisan test --filter=ContentReview` → 368 passed, 9 skipped before this batch's additions.
+- `composer test:auction:mysql` from a dropped-and-recreated database → **366 tests, 26 failing**,
+  byte-identical to the documented baseline. The 26 are the same pre-existing cross-test data-leak
+  failures (list/filter and resource-shape tests); the failing names were extracted from the junit
+  log and **not one belongs to Batch 9 or to the content-review subsystem**. Saved to the session
+  scratchpad as `batch9.failing.txt`.
+- `--group=mysql-concurrency` → **30 passed**, unchanged from Batch 8.
+- Pint → **PASS on all 40 files** this batch created or modified. The style issues Pint still reports
+  project-wide are in untouched pre-existing files.
+
+Dashboard (`C:\Users\pc\Desktop\SB\soom-dashboard`):
+
+- `npx tsc --noEmit` → clean (exit 0).
+- `npx next lint` on every new/modified file → no errors, no warnings.
+- `npx vitest run` → **16 files, 178 tests, 0 failures** (was 15 files / 163 tests).
+- `npm run build` → succeeds, 20 routes.
+
+### Production safety after Batch 9
+
+Unchanged: `CONTENT_REVIEW_ENABLED=false`, seeded `enabled = false` / `mode = manual`, seeded
+`auto_reject_categories = []`. `ContentReviewDefaultsTest` still pins all four and `KillSwitchTest`
+now proves the eight guarantees the switch makes. Nothing in this batch turns anything on.
+
+**The plan is complete.** Batches 1–9 are done.

@@ -10,4 +10,5 @@ enum ReviewTrigger: string
     case AdminManual = 'admin_manual';
     case AdminRetry = 'admin_retry';
     case Sweeper = 'sweeper';
+    case Backfill = 'backfill';
 }

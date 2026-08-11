@@ -91,18 +91,24 @@ final class ContentReviewRepository
     {
         $now = Carbon::now();
 
+        $attributes = [
+            'status' => ContentReviewStatus::Running->value,
+            'lease_owner' => $worker,
+            'leased_until' => $now->copy()->addSeconds($leaseSeconds),
+            'started_at' => $review->started_at ?? $now,
+            'updated_at' => $now,
+        ];
+
+        if ($review->started_at === null && $review->queued_at !== null) {
+            $attributes['queue_delay_ms'] = max(0, (int) $review->queued_at->diffInMilliseconds($now, true));
+        }
+
         $claimed = ContentReview::whereKey($review->id)
             ->whereIn('status', [ContentReviewStatus::Queued->value, ContentReviewStatus::Running->value])
             ->where(function ($query) use ($now): void {
                 $query->whereNull('leased_until')->orWhere('leased_until', '<=', $now);
             })
-            ->update([
-                'status' => ContentReviewStatus::Running->value,
-                'lease_owner' => $worker,
-                'leased_until' => $now->copy()->addSeconds($leaseSeconds),
-                'started_at' => $review->started_at ?? $now,
-                'updated_at' => $now,
-            ]);
+            ->update($attributes);
 
         return $claimed === 1;
     }
@@ -147,9 +153,69 @@ final class ContentReviewRepository
         return $value === null ? null : Carbon::parse($value);
     }
 
+    public function expiredLeases(Carbon $now, int $limit): Collection
+    {
+        return ContentReview::where('status', ContentReviewStatus::Running->value)
+            ->whereNotNull('leased_until')
+            ->where('leased_until', '<=', $now)
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get();
+    }
+
+    public function terminalRowsStillMarkedActive(int $limit): Collection
+    {
+        return ContentReview::whereIn('status', [
+            ContentReviewStatus::Cancelled->value,
+            ContentReviewStatus::Superseded->value,
+        ])
+            ->whereNotNull('current_marker')
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get();
+    }
+
+    public function completedWithoutApplicationStateCount(Carbon $before): int
+    {
+        return ContentReview::where('status', ContentReviewStatus::Completed->value)
+            ->whereNull('outcome')
+            ->whereNull('decided_at')
+            ->where('completed_at', '<=', $before)
+            ->count();
+    }
+
+    public function subjectsWithMultipleActiveReviews(): int
+    {
+        return ContentReview::query()
+            ->active()
+            ->selectRaw('subject_type, subject_id')
+            ->groupBy('subject_type', 'subject_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->get()
+            ->count();
+    }
+
     public function totalCostMicrosSince(Carbon $since): int
     {
         return (int) ContentReview::where('created_at', '>=', $since)->sum('cost_micros');
+    }
+
+    /**
+     * @param  array<int, int>  $subjectIds
+     * @return array<int, int>
+     */
+    public function subjectIdsWithAnyReview(ReviewableSubjectType $type, array $subjectIds): array
+    {
+        if ($subjectIds === []) {
+            return [];
+        }
+
+        return ContentReview::where('subject_type', $type->value)
+            ->whereIn('subject_id', $subjectIds)
+            ->distinct()
+            ->pluck('subject_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
     }
 
     public function pendingForSubject(ReviewableSubjectType $type, int $subjectId): Collection

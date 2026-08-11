@@ -72,6 +72,37 @@ return [
     'alerts' => [
         'per_subject_cooldown_seconds' => (int) env('CONTENT_REVIEW_ALERT_SUBJECT_COOLDOWN', 3600),
         'global_cooldown_seconds' => (int) env('CONTENT_REVIEW_ALERT_GLOBAL_COOLDOWN', 3600),
+        'repeat_seconds' => (int) env('CONTENT_REVIEW_ALERT_REPEAT_SECONDS', 21_600),
+        'state_ttl_seconds' => (int) env('CONTENT_REVIEW_ALERT_STATE_TTL_SECONDS', 604_800),
+        'evaluation_cache_seconds' => (int) env('CONTENT_REVIEW_ALERT_EVALUATION_CACHE_SECONDS', 60),
+        'queue_delay_seconds' => (int) env('CONTENT_REVIEW_ALERT_QUEUE_DELAY_SECONDS', 600),
+        'invalid_output_percent' => (int) env('CONTENT_REVIEW_ALERT_INVALID_OUTPUT_PERCENT', 10),
+        'invalid_output_min_sample' => (int) env('CONTENT_REVIEW_ALERT_INVALID_OUTPUT_SAMPLE', 50),
+        'invalid_output_window_hours' => (int) env('CONTENT_REVIEW_ALERT_INVALID_OUTPUT_WINDOW_HOURS', 24),
+        'permanent_failure_threshold' => (int) env('CONTENT_REVIEW_ALERT_PERMANENT_FAILURES', 5),
+        'permanent_failure_window_hours' => (int) env('CONTENT_REVIEW_ALERT_PERMANENT_FAILURE_WINDOW_HOURS', 1),
+        'escalation_backlog_threshold' => (int) env('CONTENT_REVIEW_ALERT_ESCALATION_BACKLOG', 50),
+    ],
+
+    'metrics' => [
+        'cache_seconds' => (int) env('CONTENT_REVIEW_METRICS_CACHE_SECONDS', 60),
+        'max_range_days' => (int) env('CONTENT_REVIEW_METRICS_MAX_RANGE_DAYS', 92),
+        'default_range' => env('CONTENT_REVIEW_METRICS_DEFAULT_RANGE', '7d'),
+    ],
+
+    'heartbeat' => [
+        'ttl_seconds' => (int) env('CONTENT_REVIEW_HEARTBEAT_TTL_SECONDS', 86_400),
+    ],
+
+    'backfill' => [
+        'default_limit' => (int) env('CONTENT_REVIEW_BACKFILL_DEFAULT_LIMIT', 50),
+        'max_limit' => (int) env('CONTENT_REVIEW_BACKFILL_MAX_LIMIT', 500),
+        'chunk' => (int) env('CONTENT_REVIEW_BACKFILL_CHUNK', 100),
+    ],
+
+    'reconcile' => [
+        'stale_queued_seconds' => (int) env('CONTENT_REVIEW_RECONCILE_STALE_QUEUED_SECONDS', 3600),
+        'limit' => (int) env('CONTENT_REVIEW_RECONCILE_LIMIT', 200),
     ],
 
     'admin_permissions' => [
@@ -84,6 +115,7 @@ return [
         'content_review.policy.manage',
         'content_review.costs.view',
         'content_review.technical.view',
+        'content_review.metrics.view',
     ],
 
     'role_admin_permissions' => [

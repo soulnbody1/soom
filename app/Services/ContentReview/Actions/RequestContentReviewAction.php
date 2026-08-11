@@ -6,6 +6,7 @@ namespace App\Services\ContentReview\Actions;
 
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
+use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
 use App\Jobs\ContentReview\ProcessContentReviewJob;
 use App\Models\ContentReview\ContentReview;
@@ -29,13 +30,22 @@ final class RequestContentReviewAction
         private readonly ContentReviewEventPublisher $events,
     ) {}
 
+    /**
+     * $modeCeiling never widens the published mode; it only caps it, so a backfill can
+     * force historical content into shadow while a manual platform still creates nothing.
+     */
     public function execute(
         ReviewableSubjectType $type,
         int $subjectId,
         ReviewTrigger $trigger,
         ?int $requestedBy = null,
+        ?ReviewMode $modeCeiling = null,
     ): ?ContentReview {
         $mode = $this->modes->resolve($type);
+
+        if ($modeCeiling !== null && ! $modeCeiling->isAtLeastAsPermissiveAs($mode)) {
+            $mode = $modeCeiling;
+        }
 
         if (! $mode->callsProvider()) {
             return null;

@@ -35,6 +35,15 @@ Operational checklist:
 - Process outbox messages through the scheduled outbox job. Outbox rows are leased before notifications are sent.
 - Exercise the hot bid path with k6: `k6 run load-tests/auction-hot-bid.js -e BASE_URL=http://127.0.0.1:8000 -e AUCTION_ID=<public-id> -e AUTH_TOKEN=<token>`.
 
+## AI Content Review
+
+Isolated under `App\Domain\ContentReview`, `App\Services\ContentReview`, `App\Models\ContentReview`, `App\Http\Controllers\ContentReview`, and `routes/api/content_review.php`. It ships disabled: `CONTENT_REVIEW_ENABLED=false` and a seeded `mode=manual` settings version, which makes runtime behaviour identical to the platform without it.
+
+- Run a second, dedicated queue worker: `php artisan queue:work --queue=content-review --tries=3 --timeout=120`. Keep it separate from the `default` worker so a stalled provider cannot starve auction jobs.
+- Set `CACHE_STORE` to `database` or `redis`. The circuit breaker, budget guard, concurrency limiter, alert state and worker heartbeat are shared atomic cache operations and do not work on the `array` store.
+- `routes/console.php` registers `content-review:dispatch-pending` every minute and `content-review:sweep-alerts` every five minutes. `content-review:backfill` and `content-review:reconcile` are run by hand and default to a dry run.
+- Full operational detail — env reference, health checks, alerts, recovery, rollout stages, kill switch and rollback — is in [`AI_CONTENT_REVIEW_RUNBOOK.md`](AI_CONTENT_REVIEW_RUNBOOK.md).
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

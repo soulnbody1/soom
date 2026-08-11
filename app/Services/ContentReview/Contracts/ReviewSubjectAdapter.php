@@ -21,6 +21,11 @@ interface ReviewSubjectAdapter
 
     public function isReviewable(int $subjectId): bool;
 
+    /**
+     * @return array<int, int>
+     */
+    public function reviewableSubjectIds(int $limit, int $afterId): array;
+
     public function buildContent(int $subjectId): ?ReviewContentDTO;
 
     public function automationContext(int $subjectId): AutomationContext;

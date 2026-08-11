@@ -52,6 +52,11 @@ final class ContentReviewPolicy
         return $this->hasContentReviewPermission($user, 'content_review.policy.manage');
     }
 
+    public function viewMetrics(User $user): bool
+    {
+        return $this->hasContentReviewPermission($user, 'content_review.metrics.view');
+    }
+
     public function viewCosts(User $user): bool
     {
         return $this->hasContentReviewPermission($user, 'content_review.costs.view');

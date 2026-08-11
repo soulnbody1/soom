@@ -33,9 +33,9 @@ final class ContentReviewOutboxNotifier implements OutboxNotifier
         }
 
         $payload = is_array($message->payload) ? $message->payload : [];
-        $subjectKey = $this->subjectKey($payload);
+        $scopeKey = $this->scopeKey($message->event_type, $payload);
 
-        if (! $this->recipients->shouldAlert($message->event_type, $subjectKey)) {
+        if (! $this->recipients->shouldAlert($message->event_type, $scopeKey)) {
             return;
         }
 
@@ -85,6 +85,17 @@ final class ContentReviewOutboxNotifier implements OutboxNotifier
             ->where('type', ContentReviewAdminNotification::class)
             ->where('data->event_id', $eventId)
             ->exists();
+    }
+
+    private function scopeKey(string $eventType, array $payload): ?string
+    {
+        if (ContentReviewNotificationCatalog::scope($eventType) === ContentReviewNotificationCatalog::SCOPE_ALERT) {
+            $code = $payload['alert_code'] ?? null;
+
+            return is_string($code) && $code !== '' ? $code : null;
+        }
+
+        return $this->subjectKey($payload);
     }
 
     private function subjectKey(array $payload): ?string

@@ -108,6 +108,16 @@ return [
         'admin_manual' => 'Requested by an employee',
         'admin_retry' => 'Retried by an employee',
         'sweeper' => 'Requeued by the scheduler',
+        'backfill' => 'Created by the backfill command',
+    ],
+
+    'alerts' => [
+        'queue_delay_high' => 'Reviews are waiting in the queue for too long',
+        'circuit_open' => 'Automated review is paused because the service is unhealthy',
+        'budget_exhausted' => 'The automated review budget is exhausted',
+        'provider_unavailable' => 'The review service keeps failing permanently',
+        'invalid_output_spike' => 'The review service keeps returning results that break the contract',
+        'escalation_backlog' => 'Too many reviews are waiting for a human decision',
     ],
 
     'actor_types' => [
@@ -241,6 +251,22 @@ return [
         'content_review.stale' => [
             'title' => 'Review result is no longer valid',
             'body' => 'The content of ":subject" changed, so the automated result is no longer valid.',
+        ],
+        'content_review.queue_delay_high' => [
+            'title' => 'Automated review queue is falling behind',
+            'body' => 'Reviews have been waiting longer than the configured limit. Check that the content review worker is running.',
+        ],
+        'content_review.invalid_output_spike' => [
+            'title' => 'Automated review results keep breaking the contract',
+            'body' => 'Too many results did not match the required schema. The prompt, the policy or the model may have changed.',
+        ],
+        'content_review.escalation_backlog' => [
+            'title' => 'Manual review backlog is growing',
+            'body' => 'Too many reviews are waiting for a human decision.',
+        ],
+        'content_review.recovered' => [
+            'title' => 'Automated review alert cleared',
+            'body' => 'This alert has cleared: ":subject".',
         ],
     ],
 ];

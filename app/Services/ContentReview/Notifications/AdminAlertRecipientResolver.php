@@ -38,13 +38,16 @@ final class AdminAlertRecipientResolver
         return $recipients;
     }
 
-    public function shouldAlert(string $eventType, ?string $subjectKey): bool
+    public function shouldAlert(string $eventType, ?string $scopeKey): bool
     {
-        $key = ContentReviewNotificationCatalog::isSubjectScoped($eventType) && $subjectKey !== null
-            ? self::COOLDOWN_PREFIX.$eventType.':'.$subjectKey
+        $scope = ContentReviewNotificationCatalog::scope($eventType);
+        $scoped = $scope !== ContentReviewNotificationCatalog::SCOPE_GLOBAL && $scopeKey !== null && $scopeKey !== '';
+
+        $key = $scoped
+            ? self::COOLDOWN_PREFIX.$eventType.':'.$scopeKey
             : self::COOLDOWN_PREFIX.$eventType;
 
-        $seconds = ContentReviewNotificationCatalog::isSubjectScoped($eventType)
+        $seconds = $scope === ContentReviewNotificationCatalog::SCOPE_SUBJECT
             ? (int) config('content_review.alerts.per_subject_cooldown_seconds', 3600)
             : (int) config('content_review.alerts.global_cooldown_seconds', 3600);
 

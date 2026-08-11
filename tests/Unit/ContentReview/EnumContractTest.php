@@ -93,7 +93,7 @@ test('the configured permission list is a superset of the role admin defaults', 
     $all = config('content_review.admin_permissions');
     $defaults = config('content_review.role_admin_permissions');
 
-    expect($all)->toBeArray()->toHaveCount(9)
+    expect($all)->toBeArray()->toHaveCount(10)
         ->and(array_diff($defaults, $all))->toBe([]);
 });
 

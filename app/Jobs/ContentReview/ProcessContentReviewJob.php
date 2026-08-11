@@ -11,6 +11,7 @@ use App\Repositories\ContentReview\ContentReviewRepository;
 use App\Services\ContentReview\Actions\DecideContentReviewAction;
 use App\Services\ContentReview\Actions\ProcessContentReviewAction;
 use App\Services\ContentReview\Support\ContentReviewConcurrencyLimiter;
+use App\Services\ContentReview\Support\ContentReviewWorkerHeartbeat;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
 use DateTimeInterface;
 use Illuminate\Bus\Queueable;
@@ -61,8 +62,13 @@ final class ProcessContentReviewJob implements ShouldBeUnique, ShouldQueue
         return Carbon::now()->addMinutes(30);
     }
 
-    public function handle(ProcessContentReviewAction $action, ContentReviewConcurrencyLimiter $limiter): void
-    {
+    public function handle(
+        ProcessContentReviewAction $action,
+        ContentReviewConcurrencyLimiter $limiter,
+        ContentReviewWorkerHeartbeat $heartbeat,
+    ): void {
+        $heartbeat->record();
+
         if ($action->execute($this->publicId) === ProcessContentReviewAction::RESULT_NO_SLOT) {
             $this->release($limiter->releaseDelaySeconds());
         }

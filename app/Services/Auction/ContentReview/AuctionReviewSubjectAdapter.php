@@ -68,6 +68,18 @@ final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
         return $status !== null && AuctionStatus::tryFrom((string) $status) === AuctionStatus::PendingReview;
     }
 
+    public function reviewableSubjectIds(int $limit, int $afterId): array
+    {
+        return Auction::query()
+            ->where('status', AuctionStatus::PendingReview->value)
+            ->where('id', '>', $afterId)
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
     public function buildContent(int $subjectId): ?ReviewContentDTO
     {
         $auction = Auction::query()->with('media')->find($subjectId);
