@@ -226,6 +226,7 @@ final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
                 'mime_type' => (string) $medium->mime_type,
                 'size_bytes' => (int) $medium->size_bytes,
                 'path_sha256' => hash('sha256', (string) $medium->disk.'|'.(string) $medium->path),
+                'content_revision' => $medium->updated_at?->toIso8601String(),
             ])
             ->values()
             ->all();

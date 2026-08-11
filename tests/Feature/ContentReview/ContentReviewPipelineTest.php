@@ -44,11 +44,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 final class ContentReviewPipelineTest extends TestCase
 {
+    private const SAMPLE_JPEG_BASE64 = '/9j/4AAQSkZJRgABAQEAYABgAAD//gA7Q1JFQVRPUjogZ2QtanBlZyB2MS4wICh1c2luZyBJSkcgSlBFRyB2ODApLCBxdWFsaXR5ID0gNzAK/9sAQwAKBwcIBwYKCAgICwoKCw4YEA4NDQ4dFRYRGCMfJSQiHyIhJis3LyYpNCkhIjBBMTQ5Oz4+PiUuRElDPEg3PT47/9sAQwEKCwsODQ4cEBAcOygiKDs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7/8AAEQgABAAEAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8AxaKKK+vPjT//2Q==';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -763,6 +766,12 @@ final class ContentReviewPipelineTest extends TestCase
             'findings' => [],
             'policy_checks' => [],
             'missing_information' => [],
+            'image_checks' => [[
+                'ref' => 'img-1',
+                'verdict' => 'clean',
+                'risk_level' => 'low',
+                'findings' => [],
+            ]],
         ];
     }
 
@@ -785,17 +794,30 @@ final class ContentReviewPipelineTest extends TestCase
             'findings' => [],
             'policy_checks' => [],
             'missing_information' => [],
+            'image_checks' => [[
+                'ref' => 'img-1',
+                'verdict' => 'clean',
+                'risk_level' => 'low',
+                'findings' => [],
+            ]],
         ];
     }
 
     private function attachMedia(Auction $auction): AuctionMedia
     {
+        Storage::fake('public');
+
+        $bytes = (string) base64_decode(self::SAMPLE_JPEG_BASE64, true);
+        $path = 'auctions/'.Str::ulid().'.jpg';
+
+        Storage::disk('public')->put($path, $bytes);
+
         return AuctionMedia::create([
             'auction_id' => $auction->id,
             'disk' => 'public',
-            'path' => 'auctions/'.Str::ulid().'.jpg',
+            'path' => $path,
             'mime_type' => 'image/jpeg',
-            'size_bytes' => 120_000,
+            'size_bytes' => strlen($bytes),
             'sort_order' => 0,
             'is_primary' => true,
         ]);

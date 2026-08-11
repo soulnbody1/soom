@@ -22,6 +22,7 @@ final readonly class StructuredReviewResult extends BaseContentReviewDTO
         public array $findings,
         public array $policyChecks,
         public array $missingInformation,
+        public array $imageChecks = [],
     ) {}
 
     public function hasViolations(): bool
@@ -60,6 +61,7 @@ final readonly class StructuredReviewResult extends BaseContentReviewDTO
             'findings' => $this->findings,
             'policy_checks' => $this->policyChecks,
             'missing_information' => $this->missingInformation,
+            'image_checks' => array_values($this->imageChecks),
         ];
     }
 }

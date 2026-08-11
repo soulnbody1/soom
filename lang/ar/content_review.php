@@ -152,6 +152,46 @@ return [
         'budget_exhausted' => 'تم استنفاد ميزانية المراجعة الآلية',
         'policy_missing' => 'لا توجد سياسة مراجعة فعالة منشورة',
         'subject_type_not_supported' => 'نوع المحتوى هذا غير مدعوم في نظام المراجعة',
+        'image_review_blocks_approval' => 'ملاحظة على إحدى الصور تمنع الموافقة التلقائية',
+    ],
+
+    'automation_reasons' => [
+        'content_review_disabled' => 'المراجعة الآلية موقوفة على مستوى المنصة',
+        'mode_not_automatic' => 'الوضع الحالي ليس الوضع التلقائي',
+        'frozen_mode_not_automatic' => 'أُنشئت هذه المحاولة قبل تفعيل الوضع التلقائي',
+        'subject_type_not_supported' => 'نوع المحتوى هذا غير مدعوم في نظام المراجعة',
+        'review_not_current' => 'هذه المحاولة ليست المحاولة الفعالة',
+        'review_not_completed' => 'لم تكتمل المراجعة الآلية',
+        'recommendation_missing' => 'لم تنتج المراجعة الآلية أي توصية',
+        'deterministic_hard_failure' => 'فشل شرط إلزامي في المحتوى',
+        'subject_not_reviewable' => 'المحتوى لم يعد في انتظار المراجعة',
+        'content_unavailable' => 'تعذر إعادة تجهيز المحتوى',
+        'review_stale' => 'تغيّر المحتوى بعد تنفيذ هذه المحاولة',
+        'subject_missing' => 'المحتوى لم يعد موجودًا',
+        'category_not_allowed' => 'التصنيف غير مُدرج في قائمة التشغيل التلقائي',
+        'value_above_automation_cap' => 'مبلغ البداية أعلى من حد التشغيل التلقائي',
+        'required_images_missing' => 'التشغيل التلقائي يتطلب صورة واحدة على الأقل',
+        'terms_version_missing' => 'لا توجد نسخة شروط مرتبطة',
+        'configuration_version_missing' => 'لا توجد نسخة إعدادات مرتبطة',
+        'image_preparation_failed' => 'تعذر تجهيز إحدى الصور للتحليل',
+        'image_not_screened' => 'لم يتم فحص إحدى الصور',
+        'image_flagged' => 'تم وسم إحدى الصور في المراجعة الآلية',
+        'provider_circuit_open' => 'خدمة المراجعة غير مستقرة حاليًا',
+        'budget_exhausted' => 'تم استنفاد ميزانية المراجعة الآلية',
+    ],
+
+    'image_verdicts' => [
+        'clean' => 'سليمة',
+        'flagged' => 'موسومة',
+        'needs_human' => 'تحتاج مراجعة بشرية',
+    ],
+
+    'image_failures' => [
+        'unsupported_mime' => 'صيغة صورة غير مدعومة',
+        'mime_mismatch' => 'صيغة الصورة لا تطابق سجلها',
+        'image_too_large' => 'حجم الصورة أكبر من الحد المسموح للتحليل',
+        'image_unreadable' => 'تعذر قراءة الصورة',
+        'image_corrupt' => 'ملف الصورة تالف',
     ],
 
     'violations' => [

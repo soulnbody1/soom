@@ -72,6 +72,10 @@ final class ContentReviewDecisionEngine
             );
         }
 
+        if ($context->blocksAutomaticApproval()) {
+            return $this->escalate($result, 'image_review_blocks_approval', ['reasons' => $context->approvalBlockers]);
+        }
+
         if ($this->qualifiesForAutomaticApproval($result, $policy)) {
             return new ReviewDecisionDTO(
                 ContentReviewOutcome::AutoApproved,

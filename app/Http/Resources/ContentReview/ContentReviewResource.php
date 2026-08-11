@@ -6,7 +6,9 @@ namespace App\Http\Resources\ContentReview;
 
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\DTO\ContentReview\ImageReviewSummary;
 use App\Models\ContentReview\ContentReview;
+use App\Services\ContentReview\Support\AutomationEligibilityResolver;
 use App\Services\ContentReview\Support\ContentReviewActionResolver;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use Illuminate\Http\Request;
@@ -18,6 +20,15 @@ use Illuminate\Support\Facades\Gate;
  */
 final class ContentReviewResource extends JsonResource
 {
+    private bool $includeAutomation = false;
+
+    public function withAutomation(bool $include = true): self
+    {
+        $this->includeAutomation = $include;
+
+        return $this;
+    }
+
     /**
      * Resolve the effective mode once per request so a paginated list does not
      * re-query the settings table for every row.
@@ -70,10 +81,7 @@ final class ContentReviewResource extends JsonResource
             'missing_information' => $this->stringList($this->missing_information),
             'categories' => $this->stringList($this->categories),
             'deterministic_findings' => $this->deterministicFindingsPayload(),
-            'image_analysis' => [
-                'total' => (int) $this->image_count,
-                'analyzed' => (int) $this->images_analyzed,
-            ],
+            'image_analysis' => $this->imageAnalysisPayload(),
             'is_stale' => $resolver->isStale($this->resource),
             'is_active' => $resolver->isActive($this->resource),
             'error_code' => $this->error_code?->value,
@@ -105,6 +113,10 @@ final class ContentReviewResource extends JsonResource
             ];
         }
 
+        if ($this->includeAutomation) {
+            $data['automation'] = $this->automationPayload($mode);
+        }
+
         if ($gate !== null && $gate->allows('viewCosts', ContentReview::class)) {
             $data['cost'] = [
                 'input_tokens' => $this->input_tokens === null ? null : (int) $this->input_tokens,
@@ -116,6 +128,57 @@ final class ContentReviewResource extends JsonResource
         }
 
         return $data;
+    }
+
+    private function imageAnalysisPayload(): array
+    {
+        $summary = ImageReviewSummary::fromArray($this->image_review);
+
+        return [
+            'analysis_enabled' => $summary->analysisEnabled,
+            'total' => (int) $this->image_count,
+            'selected' => $summary->selected,
+            'analyzed' => (int) $this->images_analyzed,
+            'cache_hits' => $summary->cacheHits,
+            'failed' => $summary->failed,
+            'unscreened' => $summary->unscreened,
+            'checks' => array_values(array_map(fn (array $check): array => [
+                'ref' => (string) ($check['ref'] ?? ''),
+                'verdict' => (string) ($check['verdict'] ?? ''),
+                'verdict_label' => $this->translated('content_review.image_verdicts.'.($check['verdict'] ?? '')),
+                'risk_level' => $check['risk_level'] === null ? null : (string) $check['risk_level'],
+                'risk_level_label' => $this->translated('content_review.risk_levels.'.($check['risk_level'] ?? '')),
+                'from_cache' => ($check['from_cache'] ?? false) === true,
+            ], $summary->checks)),
+            'failures' => array_values(array_map(fn (array $failure): array => [
+                'ref' => (string) ($failure['ref'] ?? ''),
+                'failure_code' => (string) ($failure['failure_code'] ?? ''),
+                'failure_label' => $this->translated('content_review.image_failures.'.($failure['failure_code'] ?? '')),
+            ], $summary->failures)),
+        ];
+    }
+
+    private function automationPayload(ReviewMode $mode): array
+    {
+        $context = app(AutomationEligibilityResolver::class)->resolve($this->resource);
+
+        return [
+            'mode' => $mode->value,
+            'is_eligible' => $context->isAutomationEligible,
+            'reasons' => array_values(array_map(static fn ($reason): string => (string) $reason, $context->reasons)),
+            'reason_labels' => array_values(array_map(
+                fn ($reason): string => $this->translated('content_review.automation_reasons.'.$reason) ?? (string) $reason,
+                $context->reasons
+            )),
+            'approval_blockers' => array_values(array_map(
+                static fn ($reason): string => (string) $reason,
+                $context->approvalBlockers
+            )),
+            'approval_blocker_labels' => array_values(array_map(
+                fn ($reason): string => $this->translated('content_review.automation_reasons.'.$reason) ?? (string) $reason,
+                $context->approvalBlockers
+            )),
+        ];
     }
 
     private function reasonLabel(): ?string

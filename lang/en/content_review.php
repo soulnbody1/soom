@@ -152,6 +152,46 @@ return [
         'budget_exhausted' => 'The automated review budget was exhausted',
         'policy_missing' => 'No active review policy was published',
         'subject_type_not_supported' => 'This content type is not supported by the review system',
+        'image_review_blocks_approval' => 'An image finding prevents an automatic approval',
+    ],
+
+    'automation_reasons' => [
+        'content_review_disabled' => 'Automated review is switched off for the whole platform',
+        'mode_not_automatic' => 'The current mode is not automatic',
+        'frozen_mode_not_automatic' => 'This attempt was created before automatic mode was enabled',
+        'subject_type_not_supported' => 'This content type is not supported by the review system',
+        'review_not_current' => 'This attempt is no longer the active one',
+        'review_not_completed' => 'The automated review did not complete',
+        'recommendation_missing' => 'The automated review produced no recommendation',
+        'deterministic_hard_failure' => 'A mandatory content rule failed',
+        'subject_not_reviewable' => 'The content is no longer waiting for review',
+        'content_unavailable' => 'The content could not be rebuilt',
+        'review_stale' => 'The content changed after this attempt ran',
+        'subject_missing' => 'The content no longer exists',
+        'category_not_allowed' => 'The category is not in the automation allowlist',
+        'value_above_automation_cap' => 'The starting amount is above the automation limit',
+        'required_images_missing' => 'Automation requires at least one image',
+        'terms_version_missing' => 'No terms version is attached',
+        'configuration_version_missing' => 'No configuration version is attached',
+        'image_preparation_failed' => 'An image could not be prepared for analysis',
+        'image_not_screened' => 'An image was not screened',
+        'image_flagged' => 'An image was flagged by the automated review',
+        'provider_circuit_open' => 'The review service is currently unhealthy',
+        'budget_exhausted' => 'The automated review budget is exhausted',
+    ],
+
+    'image_verdicts' => [
+        'clean' => 'Clean',
+        'flagged' => 'Flagged',
+        'needs_human' => 'Needs a human reviewer',
+    ],
+
+    'image_failures' => [
+        'unsupported_mime' => 'Unsupported image format',
+        'mime_mismatch' => 'The image format does not match its record',
+        'image_too_large' => 'The image is too large to analyze',
+        'image_unreadable' => 'The image could not be read',
+        'image_corrupt' => 'The image file is damaged',
     ],
 
     'violations' => [

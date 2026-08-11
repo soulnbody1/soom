@@ -11,16 +11,26 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionMedia;
 use App\Models\Auction\AuctionTermsVersion;
 use App\Models\Category;
+use App\Models\ContentReview\ContentReview;
 use App\Models\ContentReview\ContentReviewPolicy;
 use App\Models\ContentReview\ContentReviewSetting;
 use App\Models\Country;
 use App\Models\User;
 use App\Services\Auction\Actions\SubmitAuctionForReviewAction;
+use App\Services\ContentReview\Actions\ProcessContentReviewAction;
+use App\Services\ContentReview\Providers\FakeContentReviewProvider;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 trait BuildsContentReviewFixtures
 {
+    protected const SAMPLE_JPEG_BASE64 = '/9j/4AAQSkZJRgABAQEAYABgAAD//gA7Q1JFQVRPUjogZ2QtanBlZyB2MS4wICh1c2luZyBJSkcgSlBFRyB2ODApLCBxdWFsaXR5ID0gNzAK/9sAQwAKBwcIBwYKCAgICwoKCw4YEA4NDQ4dFRYRGCMfJSQiHyIhJis3LyYpNCkhIjBBMTQ5Oz4+PiUuRElDPEg3PT47/9sAQwEKCwsODQ4cEBAcOygiKDs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7/8AAEQgABAAEAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8AxaKKK+vPjT//2Q==';
+
+    protected const SAMPLE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAC0lEQVQImWNgQAYAAA4AAbGa6gYAAAAASUVORK5CYII=';
+
+    private bool $mediaDiskFaked = false;
+
     protected function admin(array $permissions = []): User
     {
         return $this->makeUser('admin', $permissions);
@@ -178,16 +188,83 @@ trait BuildsContentReviewFixtures
         ], $overrides));
     }
 
-    protected function attachMedia(Auction $auction): AuctionMedia
+    protected function fakeMediaDisk(): void
     {
+        if ($this->mediaDiskFaked) {
+            return;
+        }
+
+        Storage::fake('public');
+        $this->mediaDiskFaked = true;
+    }
+
+    protected function sampleJpegBytes(): string
+    {
+        return (string) base64_decode(self::SAMPLE_JPEG_BASE64, true);
+    }
+
+    protected function samplePngBytes(): string
+    {
+        return (string) base64_decode(self::SAMPLE_PNG_BASE64, true);
+    }
+
+    protected function distinctJpegBytes(int $index): string
+    {
+        return $this->sampleJpegBytes().str_repeat("\x20", $index);
+    }
+
+    protected function attachMedia(
+        Auction $auction,
+        int $sortOrder = 0,
+        ?string $bytes = null,
+        string $mimeType = 'image/jpeg',
+        string $extension = 'jpg',
+    ): AuctionMedia {
+        $this->fakeMediaDisk();
+
+        $bytes ??= $this->sampleJpegBytes();
+        $path = 'auction-media/'.Str::ulid().'.'.$extension;
+
+        Storage::disk('public')->put($path, $bytes);
+
+        return AuctionMedia::create([
+            'auction_id' => $auction->id,
+            'disk' => 'public',
+            'path' => $path,
+            'mime_type' => $mimeType,
+            'size_bytes' => strlen($bytes),
+            'sort_order' => $sortOrder,
+        ]);
+    }
+
+    protected function attachUnreadableMedia(Auction $auction, int $sortOrder = 0): AuctionMedia
+    {
+        $this->fakeMediaDisk();
+
         return AuctionMedia::create([
             'auction_id' => $auction->id,
             'disk' => 'public',
             'path' => 'auction-media/'.Str::ulid().'.jpg',
             'mime_type' => 'image/jpeg',
             'size_bytes' => 12_345,
-            'sort_order' => 0,
+            'sort_order' => $sortOrder,
         ]);
+    }
+
+    protected function imageCheckPayload(int $images = 1, string $verdict = 'clean', string $riskLevel = 'low'): array
+    {
+        $checks = [];
+
+        for ($index = 1; $index <= $images; $index++) {
+            $checks[] = [
+                'ref' => 'img-'.$index,
+                'verdict' => $verdict,
+                'risk_level' => $riskLevel,
+                'findings' => [],
+            ];
+        }
+
+        return $checks;
     }
 
     protected function submitForReview(?Auction $auction = null): Auction
@@ -197,9 +274,73 @@ trait BuildsContentReviewFixtures
         return app(SubmitAuctionForReviewAction::class)->execute($auction, (int) $auction->seller_id);
     }
 
-    protected function cleanResultPayload(): array
+    protected function reviewedAuction(
+        ReviewMode $mode,
+        array $policyOverrides = [],
+        array $automationOverrides = [],
+        int $images = 1,
+        array $mediaOverrides = [],
+        bool $publishPolicy = true,
+    ): Auction {
+        if ($publishPolicy) {
+            $this->publishPolicy($policyOverrides);
+        }
+
+        $auction = $this->draftAuction();
+
+        for ($index = 0; $index < $images; $index++) {
+            $override = $mediaOverrides[$index] ?? [];
+
+            if (($override['unreadable'] ?? false) === true) {
+                $this->attachUnreadableMedia($auction, $index);
+
+                continue;
+            }
+
+            $this->attachMedia(
+                $auction,
+                $index,
+                $override['bytes'] ?? $this->distinctJpegBytes($index),
+                (string) ($override['mime_type'] ?? 'image/jpeg'),
+                (string) ($override['extension'] ?? 'jpg'),
+            );
+        }
+
+        $this->publishSettings($mode, ['automation' => array_replace([
+            'allowed_category_ids' => [(int) $auction->category_id],
+            'max_starting_amount_minor' => 1_000_000,
+            'require_images' => true,
+        ], $automationOverrides)]);
+
+        return $this->submitForReview($auction);
+    }
+
+    protected function activeReview(Auction $auction): ContentReview
+    {
+        return ContentReview::where('subject_type', ReviewableSubjectType::Auction->value)
+            ->where('subject_id', (int) $auction->id)
+            ->latest('id')
+            ->firstOrFail();
+    }
+
+    protected function processActiveReview(Auction $auction): ContentReview
+    {
+        $review = $this->activeReview($auction);
+
+        app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
+
+        return $review->refresh();
+    }
+
+    protected function fakeProvider(): FakeContentReviewProvider
+    {
+        return app(FakeContentReviewProvider::class);
+    }
+
+    protected function cleanResultPayload(int $images = 1): array
     {
         return [
+            'image_checks' => $this->imageCheckPayload($images),
             'recommendation' => 'approve',
             'confidence' => 96,
             'risk_level' => 'low',

@@ -6,20 +6,19 @@ namespace App\Services\ContentReview\Actions;
 
 use App\Domain\ContentReview\Enums\ContentReviewErrorCode;
 use App\Domain\ContentReview\ValueObjects\ReviewPolicy;
-use App\DTO\ContentReview\AutomationContext;
 use App\DTO\ContentReview\DeterministicCheckResult;
 use App\DTO\ContentReview\StructuredReviewResult;
 use App\Models\ContentReview\ContentReview;
+use App\Services\ContentReview\Support\AutomationEligibilityResolver;
 use App\Services\ContentReview\Support\ContentReviewDecisionEngine;
 use App\Services\ContentReview\Support\ReviewPolicyResolver;
-use App\Services\ContentReview\Support\ReviewSubjectRegistry;
 
 final class DecideContentReviewAction
 {
     public function __construct(
         private readonly ContentReviewDecisionEngine $engine,
         private readonly ReviewPolicyResolver $policies,
-        private readonly ReviewSubjectRegistry $registry,
+        private readonly AutomationEligibilityResolver $eligibility,
         private readonly ApplyContentReviewDecisionAction $apply,
     ) {}
 
@@ -35,7 +34,7 @@ final class DecideContentReviewAction
             $checks,
             $policy,
             $review->mode,
-            $this->automationContext($review),
+            $this->eligibility->resolve($review),
             $error,
         );
 
@@ -51,15 +50,6 @@ final class DecideContentReviewAction
             ?? ReviewPolicy::fromArray([]);
 
         return $this->execute($review, null, $checks, $policy, $error);
-    }
-
-    private function automationContext(ContentReview $review): AutomationContext
-    {
-        if (! $this->registry->supports($review->subject_type)) {
-            return AutomationContext::ineligible(['subject_type_not_supported']);
-        }
-
-        return $this->registry->for($review->subject_type)->automationContext((int) $review->subject_id);
     }
 
     private function reasonFor(ContentReview $review, string $reasonCode): string

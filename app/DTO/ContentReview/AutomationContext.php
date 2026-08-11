@@ -9,16 +9,22 @@ final readonly class AutomationContext extends BaseContentReviewDTO
     public function __construct(
         public bool $isAutomationEligible,
         public array $reasons,
+        public array $approvalBlockers = [],
     ) {}
 
-    public static function eligible(): self
+    public static function eligible(array $approvalBlockers = []): self
     {
-        return new self(true, []);
+        return new self(true, [], $approvalBlockers);
     }
 
-    public static function ineligible(array $reasons): self
+    public static function ineligible(array $reasons, array $approvalBlockers = []): self
     {
-        return new self(false, $reasons);
+        return new self(false, $reasons, $approvalBlockers);
+    }
+
+    public function blocksAutomaticApproval(): bool
+    {
+        return $this->approvalBlockers !== [];
     }
 
     public function toArray(): array
@@ -26,6 +32,7 @@ final readonly class AutomationContext extends BaseContentReviewDTO
         return [
             'is_automation_eligible' => $this->isAutomationEligible,
             'reasons' => $this->reasons,
+            'approval_blockers' => $this->approvalBlockers,
         ];
     }
 }

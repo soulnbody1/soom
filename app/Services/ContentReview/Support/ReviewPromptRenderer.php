@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ContentReview\Support;
 
+use App\Domain\ContentReview\Enums\ImageCheckVerdict;
 use App\Domain\ContentReview\Enums\ReviewRecommendation;
 use App\Domain\ContentReview\Enums\ReviewRiskLevel;
 use App\Domain\ContentReview\Enums\ViolationSeverity;
@@ -17,7 +18,7 @@ final class ReviewPromptRenderer
         return $policy->promptVersion;
     }
 
-    public function render(ReviewPolicy $policy, ReviewContentDTO $content): string
+    public function render(ReviewPolicy $policy, ReviewContentDTO $content, array $imageContext = []): string
     {
         $sections = [];
 
@@ -26,9 +27,10 @@ final class ReviewPromptRenderer
         $sections[] = $this->renderPolicy($policy);
         $sections[] = $this->renderUntrustedNotice();
         $sections[] = $this->renderStructuredFacts($content);
+        $sections[] = $this->renderImageContract($imageContext);
         $sections[] = $this->renderOutputContract($policy);
 
-        return implode("\n\n", $sections);
+        return implode("\n\n", array_values(array_filter($sections, static fn (string $section): bool => $section !== '')));
     }
 
     public function resultSchema(ReviewPolicy $policy): array
@@ -95,8 +97,80 @@ final class ReviewPromptRenderer
                     'maxItems' => 10,
                     'items' => ['type' => 'string', 'maxLength' => 120],
                 ],
+                'image_checks' => [
+                    'type' => 'array',
+                    'maxItems' => 8,
+                    'items' => [
+                        'type' => 'object',
+                        'required' => ['ref', 'verdict'],
+                        'additionalProperties' => false,
+                        'properties' => [
+                            'ref' => ['type' => 'string', 'maxLength' => 20],
+                            'verdict' => ['type' => 'string', 'enum' => array_column(ImageCheckVerdict::cases(), 'value')],
+                            'risk_level' => ['type' => 'string', 'enum' => array_column(ReviewRiskLevel::cases(), 'value')],
+                            'findings' => [
+                                'type' => 'array',
+                                'maxItems' => 5,
+                                'items' => ['type' => 'string', 'maxLength' => 200],
+                            ],
+                        ],
+                    ],
+                ],
             ],
         ];
+    }
+
+    private function renderImageContract(array $imageContext): string
+    {
+        $attached = $this->refList($imageContext['attached'] ?? []);
+        $reused = is_array($imageContext['reused'] ?? null) ? $imageContext['reused'] : [];
+        $failed = is_array($imageContext['failed'] ?? null) ? $imageContext['failed'] : [];
+
+        if ($attached === [] && $reused === [] && $failed === []) {
+            return '';
+        }
+
+        $lines = ['IMAGES'];
+
+        if ($attached === []) {
+            $lines[] = 'No new image is attached to this request.';
+        } else {
+            $lines[] = 'Each attached image is preceded by a text line holding its label.';
+            $lines[] = 'Attached labels, in order: '.implode(', ', $attached);
+            $lines[] = 'Return exactly one image_checks entry per attached label, using that label as ref.';
+        }
+
+        foreach ($reused as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $lines[] = 'Already screened, not attached again: '.(string) ($entry['ref'] ?? '')
+                .' verdict='.(string) ($entry['verdict'] ?? '')
+                .' risk_level='.(string) ($entry['risk_level'] ?? 'unknown');
+        }
+
+        foreach ($failed as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $lines[] = 'Could not be prepared for analysis: '.(string) ($entry['ref'] ?? '')
+                .' reason='.(string) ($entry['failure_code'] ?? '');
+        }
+
+        $lines[] = 'Never invent an image_checks entry for a label that is not attached.';
+
+        return implode("\n", $lines);
+    }
+
+    private function refList(mixed $refs): array
+    {
+        if (! is_array($refs)) {
+            return [];
+        }
+
+        return array_values(array_map(static fn ($ref): string => (string) $ref, $refs));
     }
 
     private function renderPolicy(ReviewPolicy $policy): string

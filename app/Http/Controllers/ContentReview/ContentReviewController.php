@@ -59,7 +59,7 @@ final class ContentReviewController extends Controller
         $review->loadMissing('decisions.decidedBy:id,name');
 
         return $this->sendResponse(
-            new ContentReviewResource($review),
+            (new ContentReviewResource($review))->withAutomation(),
             __('content_review.messages.review_fetched')
         );
     }
@@ -71,7 +71,7 @@ final class ContentReviewController extends Controller
         $contentReview->loadMissing('decisions.decidedBy:id,name');
 
         return $this->sendResponse(
-            new ContentReviewResource($contentReview),
+            (new ContentReviewResource($contentReview))->withAutomation(),
             __('content_review.messages.review_fetched')
         );
     }
@@ -132,7 +132,7 @@ final class ContentReviewController extends Controller
         $review?->load('decisions.decidedBy:id,name');
 
         return $this->sendResponse(
-            $review === null ? null : new ContentReviewResource($review),
+            $review === null ? null : (new ContentReviewResource($review))->withAutomation(),
             __($result->overrodeRecommendation()
                 ? 'content_review.messages.recommendation_overridden'
                 : 'content_review.messages.recommendation_confirmed')

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ContentReview\Support;
 
+use App\Domain\ContentReview\Enums\ImageCheckVerdict;
 use App\Domain\ContentReview\Enums\ReviewRecommendation;
 use App\Domain\ContentReview\Enums\ReviewRiskLevel;
 use App\Domain\ContentReview\Enums\ViolationSeverity;
@@ -25,6 +26,8 @@ final class StructuredReviewResultValidator
     private const MAX_POLICY_CHECKS = 40;
 
     private const MAX_MISSING_INFORMATION = 10;
+
+    private const MAX_IMAGE_CHECKS = 8;
 
     public function __construct(private readonly ContentSanitizer $sanitizer) {}
 
@@ -58,6 +61,7 @@ final class StructuredReviewResultValidator
             $this->normalizeFindings($payload['findings'] ?? []),
             $this->normalizePolicyChecks($payload['policy_checks'] ?? []),
             $this->normalizeMissingInformation($payload['missing_information'] ?? []),
+            $this->normalizeImageChecks($payload['image_checks'] ?? []),
         );
     }
 
@@ -88,6 +92,12 @@ final class StructuredReviewResultValidator
             'policy_checks.*.passed' => ['required', 'boolean'],
             'missing_information' => ['sometimes', 'array', 'max:'.self::MAX_MISSING_INFORMATION],
             'missing_information.*' => ['string', 'max:2000'],
+            'image_checks' => ['sometimes', 'array', 'max:'.self::MAX_IMAGE_CHECKS],
+            'image_checks.*.ref' => ['required', 'string', 'max:20'],
+            'image_checks.*.verdict' => ['required', 'string', 'in:'.implode(',', array_column(ImageCheckVerdict::cases(), 'value'))],
+            'image_checks.*.risk_level' => ['sometimes', 'nullable', 'string', 'in:'.implode(',', array_column(ReviewRiskLevel::cases(), 'value'))],
+            'image_checks.*.findings' => ['sometimes', 'array', 'max:5'],
+            'image_checks.*.findings.*' => ['string', 'max:2000'],
         ];
     }
 
@@ -105,9 +115,46 @@ final class StructuredReviewResultValidator
             'findings',
             'policy_checks',
             'missing_information',
+            'image_checks',
         ];
 
         return array_intersect_key($payload, array_flip($known));
+    }
+
+    private function normalizeImageChecks(mixed $checks): array
+    {
+        if (! is_array($checks)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach (array_slice($checks, 0, self::MAX_IMAGE_CHECKS) as $check) {
+            if (! is_array($check)) {
+                continue;
+            }
+
+            $ref = $this->sanitizer->sanitize((string) ($check['ref'] ?? ''), 20);
+            $verdict = ImageCheckVerdict::tryFrom((string) ($check['verdict'] ?? ''));
+
+            if ($ref === '' || $verdict === null) {
+                continue;
+            }
+
+            $findings = is_array($check['findings'] ?? null) ? $check['findings'] : [];
+
+            $normalized[$ref] = [
+                'ref' => $ref,
+                'verdict' => $verdict->value,
+                'risk_level' => ReviewRiskLevel::tryFrom((string) ($check['risk_level'] ?? ''))?->value,
+                'findings' => array_values(array_map(
+                    fn ($note): string => $this->sanitizer->sanitize((string) $note, 200),
+                    array_slice($findings, 0, 5)
+                )),
+            ];
+        }
+
+        return $normalized;
     }
 
     private function isStrictInteger(mixed $value): bool

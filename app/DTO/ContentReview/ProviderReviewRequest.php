@@ -19,6 +19,7 @@ final readonly class ProviderReviewRequest extends BaseContentReviewDTO
         public int $maxOutputTokens,
         public int $timeoutSeconds,
         public array $locales,
+        public array $imageContext = [],
     ) {}
 
     public function toArray(): array

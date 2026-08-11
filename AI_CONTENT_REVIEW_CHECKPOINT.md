@@ -14,9 +14,9 @@ Backend branch: `soom-auctions` · Dashboard branch: `main` · No commit, no pus
 | 4 — adapter, actions, job, sweeper, guards | Done |
 | 5 — admin API, permissions, outbox router | Done |
 | 6 — dashboard (read-only + operational UI) | Done |
-| 7 — `ai_assisted` confirm / override | **Done in this session** |
-| 8 — `ai_automatic` + image cache | **Not started — next** |
-| 9 — observability, docs, rollout | Not started |
+| 7 — `ai_assisted` confirm / override | Done |
+| 8 — `ai_automatic` + image cache | **Done in this session** |
+| 9 — observability, docs, rollout | **Not started — next** |
 
 Batch 7 touched **both** repositories. Batches 1–6 were not re-implemented and nothing was
 refactored beyond what the new contract required.
@@ -546,21 +546,194 @@ Dashboard (`C:\Users\pc\Desktop\SB\soom-dashboard`):
 
 ---
 
-## NEXT TASK (start of Batch 8)
+## Batch 8 — what shipped
 
-**First step:** add migration M5 plus `app/Models/ContentReview/ContentReviewImageCheck.php` and its
-repository, then teach `ContentReviewImageLoader` to reuse a cached check by `image_sha256`.
+### Backend — new files
+```
+database/migrations/2026_08_09_100000_create_content_review_image_checks_table.php   (M5)
+database/migrations/2026_08_09_100100_add_image_review_to_content_reviews_table.php  (M6)
+app/Domain/ContentReview/Enums/ImageCheckVerdict.php
+app/Models/ContentReview/ContentReviewImageCheck.php
+app/Repositories/ContentReview/ContentReviewImageCheckRepository.php
+app/DTO/ContentReview/PreparedImage.php
+app/DTO/ContentReview/ImageCheckResult.php
+app/DTO/ContentReview/ImageReviewSummary.php
+app/Services/ContentReview/Support/ContentReviewImageScreener.php
+app/Services/ContentReview/Support/AutomationEligibilityResolver.php
+tests/Feature/ContentReview/ImageCacheTest.php                        (17)
+tests/Feature/ContentReview/AutomationEligibilityTest.php             (22)
+tests/Feature/ContentReview/AiAutomaticApproveTest.php                (15)
+tests/Feature/ContentReview/AiAutomaticRejectTest.php                 (13)
+tests/Feature/ContentReview/ContentReviewDefaultsTest.php              (5)
+tests/Feature/ContentReview/ContentReviewAutomationApiTest.php         (7)
+tests/Feature/Auction/ContentReviewAutomationConcurrencyMysqlTest.php  (5, MySQL only)
+```
 
-Then the automation gates: `AutomationEligibilityResolver` (category allowlist, value cap, image
-requirement) consumed by `AuctionReviewSubjectAdapter::automationContext()`, which today inlines
-those three rules; the settings `automation` block becomes enforced rather than advisory. Dashboard:
-the automation sub-form in the settings tab plus a type-to-confirm step when switching into
-`ai_automatic`. Tests: `AiAutomaticApproveTest`, `AiAutomaticRejectTest`, `AutomationEligibilityTest`,
-`ImageCacheTest`, `AuctionAiReviewIntegrationTest`.
+### Backend — modified files
+```
+app/Services/ContentReview/Support/ContentReviewImageLoader.php      (select + prepare, replaces load)
+app/Services/ContentReview/Support/ReviewPromptRenderer.php          (IMAGES section, image_checks schema)
+app/Services/ContentReview/Support/StructuredReviewResultValidator.php (image_checks)
+app/Services/ContentReview/Support/ContentReviewDecisionEngine.php   (approval-only blocker gate)
+app/Services/ContentReview/Actions/ProcessContentReviewAction.php    (image plan, cache, summary)
+app/Services/ContentReview/Actions/DecideContentReviewAction.php     (eligibility resolver)
+app/Services/Auction/ContentReview/AuctionReviewSubjectAdapter.php   (media content_revision)
+app/DTO/ContentReview/{AutomationContext,StructuredReviewResult,ProviderReviewRequest}.php
+app/Models/ContentReview/ContentReview.php                           (image_review)
+app/Http/Resources/ContentReview/ContentReviewResource.php           (automation + image_analysis)
+app/Http/Controllers/ContentReview/ContentReviewController.php       (withAutomation on 3 endpoints)
+app/Services/ContentReview/Providers/AnthropicContentReviewProvider.php (image ref labels)
+lang/{ar,en}/content_review.php                                      (automation_reasons, image_*)
+tests/Feature/ContentReview/Concerns/BuildsContentReviewFixtures.php (real image bytes, helpers)
+tests/Feature/ContentReview/ContentReviewPipelineTest.php            (real image bytes, image_checks)
+```
 
-Useful starting points already in place: `ApplyContentReviewDecisionAction::execute()` already
-refuses a mutating outcome unless the *current* mode is `ai_automatic` and is at least as permissive
-as the frozen one; `ContentReviewDecisionConcurrencyMysqlTest` already exercises `ai_automatic`
-against a racing admin, so the late-AI guard is covered before Batch 8 starts.
+### The image cache — how it actually works
 
-**The overall task is NOT complete.** Batches 8–9 remain.
+The pipeline makes **one** provider call per attempt, so a separate per-image call would have doubled
+the cost for no extra signal. Instead the result schema gained `image_checks[]`, keyed by a label the
+request itself assigns (`img-1`, `img-2`, …) to each *attached* image. The flow is:
+
+1. `ContentReviewImageLoader::select()` picks images **by position only** — sorted by
+   `(sort_order, original index)`, first `min(policy.max_images, config.max_images)`. Selection never
+   depends on whether an image turns out to be readable, so the same four images are chosen every
+   time and a broken one is *reported* rather than silently swapped out.
+2. `prepare()` reads the bytes, verifies the real type with `getimagesizefromstring` (a declared MIME
+   that disagrees with the bytes is `mime_mismatch`), fingerprints the **original** bytes with
+   SHA-256, and downscales to `image_max_edge_px` with GD when the extension is present. The original
+   file is only ever read; nothing is written, so there is no temp file to clean up.
+3. `ContentReviewImageScreener::cached()` looks the fingerprints up; hits are **not attached** to the
+   request — their stored verdict is passed to the prompt as text instead.
+4. Only the misses are attached, each preceded by a `IMAGE img-N` text block.
+5. `record()` stores one row per newly scored image with `insertOrIgnore`, then re-reads.
+
+**The cache key is `(image_sha256, provider, model, policy_version, result_schema_version)`, not
+`image_sha256` alone.** The same picture judged by a different model, or under a different published
+policy, is a different judgement — reusing it would silently serve a verdict the current
+configuration never produced. `policy_version` is stored as `0` rather than `NULL` when a review runs
+without a published policy, because MySQL treats every `NULL` as distinct and the unique index would
+stop being unique. Over-invalidation is the cheap direction: the cost of a wrong key is one wasted
+analysis, the cost of a stale hit is a wrong automatic decision.
+
+`cost_micros` is stored as **NULL**. A single aggregate call cannot attribute a per-image cost, and
+inventing a share would be a fabricated number. What *is* measurable is that a cached image is never
+sent, so it consumes no input tokens at all — `image_review.counts` records `sent`, `analyzed` and
+`cache_hits` separately.
+
+### Key decisions
+
+- **`AutomationEligibilityResolver` owns every gate, and each one has its own reason code.** The
+  decision engine stays pure (the architecture test still forbids `DB::`/`config(`/`Cache::` in it),
+  so the resolver runs in `DecideContentReviewAction` and hands the engine an `AutomationContext`.
+  Gates: master kill switch → `content_review_disabled`; frozen mode; current mode; subject type;
+  `current_marker`/superseded/cancelled; status not completed; missing recommendation; a failed hard
+  deterministic rule; subject no longer reviewable; content unavailable; content hash moved; the
+  subject's own rules (category allowlist, value cap, required images, terms/configuration version);
+  image preparation failures; unscreened images; open circuit; exhausted budget. Any one of them and
+  the outcome is `escalated_to_human` — never an attempted decision.
+- **`AutomationContext` gained `approvalBlockers`, separate from `reasons`.** A *flagged* image is a
+  complete analysis with a negative finding: it must stop an automatic **approval**, but stopping an
+  automatic **rejection** would be backwards. An *unscreened* or *unpreparable* image is an
+  incomplete analysis and blocks both directions. `AiAutomaticRejectTest` pins both halves.
+- **The content hash now moves when an image is replaced in place.** `AuctionMedia` has no checksum
+  column, and hashing every image's bytes inside `buildContent()` would mean re-reading object
+  storage on every staleness check — including on ordinary dashboard reads. The hashable therefore
+  carries the media row's `updated_at` as `content_revision`, which catches every in-app replacement
+  for free, while the *cache* fingerprint is the real bytes SHA-256 computed once at analysis time.
+  So "changed image bytes invalidate the cache" is guaranteed at the layer that has the bytes.
+- **`ContentReviewResource` exposes `automation` only where it was asked for.** Resolving eligibility
+  costs a `buildContent()` plus a hash per subject; the review queue must stay at a constant query
+  count (`AdminAuctionQueryContentReviewTest` pins that). The block is opt-in via
+  `->withAutomation()`, set on `show`, `current` and `decide` only, and a test asserts the list
+  payload does not carry it.
+- **Existing fixtures now write a real 4×4 JPEG to a faked disk.** Before this batch the auction
+  fixtures attached media rows pointing at files that did not exist, and the old loader silently
+  skipped unreadable images — so the automatic tests were passing *through* a hole that Batch 8
+  closes. Four `ContentReviewPipelineTest` cases had to be given real bytes and an `image_checks`
+  payload; nothing about their assertions was weakened.
+- **M6 adds one nullable JSON column.** The plan's "zero changes to existing tables" note covered
+  M1–M5, but requirement 15 asks the dashboard to show analyzed vs cache-hit counts, and those cannot
+  be derived from the cache table (which is deliberately not linked to a review). `content_reviews.
+  image_review` is additive, nullable and reversible, and older attempts render from `total`/
+  `analyzed` alone.
+
+### Dashboard — new files
+```
+src/app/dashboard/auctions/components/contentReview/ContentReviewAutomation.tsx
+src/app/dashboard/auctions/__tests__/ContentReviewAutomation.test.tsx          (11)
+src/app/dashboard/auctions/__tests__/contentReviewAutomaticSettings.test.tsx    (8)
+```
+
+### Dashboard — modified files
+```
+src/app/dashboard/auctions/lib/contentReviewTypes.ts        (automation, image checks/failures)
+src/app/dashboard/auctions/lib/useContentReviewLabels.ts    (3 label groups)
+src/app/dashboard/auctions/components/contentReview/AiReviewPanel.tsx
+src/app/dashboard/auctions/settings/components/ContentReviewSettingsForm.tsx
+src/app/dashboard/auctions/__tests__/contentReviewFixtures.tsx
+src/i18n/languages/{ar,en}.json                             (+21 keys each)
+```
+
+### Dashboard key decisions
+
+- **Eligibility is fetched, the image summary is not.** The enriched `image_analysis` already rides
+  on the embedded `ai_review.current`, so it renders with no extra request. `automation` exists only
+  on the single-review endpoints, so the panel calls `useCurrentContentReview` — and only when
+  `mode === "ai_automatic"` and an attempt exists, so nothing changes for the other three modes. The
+  block renders only if the fetched attempt id matches the one on screen.
+- **Nothing about automatic mode happens silently.** Publishing settings with `mode = ai_automatic`
+  *and* `enabled = true` adds a destructive-styled warning to the confirm step plus a type-to-confirm
+  input: the operator must retype `ai_automatic` before the publish button leaves its disabled state,
+  and stepping back clears it. A badge distinguishes three states — not eligible, eligible, and
+  eligible-but-approval-blocked.
+- **Reason codes are translated client-side**, like every other content-review label: the tests plant
+  `"SERVER SIDE LABEL"` on the API payload and assert it never reaches the DOM.
+
+---
+
+## Verification (Batch 8)
+
+Backend (`C:\Users\pc\Desktop\SB\soom`):
+
+- `php artisan test` → **732 passed, 34 skipped, 0 failed** (was 653/29 after Batch 7; +79 tests,
+  and 5 of the new skips are the MySQL-only automation concurrency cases).
+- `php artisan test --filter=ContentReview` → 289 passed before this batch, 373 passed after.
+- Targeted run of the decision engine, provider contract, image cache, snapshot, financial flow,
+  assisted/override and notification suites → **191 passed**.
+- `composer test:auction:mysql` from a dropped-and-recreated database → **366 tests, 26 failing**.
+  The 26 are the same pre-existing cross-test data-leak failures documented above (list/filter and
+  resource-shape tests); the failing names were extracted from the junit log and **not one belongs to
+  Batch 8 or to the content-review subsystem**. The +5 tests over Batch 7's 361 are this batch's
+  concurrency cases and they all pass.
+- `--group=mysql-concurrency` → **30 passed**, including the five new races: two automatic workers on
+  one review, automatic-approve vs admin-reject, automatic-reject vs admin-approve, a stale automatic
+  result against a content change, and two processes caching the same image fingerprint. Exactly one
+  domain decision applies in every case, and the image race leaves exactly one row.
+- Pint → **PASS on all 110 files** this batch created or modified. The 11 style issues Pint still
+  reports project-wide are in untouched pre-existing migrations.
+
+Dashboard (`C:\Users\pc\Desktop\SB\soom-dashboard`):
+
+- `npx tsc --noEmit` → clean (exit 0).
+- `npx next lint` on every new/modified file → no errors, no warnings.
+- `npx vitest run` → **15 files, 163 tests, 0 failures** (was 13 files / 144 tests).
+- `npm run build` → succeeds, 20 routes.
+
+### Production safety after Batch 8
+
+`CONTENT_REVIEW_ENABLED` is still `false`, the seeded settings are still `enabled = false` /
+`mode = manual`, and the seeded policy still carries `auto_reject_categories = []`.
+`ContentReviewDefaultsTest` pins all four, and `ReviewModeResolver` collapses to `manual` whenever the
+master switch is off no matter what is published. The capability exists; nothing turns it on.
+The intended order is unchanged: **Manual → Shadow → Assisted → a narrow Automatic**.
+
+---
+
+## NEXT TASK (start of Batch 9)
+
+Observability and rollout: `ContentReviewLogContext`, the metrics endpoint from §28, alert thresholds
+in the dashboard status header, `BackfillContentReviews` (opt-in, `--dry-run` by default) and
+`docs/CONTENT_REVIEW_OPERATIONS.md` covering the four rollback levers. Tests named in the plan:
+`LogRedactionTest`, `AlertRateLimitTest`, `MetricsAccuracyTest`, `BackfillCommandTest`.
+
+**The overall task is NOT complete.** Batch 9 remains.

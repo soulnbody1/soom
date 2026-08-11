@@ -11,6 +11,9 @@ use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Domain\ContentReview\Exceptions\ContentReviewProviderException;
 use App\Domain\ContentReview\ValueObjects\ReviewPolicy;
 use App\DTO\ContentReview\DeterministicCheckResult;
+use App\DTO\ContentReview\ImageCheckResult;
+use App\DTO\ContentReview\ImageReviewSummary;
+use App\DTO\ContentReview\PreparedImage;
 use App\DTO\ContentReview\ProviderReviewRequest;
 use App\DTO\ContentReview\ProviderReviewResponse;
 use App\DTO\ContentReview\ReviewContentDTO;
@@ -24,6 +27,7 @@ use App\Services\ContentReview\Support\ContentReviewBudgetGuard;
 use App\Services\ContentReview\Support\ContentReviewCircuitBreaker;
 use App\Services\ContentReview\Support\ContentReviewConcurrencyLimiter;
 use App\Services\ContentReview\Support\ContentReviewImageLoader;
+use App\Services\ContentReview\Support\ContentReviewImageScreener;
 use App\Services\ContentReview\Support\DeterministicContentChecks;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
 use App\Services\ContentReview\Support\ProviderCallGuard;
@@ -54,6 +58,7 @@ final class ProcessContentReviewAction
         private readonly DeterministicContentChecks $deterministic,
         private readonly ReviewPromptRenderer $renderer,
         private readonly ContentReviewImageLoader $images,
+        private readonly ContentReviewImageScreener $screener,
         private readonly StructuredReviewResultValidator $validator,
         private readonly ContentReviewProviderFactory $providers,
         private readonly ContentReviewCircuitBreaker $breaker,
@@ -158,8 +163,11 @@ final class ProcessContentReviewAction
             return self::RESULT_PROCESSED;
         }
 
+        $plan = $this->imagePlan($content, $policy, $settings, $model);
+        $this->persistImageSummary($review, $content, $policy, $plan, []);
+
         try {
-            $response = $this->callProvider($review, $content, $policy, $settings, $model, $maxOutputTokens);
+            $response = $this->callProvider($review, $content, $policy, $settings, $model, $maxOutputTokens, $plan);
         } catch (ContentReviewProviderException $exception) {
             $this->breaker->recordFailure($settings);
             $this->health->recordFailure($exception->errorCode());
@@ -202,7 +210,18 @@ final class ProcessContentReviewAction
             return self::RESULT_PROCESSED;
         }
 
+        $merged = $this->screener->record(
+            $plan['prepared'],
+            $plan['cached'],
+            $result->imageChecks,
+            $this->resolvedProviderName($settings),
+            $model,
+            $this->policyVersionKey($policy),
+            $policy->resultSchemaVersion,
+        );
+
         $this->persistResult($review, $response, $result, $checks, $policy);
+        $this->persistImageSummary($review, $content, $policy, $plan, $merged);
         $this->events->publish($review->refresh(), 'content_review.completed');
 
         $this->decide->execute($review->refresh(), $result, $checks, $policy, null);
@@ -217,29 +236,109 @@ final class ProcessContentReviewAction
         array $settings,
         string $model,
         int $maxOutputTokens,
+        array $plan,
     ): ProviderReviewResponse {
         $this->callGuard->assertOutsideTransaction();
 
-        $images = ($settings['analyze_images'] ?? true) === true
-            ? $this->images->load($content, $policy)
-            : [];
-
-        $this->reviews->update($review, ['images_analyzed' => min(255, count($images))]);
+        $imageContext = $this->imageContext($plan);
 
         $request = new ProviderReviewRequest(
             $review->subject_type,
-            $this->renderer->render($policy, $content),
+            $this->renderer->render($policy, $content, $imageContext),
             $this->renderer->resultSchema($policy),
             $content->textBlocks,
             $content->structuredFacts,
-            $images,
+            $this->attachedImages($plan),
             $model,
             $maxOutputTokens,
             $this->timeoutSeconds($settings),
             $policy->locales(),
+            $imageContext,
         );
 
         return $this->providers->make($this->providerName($settings))->analyze($request);
+    }
+
+    private function imagePlan(ReviewContentDTO $content, ReviewPolicy $policy, array $settings, string $model): array
+    {
+        if (($settings['analyze_images'] ?? true) !== true || ! $policy->analyzeImages()) {
+            return ['enabled' => false, 'prepared' => [], 'cached' => [], 'pending' => []];
+        }
+
+        $prepared = $this->images->prepare($content, $policy);
+        $cached = $this->screener->cached(
+            $prepared,
+            $this->resolvedProviderName($settings),
+            $model,
+            $this->policyVersionKey($policy),
+            $policy->resultSchemaVersion,
+        );
+
+        return [
+            'enabled' => true,
+            'prepared' => $prepared,
+            'cached' => $cached,
+            'pending' => $this->screener->pending($prepared, $cached),
+        ];
+    }
+
+    private function attachedImages(array $plan): array
+    {
+        return array_map(static fn (PreparedImage $image): array => [
+            'ref' => $image->ref,
+            'mime' => (string) $image->mime,
+            'bytes' => (string) $image->bytes,
+            'sha256' => (string) $image->sha256,
+            'sort_order' => $image->sortOrder,
+        ], $plan['pending']);
+    }
+
+    private function imageContext(array $plan): array
+    {
+        $failed = array_values(array_filter(
+            $plan['prepared'],
+            static fn (PreparedImage $image): bool => ! $image->isReady()
+        ));
+
+        return [
+            'attached' => array_map(static fn (PreparedImage $image): string => $image->ref, $plan['pending']),
+            'reused' => array_map(static fn (ImageCheckResult $check): array => [
+                'ref' => $check->ref,
+                'verdict' => $check->verdict->value,
+                'risk_level' => $check->riskLevel?->value,
+            ], array_values($plan['cached'])),
+            'failed' => array_map(static fn (PreparedImage $image): array => [
+                'ref' => $image->ref,
+                'failure_code' => (string) $image->failureCode,
+            ], $failed),
+        ];
+    }
+
+    private function persistImageSummary(
+        ContentReview $review,
+        ReviewContentDTO $content,
+        ReviewPolicy $policy,
+        array $plan,
+        array $checks,
+    ): void {
+        $summary = $plan['enabled'] === true
+            ? ImageReviewSummary::build($content->imageCount(), $plan['prepared'], $checks)
+            : ImageReviewSummary::disabled($content->imageCount());
+
+        $this->reviews->update($review, [
+            'images_analyzed' => min(255, $summary->analyzed),
+            'image_review' => $summary->toArray(),
+        ]);
+    }
+
+    private function resolvedProviderName(array $settings): string
+    {
+        return $this->providers->make($this->providerName($settings))->name();
+    }
+
+    private function policyVersionKey(ReviewPolicy $policy): int
+    {
+        return max(0, (int) $policy->policyVersion);
     }
 
     private function persistProviderMetrics(ContentReview $review, ProviderReviewResponse $response): void

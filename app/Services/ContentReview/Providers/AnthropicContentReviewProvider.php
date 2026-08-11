@@ -98,6 +98,12 @@ final class AnthropicContentReviewProvider implements ContentReviewProvider
                 continue;
             }
 
+            $ref = (string) ($image['ref'] ?? '');
+
+            if ($ref !== '') {
+                $content[] = ['type' => 'text', 'text' => 'IMAGE '.$ref];
+            }
+
             $content[] = [
                 'type' => 'image',
                 'source' => [
