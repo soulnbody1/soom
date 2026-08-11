@@ -128,7 +128,7 @@ final class AlertRateLimitTest extends TestCase
         Notification::fake();
         config()->set('content_review.alerts.repeat_seconds', 1);
         config()->set('content_review.alerts.global_cooldown_seconds', 3600);
-        $this->admin(['content_review.view']);
+        $this->admin();
         $this->staleQueuedReview();
 
         $this->monitor()->sweep(ReviewableSubjectType::Auction);
@@ -145,7 +145,7 @@ final class AlertRateLimitTest extends TestCase
     public function test_two_different_alerts_recovering_together_both_notify(): void
     {
         Notification::fake();
-        $this->admin(['content_review.view']);
+        $this->admin();
         $this->staleQueuedReview();
         app(ContentReviewCircuitBreaker::class)->recordFailure(
             ['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]]

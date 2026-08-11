@@ -13,7 +13,6 @@ use App\Services\ContentReview\Support\ContentReviewActionResolver;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * @mixin ContentReview
@@ -46,9 +45,7 @@ final class ContentReviewResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        $user = $request->user();
         $resolver = app(ContentReviewActionResolver::class);
-        $gate = $user === null ? null : Gate::forUser($user);
         $mode = self::resolvedMode($request, $this->subject_type);
 
         $data = [
@@ -97,11 +94,8 @@ final class ContentReviewResource extends JsonResource
             'decisions' => ContentReviewDecisionResource::collection(
                 $this->relationLoaded('decisions') ? $this->decisions : collect()
             ),
-            'available_actions' => $resolver->for($user, $this->resource, $mode),
-        ];
-
-        if ($gate !== null && $gate->allows('viewTechnical', ContentReview::class)) {
-            $data['technical'] = [
+            'available_actions' => $resolver->for($this->resource, $mode),
+            'technical' => [
                 'provider' => $this->provider,
                 'model' => $this->model,
                 'prompt_version' => $this->prompt_version,
@@ -110,21 +104,18 @@ final class ContentReviewResource extends JsonResource
                 'settings_version' => $this->settings_version === null ? null : (int) $this->settings_version,
                 'duration_ms' => $this->duration_ms === null ? null : (int) $this->duration_ms,
                 'error_message' => $this->error_message,
-            ];
-        }
-
-        if ($this->includeAutomation) {
-            $data['automation'] = $this->automationPayload($mode);
-        }
-
-        if ($gate !== null && $gate->allows('viewCosts', ContentReview::class)) {
-            $data['cost'] = [
+            ],
+            'cost' => [
                 'input_tokens' => $this->input_tokens === null ? null : (int) $this->input_tokens,
                 'output_tokens' => $this->output_tokens === null ? null : (int) $this->output_tokens,
                 'cost_micros' => $this->cost_micros === null ? null : (int) $this->cost_micros,
                 'currency' => (string) config('content_review.pricing.currency', 'USD'),
                 'pricing_version' => (string) config('content_review.pricing.version', ''),
-            ];
+            ],
+        ];
+
+        if ($this->includeAutomation) {
+            $data['automation'] = $this->automationPayload($mode);
         }
 
         return $data;

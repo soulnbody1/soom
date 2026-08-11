@@ -89,12 +89,12 @@ test('every decision engine reason code has a label', function () {
     }
 });
 
-test('the configured permission list is a superset of the role admin defaults', function () {
-    $all = config('content_review.admin_permissions');
-    $defaults = config('content_review.role_admin_permissions');
+test('the subsystem defines no admin permission of its own', function () {
+    $config = config('content_review');
 
-    expect($all)->toBeArray()->toHaveCount(10)
-        ->and(array_diff($defaults, $all))->toBe([]);
+    expect($config)->not->toHaveKey('admin_permissions')
+        ->and($config)->not->toHaveKey('role_admin_permissions')
+        ->and(json_encode($config, JSON_THROW_ON_ERROR))->not->toContain('content_review.view');
 });
 
 test('sensitive settings never live in the content review config file', function () {

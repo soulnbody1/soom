@@ -29,7 +29,6 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\PaymentSubmission;
-use App\Models\ContentReview\ContentReview;
 use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Services\Auction\Actions\AcceptAuctionTermsAction;
 use App\Services\Auction\Actions\BlockAuctionParticipantAction;
@@ -86,7 +85,7 @@ final class AuctionController extends Controller
             AdminAuctionResource::collection($action->execute(
                 $request->filters(),
                 $request->perPage(),
-                Gate::allows('viewAny', ContentReview::class)
+                true
             )),
             __('auction.messages.admin_auctions_fetched')
         );
@@ -441,9 +440,7 @@ final class AuctionController extends Controller
             $relations[] = 'disputes';
         }
 
-        if (Gate::forUser($user)->allows('viewAny', ContentReview::class)) {
-            $relations[] = 'activeContentReview.decisions.decidedBy:id,name';
-        }
+        $relations[] = 'activeContentReview.decisions.decidedBy:id,name';
 
         $auction->load($relations);
     }

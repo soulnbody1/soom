@@ -10,8 +10,6 @@ use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewRecommendation;
 use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Models\ContentReview\ContentReview;
-use App\Models\User;
-use Illuminate\Support\Facades\Gate;
 
 final class ContentReviewOverrideGuard
 {
@@ -48,14 +46,14 @@ final class ContentReviewOverrideGuard
             && $review->mode->isAtLeastAsPermissiveAs(ReviewMode::AiAssisted);
     }
 
-    public function assertAllowed(?User $user, ?ContentReview $review, DecisionRelation $relation, string $reason): void
+    /**
+     * Deciding against a binding recommendation still demands a written reason. That is
+     * a business rule about the audit trail, not a permission: it holds for every admin.
+     */
+    public function assertAllowed(?ContentReview $review, DecisionRelation $relation, string $reason): void
     {
         if ($relation !== DecisionRelation::Overridden || ! $this->isBinding($review)) {
             return;
-        }
-
-        if ($user === null || ! Gate::forUser($user)->allows('override', ContentReview::class)) {
-            throw ContentReviewException::domain('content_review_override_not_allowed', [], 403);
         }
 
         if (trim($reason) === '') {

@@ -58,29 +58,29 @@ final class AdminAuctionQueryContentReviewTest extends TestCase
         );
     }
 
-    public function test_the_list_loads_the_active_review_only_for_a_permitted_admin(): void
+    public function test_the_list_loads_the_active_review_for_every_admin_at_the_same_cost(): void
     {
-        config()->set('content_review.role_admin_permissions', []);
         $this->publishPolicy();
         $this->publishSettings(ReviewMode::Shadow);
         $this->reviewedAuctions(3);
 
-        $permitted = $this->admin(['auction.review', 'content_review.view']);
-        $withoutPermission = $this->admin(['auction.review']);
+        $plain = $this->admin();
+        $reviewer = $this->admin(['auction.review']);
 
-        $withBlock = $this->countQueries(fn () => $this->actingAs($permitted, 'sanctum')
+        $plainQueries = $this->countQueries(fn () => $this->actingAs($plain, 'sanctum')
             ->getJson('/api/admin/auctions')
             ->assertOk()
             ->assertJsonPath('data.0.ai_review.enabled', true));
 
-        $withoutBlock = $this->countQueries(fn () => $this->actingAs($withoutPermission, 'sanctum')
+        $reviewerQueries = $this->countQueries(fn () => $this->actingAs($reviewer, 'sanctum')
             ->getJson('/api/admin/auctions')
-            ->assertOk());
+            ->assertOk()
+            ->assertJsonPath('data.0.ai_review.enabled', true));
 
-        $this->assertGreaterThan(
-            $withoutBlock,
-            $withBlock,
-            'The permitted admin must trigger the extra eager load, the other must not.'
+        $this->assertSame(
+            $plainQueries,
+            $reviewerQueries,
+            'The eager load is unconditional, so the query count cannot depend on who is asking.'
         );
     }
 
@@ -106,15 +106,15 @@ final class AdminAuctionQueryContentReviewTest extends TestCase
             ->assertJsonPath('data.next_admin_action', 'review_auction');
     }
 
-    public function test_an_admin_without_the_permission_still_sees_the_original_next_action(): void
+    public function test_the_original_next_action_returns_once_no_review_is_pending(): void
     {
-        config()->set('content_review.role_admin_permissions', []);
-        $this->publishPolicy();
-        $this->publishSettings(ReviewMode::Shadow);
+        $this->publishSettings(ReviewMode::Manual);
 
         $auction = $this->submitForReview();
 
-        $this->actingAs($this->admin(['auction.review']), 'sanctum')
+        $this->assertSame(0, ContentReview::count());
+
+        $this->actingAs($this->admin(), 'sanctum')
             ->getJson("/api/admin/auctions/{$auction->public_id}")
             ->assertOk()
             ->assertJsonPath('data.next_admin_action', 'review_auction');

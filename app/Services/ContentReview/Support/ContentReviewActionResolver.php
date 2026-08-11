@@ -9,8 +9,6 @@ use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Models\ContentReview\ContentReview;
 use App\Models\ContentReview\ContentReviewDecision;
-use App\Models\User;
-use Illuminate\Support\Facades\Gate;
 
 final class ContentReviewActionResolver
 {
@@ -71,39 +69,33 @@ final class ContentReviewActionResolver
     }
 
     /**
+     * Domain state only. Every admin endpoint behind `role:admin` may run every action,
+     * so what is offered depends on whether the review is in a state that accepts it,
+     * never on who is asking.
+     *
      * @return array<int, string>
      */
-    public function for(?User $user, ?ContentReview $review, ?ReviewMode $mode = null): array
+    public function for(?ContentReview $review, ?ReviewMode $mode = null): array
     {
-        if ($user === null) {
-            return [];
-        }
-
-        $gate = Gate::forUser($user);
         $actions = [];
 
-        if ($gate->allows('run', ContentReview::class) && $this->providerModeIsActive($review, $mode)) {
+        if ($this->providerModeIsActive($review, $mode)) {
             $actions[] = self::RUN;
         }
 
-        if ($review !== null && $gate->allows('run', ContentReview::class) && $this->isRetryable($review)) {
+        if ($review !== null && $this->isRetryable($review)) {
             $actions[] = self::RETRY;
         }
 
-        if ($review !== null && $this->isCancellable($review) && $gate->allows('cancel', $review)) {
+        if ($review !== null && $this->isCancellable($review)) {
             $actions[] = self::CANCEL;
         }
 
-        if ($gate->allows('forceManual', ContentReview::class)) {
-            $actions[] = self::FORCE_MANUAL;
-        }
+        $actions[] = self::FORCE_MANUAL;
 
         if ($review !== null && $this->awaitsHumanDecision($review)) {
             $actions[] = self::CONFIRM;
-
-            if ($gate->allows('override', ContentReview::class)) {
-                $actions[] = self::OVERRIDE;
-            }
+            $actions[] = self::OVERRIDE;
         }
 
         return $actions;

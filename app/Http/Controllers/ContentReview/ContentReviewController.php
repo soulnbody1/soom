@@ -19,7 +19,6 @@ use App\Services\ContentReview\Support\ReviewSubjectResolver;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Gate;
 
 final class ContentReviewController extends Controller
 {
@@ -33,8 +32,6 @@ final class ContentReviewController extends Controller
         string $subjectId,
         ContentReviewRepository $reviews
     ): JsonResponse {
-        Gate::authorize('viewAny', ContentReview::class);
-
         $type = $this->subjects->type($subjectType);
         $id = $this->subjects->id($type, $subjectId);
 
@@ -46,8 +43,6 @@ final class ContentReviewController extends Controller
 
     public function current(string $subjectType, string $subjectId, ContentReviewRepository $reviews): JsonResponse
     {
-        Gate::authorize('viewAny', ContentReview::class);
-
         $type = $this->subjects->type($subjectType);
         $id = $this->subjects->id($type, $subjectId);
         $review = $reviews->activeForSubject($type, $id);
@@ -66,8 +61,6 @@ final class ContentReviewController extends Controller
 
     public function show(ContentReview $contentReview): JsonResponse
     {
-        Gate::authorize('view', $contentReview);
-
         $contentReview->loadMissing('decisions.decidedBy:id,name');
 
         return $this->sendResponse(
@@ -78,8 +71,6 @@ final class ContentReviewController extends Controller
 
     public function run(string $subjectType, string $subjectId, RunContentReviewAction $action): JsonResponse
     {
-        Gate::authorize('run', ContentReview::class);
-
         $type = $this->subjects->type($subjectType);
         $id = $this->subjects->id($type, $subjectId);
 
@@ -92,8 +83,6 @@ final class ContentReviewController extends Controller
 
     public function retry(ContentReview $contentReview, RetryContentReviewAction $action): JsonResponse
     {
-        Gate::authorize('run', ContentReview::class);
-
         return $this->sendResponse(
             new ContentReviewResource($action->execute($contentReview, Auth::id())),
             __('content_review.messages.review_requested'),
@@ -103,8 +92,6 @@ final class ContentReviewController extends Controller
 
     public function cancel(ContentReview $contentReview, CancelContentReviewAction $action): JsonResponse
     {
-        Gate::authorize('cancel', $contentReview);
-
         return $this->sendResponse(
             new ContentReviewResource($action->execute($contentReview, Auth::id())),
             __('content_review.messages.review_cancelled')
@@ -117,8 +104,6 @@ final class ContentReviewController extends Controller
         ApplyContentReviewDecisionAction $action,
         ContentReviewRepository $reviews
     ): JsonResponse {
-        Gate::authorize('view', $contentReview);
-
         $result = $action->applyHumanDecision(
             $contentReview->subject_type,
             (int) $contentReview->subject_id,
@@ -145,8 +130,6 @@ final class ContentReviewController extends Controller
         ForceManualReviewAction $action,
         ContentReviewRepository $reviews
     ): JsonResponse {
-        Gate::authorize('forceManual', ContentReview::class);
-
         $type = $this->subjects->type($subjectType);
         $id = $this->subjects->id($type, $subjectId);
 

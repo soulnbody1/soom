@@ -55,9 +55,13 @@ trait BuildsContentReviewFixtures
         ]);
     }
 
+    /**
+     * There is only one kind of admin; this alias survives so the intent of the older
+     * tests still reads correctly.
+     */
     protected function fullyPermittedAdmin(): User
     {
-        return $this->admin((array) config('content_review.admin_permissions'));
+        return $this->admin();
     }
 
     protected function auctionReviewer(array $extra = []): User

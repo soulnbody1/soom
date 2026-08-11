@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\ContentReview;
 
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Models\Auction\Auction;
 use App\Models\ContentReview\ContentReview;
+use App\Models\User;
 use App\Services\ContentReview\Actions\ProcessContentReviewAction;
 use App\Services\ContentReview\Providers\FakeContentReviewProvider;
 use App\Services\ContentReview\Support\ContentReviewCircuitBreaker;
@@ -15,6 +17,13 @@ use Illuminate\Support\Facades\Queue;
 use Tests\Feature\ContentReview\Concerns\BuildsContentReviewFixtures;
 use Tests\TestCase;
 
+/**
+ * There is one kind of admin. Authentication is the whole access rule for the
+ * content review surface: any authenticated admin may read and run everything,
+ * a seller may reach nothing, and a guest is rejected. What an admin is *offered*
+ * still depends on the state of the review, and the redaction boundary is
+ * unaffected by any of it.
+ */
 final class ContentReviewPermissionTest extends TestCase
 {
     use BuildsContentReviewFixtures;
@@ -31,53 +40,53 @@ final class ContentReviewPermissionTest extends TestCase
         app(ContentReviewCircuitBreaker::class)->reset();
     }
 
-    /**
-     * The configured fallback is what makes an admin able to see reviews at all, so
-     * these tests clear it and grant every permission explicitly. The fallback itself
-     * is pinned by test_the_role_admin_fallback_grants_exactly_view_run_and_cancel.
-     */
-    private function withoutRoleFallback(): void
+    public function test_no_content_review_permission_is_configured_anywhere(): void
     {
-        config()->set('content_review.role_admin_permissions', []);
+        $flat = json_encode(config('content_review'), JSON_THROW_ON_ERROR);
+
+        $this->assertStringNotContainsString('content_review.view', $flat);
+        $this->assertStringNotContainsString('admin_permissions', $flat);
+        $this->assertNull(config('content_review.admin_permissions'));
+        $this->assertNull(config('content_review.role_admin_permissions'));
     }
 
-    public function test_the_role_admin_fallback_grants_exactly_view_run_and_cancel(): void
-    {
-        $this->assertSame(
-            ['content_review.view', 'content_review.run', 'content_review.cancel'],
-            (array) config('content_review.role_admin_permissions')
-        );
-    }
-
-    public function test_a_plain_admin_holds_only_the_three_default_permissions(): void
+    public function test_a_plain_admin_reaches_every_content_review_endpoint(): void
     {
         $review = $this->completedReview();
-        $auction = $review->subject_id;
+        $auction = Auction::findOrFail($review->subject_id);
+        $admin = $this->admin();
+
+        foreach ([
+            "/api/admin/content-reviews/{$review->public_id}",
+            "/api/admin/content-reviews/auction/{$auction->public_id}",
+            "/api/admin/content-reviews/auction/{$auction->public_id}/current",
+            '/api/admin/content-review/settings',
+            '/api/admin/content-review/settings/versions',
+            '/api/admin/content-review/policies',
+            '/api/admin/content-review/policies/active',
+            '/api/admin/content-review/health',
+            '/api/admin/content-review/metrics',
+        ] as $path) {
+            $this->actingAs($admin, 'sanctum')->getJson($path)->assertOk();
+        }
+    }
+
+    public function test_a_plain_admin_may_run_every_write_action(): void
+    {
+        $review = $this->completedReview();
+        $auction = Auction::findOrFail($review->subject_id);
         $admin = $this->admin();
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson("/api/admin/content-reviews/{$review->public_id}")
+            ->postJson('/api/admin/content-review/provider/test')
             ->assertOk();
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/admin/content-review/settings')
-            ->assertForbidden()
-            ->assertJsonPath('code', 'forbidden');
-
-        $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/admin/content-review/policies')
-            ->assertForbidden();
-
-        $this->actingAs($admin, 'sanctum')
-            ->postJson("/api/admin/content-reviews/auction/{$auction}/force-manual")
-            ->assertForbidden();
-
-        $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/admin/content-review/provider/test')
-            ->assertForbidden();
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual")
+            ->assertOk();
     }
 
-    public function test_a_non_admin_reaches_no_content_review_endpoint(): void
+    public function test_a_seller_reaches_no_content_review_endpoint(): void
     {
         $review = $this->completedReview();
         $seller = $this->seller();
@@ -87,9 +96,29 @@ final class ContentReviewPermissionTest extends TestCase
             '/api/admin/content-review/settings',
             '/api/admin/content-review/policies',
             '/api/admin/content-review/health',
+            '/api/admin/content-review/metrics',
         ] as $path) {
             $this->actingAs($seller, 'sanctum')->getJson($path)->assertForbidden();
         }
+    }
+
+    public function test_a_seller_cannot_write_through_an_admin_endpoint(): void
+    {
+        $review = $this->completedReview(ReviewMode::AiAssisted);
+        $auction = Auction::findOrFail($review->subject_id);
+        $seller = $this->seller();
+
+        $this->actingAs($seller, 'sanctum')
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/decide", ['decision' => 'approve'])
+            ->assertForbidden();
+
+        $this->actingAs($seller, 'sanctum')
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual")
+            ->assertForbidden();
+
+        $this->actingAs($seller, 'sanctum')
+            ->postJson('/api/admin/content-review/provider/test')
+            ->assertForbidden();
     }
 
     public function test_an_unauthenticated_caller_is_rejected(): void
@@ -97,107 +126,96 @@ final class ContentReviewPermissionTest extends TestCase
         $this->getJson('/api/admin/content-review/health')
             ->assertUnauthorized()
             ->assertJsonPath('code', 'unauthenticated');
+
+        $this->getJson('/api/admin/content-review/metrics')->assertUnauthorized();
     }
 
-    public function test_an_admin_without_the_view_permission_never_sees_the_ai_review_block(): void
+    public function test_every_admin_sees_the_ai_review_block_on_the_auction_payload(): void
     {
         $review = $this->completedReview();
-        $auction = \App\Models\Auction\Auction::findOrFail($review->subject_id);
+        $auction = Auction::findOrFail($review->subject_id);
 
-        $this->withoutRoleFallback();
-        $withoutContentReview = $this->admin(['auction.review', 'auction.approve']);
-
-        $response = $this->actingAs($withoutContentReview, 'sanctum')
-            ->getJson("/api/admin/auctions/{$auction->public_id}")
-            ->assertOk();
-
-        $this->assertArrayNotHasKey('ai_review', (array) $response->json('data'));
-    }
-
-    public function test_an_admin_with_the_view_permission_sees_the_redacted_ai_review_block(): void
-    {
-        $review = $this->completedReview();
-        $auction = \App\Models\Auction\Auction::findOrFail($review->subject_id);
-        $this->withoutRoleFallback();
-
-        $response = $this->actingAs($this->auctionReviewer(['content_review.view']), 'sanctum')
+        $this->actingAs($this->admin(), 'sanctum')
             ->getJson("/api/admin/auctions/{$auction->public_id}")
             ->assertOk()
             ->assertJsonPath('data.ai_review.mode', ReviewMode::Shadow->value)
             ->assertJsonPath('data.ai_review.current.recommendation', 'approve')
             ->assertJsonPath('data.ai_review.current.confidence', 96);
-
-        $block = (array) $response->json('data.ai_review.current');
-
-        $this->assertArrayNotHasKey('technical', $block);
-        $this->assertArrayNotHasKey('cost', $block);
     }
 
-    public function test_technical_and_cost_blocks_need_their_own_permissions(): void
+    public function test_every_admin_receives_the_technical_and_cost_blocks(): void
     {
         $review = $this->completedReview();
 
-        $this->withoutRoleFallback();
+        $data = (array) $this->actingAs($this->admin(), 'sanctum')
+            ->getJson("/api/admin/content-reviews/{$review->public_id}")
+            ->assertOk()
+            ->json('data');
 
-        $viewOnly = $this->admin(['content_review.view']);
-        $withTechnical = $this->admin(['content_review.view', 'content_review.technical.view']);
-        $withCosts = $this->admin(['content_review.view', 'content_review.costs.view']);
-
-        $plain = (array) $this->actingAs($viewOnly, 'sanctum')
-            ->getJson("/api/admin/content-reviews/{$review->public_id}")->json('data');
-        $this->assertArrayNotHasKey('technical', $plain);
-        $this->assertArrayNotHasKey('cost', $plain);
-
-        $technical = (array) $this->actingAs($withTechnical, 'sanctum')
-            ->getJson("/api/admin/content-reviews/{$review->public_id}")->json('data');
-        $this->assertArrayHasKey('technical', $technical);
-        $this->assertArrayNotHasKey('cost', $technical);
-
-        $costs = (array) $this->actingAs($withCosts, 'sanctum')
-            ->getJson("/api/admin/content-reviews/{$review->public_id}")->json('data');
-        $this->assertArrayHasKey('cost', $costs);
-        $this->assertArrayNotHasKey('technical', $costs);
+        $this->assertArrayHasKey('technical', $data);
+        $this->assertArrayHasKey('cost', $data);
+        $this->assertSame('fake', $data['technical']['provider']);
+        $this->assertSame('USD', $data['cost']['currency']);
     }
 
-    public function test_available_actions_follow_the_caller_permissions(): void
+    public function test_every_admin_receives_the_budget_and_cost_blocks_on_health_and_metrics(): void
+    {
+        $this->completedReview();
+        $admin = $this->admin();
+
+        $health = (array) $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/content-review/health')->assertOk()->json('data');
+        $this->assertArrayHasKey('budget', $health);
+
+        $metrics = (array) $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/content-review/metrics')->assertOk()->json('data');
+        $this->assertArrayHasKey('cost', $metrics);
+    }
+
+    public function test_available_actions_follow_the_review_state_not_the_caller(): void
     {
         $review = $this->completedReview();
-        $this->withoutRoleFallback();
 
-        $viewOnly = $this->admin(['content_review.view']);
-        $this->assertSame([], $this->availableActions($viewOnly, $review));
+        $plain = $this->availableActions($this->admin(), $review);
+        $reviewer = $this->availableActions($this->auctionReviewer(), $review);
 
-        $runner = $this->admin(['content_review.view', 'content_review.run']);
-        $this->assertSame(['run'], $this->availableActions($runner, $review));
-
-        $full = $this->fullyPermittedAdmin();
-        $this->assertSame(['run', 'force_manual'], $this->availableActions($full, $review));
+        $this->assertSame(['run', 'force_manual'], $plain);
+        $this->assertSame($plain, $reviewer);
     }
 
-    public function test_confirm_and_override_appear_only_on_an_assisted_recommendation(): void
+    public function test_confirm_and_override_appear_together_on_an_assisted_recommendation(): void
     {
         $review = $this->completedReview(ReviewMode::AiAssisted);
-        $this->withoutRoleFallback();
 
-        $withoutOverride = $this->admin(['content_review.view', 'content_review.force_manual']);
-        $this->assertSame(['force_manual', 'confirm'], $this->availableActions($withoutOverride, $review));
+        $this->assertSame(
+            ['run', 'force_manual', 'confirm', 'override'],
+            $this->availableActions($this->admin(), $review)
+        );
+    }
 
-        $full = $this->fullyPermittedAdmin();
-        $this->assertSame(['run', 'force_manual', 'confirm', 'override'], $this->availableActions($full, $review));
+    public function test_a_shadow_recommendation_offers_neither_confirm_nor_override(): void
+    {
+        $review = $this->completedReview();
+
+        $actions = $this->availableActions($this->admin(), $review);
+
+        $this->assertNotContains('confirm', $actions);
+        $this->assertNotContains('override', $actions);
     }
 
     public function test_the_api_never_returns_the_raw_provider_response_or_the_api_key(): void
     {
         config()->set('services.anthropic.api_key', 'sk-ant-leak-canary');
         $review = $this->completedReview();
-        $auction = \App\Models\Auction\Auction::findOrFail($review->subject_id);
-        $admin = $this->fullyPermittedAdmin();
+        $auction = Auction::findOrFail($review->subject_id);
+        $admin = $this->admin();
 
         foreach ([
             "/api/admin/content-reviews/{$review->public_id}",
             "/api/admin/content-reviews/auction/{$auction->public_id}",
             "/api/admin/content-reviews/auction/{$auction->public_id}/current",
             '/api/admin/content-review/health',
+            '/api/admin/content-review/metrics',
             '/api/admin/content-review/settings',
             '/api/admin/content-review/policies',
             "/api/admin/auctions/{$auction->public_id}",
@@ -225,7 +243,7 @@ final class ContentReviewPermissionTest extends TestCase
         $review = ContentReview::firstOrFail();
         app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
 
-        $content = $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
+        $content = $this->actingAs($this->admin(), 'sanctum')
             ->getJson("/api/admin/content-reviews/{$review->public_id}")
             ->assertOk()
             ->getContent();
@@ -237,7 +255,7 @@ final class ContentReviewPermissionTest extends TestCase
     /**
      * @return array<int, string>
      */
-    private function availableActions(\App\Models\User $user, ContentReview $review): array
+    private function availableActions(User $user, ContentReview $review): array
     {
         return (array) $this->actingAs($user, 'sanctum')
             ->getJson("/api/admin/content-reviews/{$review->public_id}")

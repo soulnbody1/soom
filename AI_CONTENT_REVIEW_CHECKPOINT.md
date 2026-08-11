@@ -23,6 +23,51 @@ refactored beyond what the new contract required.
 
 ---
 
+## Post-Batch-9 cleanup — the content review permission layer was removed
+
+**Read this before the per-batch notes below.** The platform has exactly one kind of admin,
+and every authenticated admin may run every admin function. The ten fine-grained
+`content_review.*` permissions introduced across Batches 1–9 modelled a role system that
+does not exist, so they were deleted. Everything the older sections say about
+`content_review.view`, `content_review.run`, `content_review.cancel`,
+`content_review.force_manual`, `content_review.override`, `content_review.settings.manage`,
+`content_review.policy.manage`, `content_review.costs.view`,
+`content_review.technical.view` and `content_review.metrics.view` is **historical**.
+
+What was deleted:
+
+- `app/Policies/ContentReview/ContentReviewPolicy.php` and
+  `app/Policies/ContentReview/Concerns/ChecksContentReviewPermissions.php` (the whole
+  `app/Policies/ContentReview/` tree), plus its `Gate::policy` registration.
+- `config('content_review.admin_permissions')` and `config('content_review.role_admin_permissions')`.
+- All **18** `Gate::authorize(...)` calls in the five content review controllers.
+- The `override` permission check in `ContentReviewOverrideGuard` and the now-unreachable
+  `content_review_override_not_allowed` error code and its two language entries.
+- The permission filter in `AdminAlertRecipientResolver` — every admin is now a recipient.
+- The permission gating on `technical`, `cost`, `budget`, `ai_review` and the metrics `cost`
+  block in the API resources and reporters.
+
+What deliberately did **not** change:
+
+- **The auction permission layer is untouched.** `AuctionPolicy`, `ChecksAuctionPermissions`
+  and `config('auction.admin_permissions')` predate this subsystem, are shared by payouts,
+  refunds, disputes and payments, and already grant every permission in that list to any
+  `role = 'admin'` user. They also carry the seller-side ownership rules.
+- **Seller and ownership authorization.** `update`, `reopen`, `submitForReview`, `bid`,
+  `register`, handover and dispute abilities all still run through `AuctionPolicy`.
+- **Every business rule.** `available_actions` is now derived purely from the review's own
+  state; an override still requires a reason; already-decided, stale, superseded and
+  not-reviewable are all still refused with their stable codes.
+- **The redaction boundary.** No API key, prompt, raw response, chain of thought, image
+  bytes, storage path or content hash is exposed to anyone.
+- **The provider-test rate limit**, which protects the provider account rather than the
+  operator.
+
+Access control is now exactly: `auth:sanctum` + `role:admin`. A guest is rejected 401, a
+seller is rejected 403, and any admin is allowed.
+
+---
+
 ## The MySQL "29 vs 28" question — resolved
 
 The previous checkpoint's numbers were **not comparable**, and the discrepancy is fully explained.

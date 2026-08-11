@@ -204,7 +204,7 @@ final class AiAssistedFlowTest extends TestCase
         [$review, $auction] = $this->assistedReview();
 
         config()->set('auction.admin_permissions', []);
-        $withoutAuctionRights = $this->admin(['content_review.view']);
+        $withoutAuctionRights = $this->admin();
 
         $this->decide($withoutAuctionRights, $review, 'approve')
             ->assertStatus(403)
@@ -223,7 +223,7 @@ final class AiAssistedFlowTest extends TestCase
 
     private function decider(array $extra = []): User
     {
-        return $this->auctionReviewer(array_merge(['content_review.view'], $extra));
+        return $this->auctionReviewer($extra);
     }
 
     private function reviewFingerprint(ContentReview $review): array

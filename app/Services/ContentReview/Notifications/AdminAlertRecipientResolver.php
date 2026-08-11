@@ -5,34 +5,29 @@ declare(strict_types=1);
 namespace App\Services\ContentReview\Notifications;
 
 use App\Models\User;
-use App\Policies\ContentReview\Concerns\ChecksContentReviewPermissions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 final class AdminAlertRecipientResolver
 {
-    use ChecksContentReviewPermissions;
-
     private const CHUNK = 500;
 
     private const COOLDOWN_PREFIX = 'content_review:alert:';
 
     /**
+     * Every admin is a recipient. Sellers and ordinary users never are.
+     *
      * @return Collection<int, User>
      */
-    public function recipients(string $permission = 'content_review.view'): Collection
+    public function recipients(): Collection
     {
         $recipients = collect();
 
         User::query()
             ->where('role', 'admin')
-            ->select(['id', 'name', 'role', 'auction_permissions', 'fcm_token'])
-            ->chunkById(self::CHUNK, function (Collection $users) use (&$recipients, $permission): void {
-                foreach ($users as $user) {
-                    if ($this->hasContentReviewPermission($user, $permission)) {
-                        $recipients->push($user);
-                    }
-                }
+            ->select(['id', 'name', 'role', 'fcm_token'])
+            ->chunkById(self::CHUNK, function (Collection $users) use (&$recipients): void {
+                $recipients = $recipients->concat($users);
             });
 
         return $recipients;

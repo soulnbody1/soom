@@ -108,7 +108,7 @@ final class ApplyContentReviewDecisionAction
                 throw ContentReviewException::domain('recommendation_missing');
             }
 
-            $this->overrides->assertAllowed($actor, $review, $relation, $reason);
+            $this->overrides->assertAllowed($review, $relation, $reason);
 
             if (! $adapter->applyHumanDecision($subjectId, $decision, (int) $actor->id, $this->humanReason($review, $reason))) {
                 throw ContentReviewException::domain('subject_not_reviewable', [], 409);

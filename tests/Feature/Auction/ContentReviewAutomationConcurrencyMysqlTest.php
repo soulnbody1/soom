@@ -354,6 +354,6 @@ PHP;
 
     private function overrider(): User
     {
-        return $this->auctionReviewer(['content_review.view', 'content_review.override']);
+        return $this->auctionReviewer();
     }
 }

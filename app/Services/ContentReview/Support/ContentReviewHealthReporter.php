@@ -22,7 +22,7 @@ final class ContentReviewHealthReporter
         private readonly ContentReviewWorkerHeartbeat $heartbeat,
     ) {}
 
-    public function report(ReviewableSubjectType $type, bool $includeBudget = false): array
+    public function report(ReviewableSubjectType $type): array
     {
         $settings = $this->modes->effectiveSettings($type);
         $mode = $this->modes->resolve($type);
@@ -51,15 +51,12 @@ final class ContentReviewHealthReporter
                 'last_job_processed_at' => $this->heartbeat->lastJobAt()?->toIso8601String(),
                 'seconds_since_last_job' => $this->heartbeat->secondsSinceLastJob(),
             ]),
-        ];
-
-        if ($includeBudget) {
-            $report['budget'] = [
+            'budget' => [
                 'currency' => (string) config('content_review.pricing.currency', 'USD'),
                 'daily' => $this->budgetPeriod($settings, 'daily', Carbon::now()->startOfDay()),
                 'monthly' => $this->budgetPeriod($settings, 'monthly', Carbon::now()->startOfMonth()),
-            ];
-        }
+            ],
+        ];
 
         return $report;
     }

@@ -984,6 +984,15 @@ Token counts and `cost_micros` appear only when the viewer additionally holds `c
 
 ## 22. Permissions
 
+> **Superseded after Batch 9.** This section describes a fine-grained admin permission model
+> that was built and then removed, because the platform has exactly one kind of admin and
+> every authenticated admin may run every admin function. `ContentReviewPolicy`,
+> `ChecksContentReviewPermissions`, `admin_permissions` and `role_admin_permissions` no
+> longer exist, and no endpoint checks a `content_review.*` permission. Access control is
+> `auth:sanctum` + `role:admin`, and what an admin may *do* to a review is decided by the
+> review's own state. Seller and ownership authorization (`AuctionPolicy`) is untouched.
+> The rest of this section is kept as the record of what was originally designed.
+
 A new trait, `app/Policies/ContentReview/Concerns/ChecksContentReviewPermissions.php`, is a copy of `ChecksAuctionPermissions:11-21` that reads `config('content_review.admin_permissions')` while using **the same `users.auction_permissions` JSON column** — no new column, no new permission system, no migration.
 
 ```php
@@ -1342,6 +1351,15 @@ detail lives in `AI_CONTENT_REVIEW_RUNBOOK.md`.
 
 Production defaults after Batch 9 are unchanged from Batch 1: `CONTENT_REVIEW_ENABLED=false`,
 seeded `mode=manual`, seeded `auto_reject_categories=[]`.
+
+**Post-Batch-9 correction — the permission model.** §22 designed ten fine-grained
+`content_review.*` permissions on the assumption of multiple admin roles. The platform has
+one kind of admin, so that whole layer was deleted after Batch 9: no `ContentReviewPolicy`,
+no `ChecksContentReviewPermissions`, no permission config, and no `Gate::authorize` in any
+content review controller. Access control is `auth:sanctum` + `role:admin`;
+`available_actions` and every refusal are decided by domain state alone. The pre-existing
+auction permission layer and all seller ownership rules are unchanged. See §22's superseding
+note and `AI_CONTENT_REVIEW_RUNBOOK.md` §12.
 
 ### Batch 1 — Contracts, enums, config, permissions *(no DB, no behaviour)*
 

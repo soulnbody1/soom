@@ -30,7 +30,6 @@ return [
         'subject_not_reviewable' => 'This content is not in a reviewable state.',
         'content_changed' => 'The content changed after this review started.',
         'unknown_error' => 'The automated review failed for an unexpected reason.',
-        'content_review_override_not_allowed' => 'Overriding the automated recommendation requires a dedicated permission.',
         'review_not_cancellable' => 'Only a queued or running review can be cancelled.',
         'review_already_decided' => 'This review has already been decided.',
         'subject_type_not_supported' => 'This content type is not supported by the review system.',

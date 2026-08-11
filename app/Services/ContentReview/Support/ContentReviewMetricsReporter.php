@@ -27,11 +27,11 @@ final class ContentReviewMetricsReporter
         private readonly ContentReviewWorkerHeartbeat $heartbeat,
     ) {}
 
-    public function report(ReviewableSubjectType $type, MetricsRange $range, bool $includeCosts = false): array
+    public function report(ReviewableSubjectType $type, MetricsRange $range): array
     {
         $aggregates = $this->aggregates($range);
 
-        $report = [
+        return [
             'range' => $range->toArray(),
             'generated_at' => Carbon::now()->toIso8601String(),
             'volume' => $aggregates['volume'],
@@ -45,15 +45,10 @@ final class ContentReviewMetricsReporter
             'rates' => $aggregates['rates'],
             'tokens' => $aggregates['tokens'],
             'queue' => $this->queue(),
-            'health' => $this->health->report($type, $includeCosts),
+            'health' => $this->health->report($type),
             'alerts' => $this->alerts->states($type),
+            'cost' => $this->cost($type, $aggregates),
         ];
-
-        if ($includeCosts) {
-            $report['cost'] = $this->cost($type, $aggregates);
-        }
-
-        return $report;
     }
 
     private function aggregates(MetricsRange $range): array

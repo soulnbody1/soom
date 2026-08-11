@@ -49,23 +49,10 @@ final class ContentReviewMetricsApiTest extends TestCase
         app(ContentReviewAlertMonitor::class)->reset();
     }
 
-    public function test_the_endpoint_needs_its_own_permission(): void
+    public function test_any_authenticated_admin_reaches_the_endpoint(): void
     {
-        $this->actingAs($this->admin(['content_review.view']), 'sanctum')
-            ->getJson(self::PATH)
-            ->assertForbidden()
-            ->assertJsonPath('code', 'forbidden');
-
-        $this->actingAs($this->admin(['content_review.metrics.view']), 'sanctum')
-            ->getJson(self::PATH)
-            ->assertOk();
-    }
-
-    public function test_the_default_admin_role_does_not_inherit_the_permission(): void
-    {
-        $this->assertNotContains('content_review.metrics.view', (array) config('content_review.role_admin_permissions'));
-
-        $this->actingAs($this->admin(), 'sanctum')->getJson(self::PATH)->assertForbidden();
+        $this->actingAs($this->admin(), 'sanctum')->getJson(self::PATH)->assertOk();
+        $this->actingAs($this->admin(['auction.review']), 'sanctum')->getJson(self::PATH)->assertOk();
     }
 
     public function test_a_seller_can_never_reach_the_endpoint(): void
@@ -200,14 +187,15 @@ final class ContentReviewMetricsApiTest extends TestCase
         $this->assertSame(1, $data['cost']['daily']['unpriced_reviews']);
     }
 
-    public function test_the_cost_block_is_hidden_without_the_cost_permission(): void
+    public function test_every_admin_receives_the_cost_and_budget_blocks(): void
     {
         $this->seedReviews([['status' => ContentReviewStatus::Completed, 'cost_micros' => 1200]]);
 
-        $data = $this->metrics($this->admin(['content_review.metrics.view', 'content_review.view']));
+        $data = $this->metrics($this->admin());
 
-        $this->assertArrayNotHasKey('cost', $data);
-        $this->assertArrayNotHasKey('budget', $data['health']);
+        $this->assertArrayHasKey('cost', $data);
+        $this->assertArrayHasKey('budget', $data['health']);
+        $this->assertSame(1200, $data['cost']['range_cost_micros']);
     }
 
     public function test_the_image_cache_hit_ratio_is_reported(): void
@@ -263,12 +251,12 @@ final class ContentReviewMetricsApiTest extends TestCase
     {
         config()->set('content_review.metrics.max_range_days', 30);
 
-        $this->actingAs($this->admin(['content_review.metrics.view']), 'sanctum')
+        $this->actingAs($this->admin(), 'sanctum')
             ->getJson(self::PATH.'?date_from='.now()->subDays(5)->toDateString().'&date_to='.now()->toDateString())
             ->assertOk()
             ->assertJsonPath('data.range.key', 'custom');
 
-        $this->actingAs($this->admin(['content_review.metrics.view']), 'sanctum')
+        $this->actingAs($this->admin(), 'sanctum')
             ->getJson(self::PATH.'?date_from='.now()->subDays(400)->toDateString().'&date_to='.now()->toDateString())
             ->assertStatus(422);
     }
@@ -302,7 +290,7 @@ final class ContentReviewMetricsApiTest extends TestCase
 
     private function metrics(?object $user = null, array $query = []): array
     {
-        $user ??= $this->admin(['content_review.metrics.view', 'content_review.costs.view']);
+        $user ??= $this->admin();
         $path = self::PATH.($query === [] ? '' : '?'.http_build_query($query));
 
         return $this->actingAs($user, 'sanctum')->getJson($path)->assertOk()->json('data');

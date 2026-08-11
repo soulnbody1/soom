@@ -94,13 +94,16 @@ php artisan content-review:reconcile     # dry run by default
 
 ## 4. Health checks
 
-Three read-only surfaces, all admin-gated:
+Three read-only surfaces. **Access is authentication, not permission**: there is one kind
+of admin, and every authenticated admin sees every part of the content review surface —
+readings, costs, technical detail, settings, policies and metrics alike. Sellers and
+ordinary users reach none of it, and a guest is rejected.
 
-| Surface | Permission | Use |
-|---|---|---|
-| `GET /api/admin/content-review/health` | `content_review.view` (budget needs `content_review.costs.view`) | Live provider, circuit, queue, budget. |
-| `GET /api/admin/content-review/metrics` | `content_review.metrics.view` (cost needs `content_review.costs.view`) | Aggregates over `today` / `7d` / `30d` or `date_from`+`date_to`. |
-| Dashboard → Auction settings → Metrics | same | The same numbers, rendered. |
+| Surface | Use |
+|---|---|
+| `GET /api/admin/content-review/health` | Live provider, circuit, queue, budget. |
+| `GET /api/admin/content-review/metrics` | Aggregates over `today` / `7d` / `30d` or `date_from`+`date_to`. |
+| Dashboard → Auction settings → Metrics | The same numbers, rendered. |
 
 ### How to tell what is wrong
 
@@ -318,7 +321,35 @@ test and staging environments only.
 
 ---
 
-## 12. What is never exposed
+## 12. Authorization model
+
+There is **one kind of admin**. The content review subsystem defines no permission of its
+own: every admin endpoint is protected by `auth:sanctum` plus the `role:admin` middleware,
+and nothing beyond that. An authenticated admin may read every review, run, retry, cancel,
+force manual, confirm, override, publish settings and policies, probe the provider, and
+read costs, technical detail and metrics.
+
+What still restricts an action is the **state of the domain**, never the identity of the
+caller:
+
+- `available_actions` is computed from the review alone — retry only for a failed active
+  attempt, cancel only while queued or running, confirm and override only while a completed
+  assisted recommendation is still undecided.
+- An override still requires a written reason.
+- A review that is already decided, stale, superseded, or whose auction has left
+  `pending_review` is refused with a stable error code.
+- The `/decide` route still refuses a shadow review.
+
+Seller-side authorization is untouched: a seller may still only update, reopen or submit
+their own auction, and no seller can reach an admin endpoint.
+
+`POST /api/admin/content-review/provider/test` remains rate limited
+(`CONTENT_REVIEW_PROVIDER_TEST_PER_MINUTE` / `_PER_HOUR`), because the limit protects the
+provider account, not the operator.
+
+---
+
+## 13. What is never exposed
 
 Checked by `ContentReviewPermissionTest`, `LogRedactionTest` and `ContentReviewMetricsApiTest`,
 each of which plants a canary and asserts it never appears:

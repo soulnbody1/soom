@@ -8,7 +8,6 @@ use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContentReview\PublishContentReviewSettingsRequest;
 use App\Http\Resources\ContentReview\ContentReviewSettingsResource;
-use App\Models\ContentReview\ContentReview;
 use App\Repositories\ContentReview\ContentReviewSettingRepository;
 use App\Services\ContentReview\Actions\PublishContentReviewSettingsAction;
 use App\Services\ContentReview\Support\ReviewModeResolver;
@@ -16,7 +15,6 @@ use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Gate;
 
 final class ContentReviewSettingsController extends Controller
 {
@@ -29,8 +27,6 @@ final class ContentReviewSettingsController extends Controller
         ContentReviewSettingRepository $settings,
         ReviewModeResolver $modes
     ): JsonResponse {
-        Gate::authorize('manageSettings', ContentReview::class);
-
         $scope = $this->scope($request);
         $active = $settings->active($scope);
         $active?->loadMissing('creator:id,name');
@@ -58,8 +54,6 @@ final class ContentReviewSettingsController extends Controller
 
     public function index(Request $request, ContentReviewSettingRepository $settings): JsonResponse
     {
-        Gate::authorize('manageSettings', ContentReview::class);
-
         return $this->sendResponse(
             ContentReviewSettingsResource::collection($settings->all($this->scope($request))),
             __('content_review.messages.reviews_fetched')
@@ -70,8 +64,6 @@ final class ContentReviewSettingsController extends Controller
         PublishContentReviewSettingsRequest $request,
         PublishContentReviewSettingsAction $action
     ): JsonResponse {
-        Gate::authorize('manageSettings', ContentReview::class);
-
         $published = $action->execute($request->scope(), $request->settingsPayload(), Auth::id());
         $published->loadMissing('creator:id,name');
 

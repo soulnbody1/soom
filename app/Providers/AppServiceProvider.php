@@ -9,7 +9,6 @@ use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
-use App\Models\ContentReview\ContentReview;
 use App\Policies\Auction\AuctionDashboardPolicy;
 use App\Policies\Auction\AuctionDepositPolicy;
 use App\Policies\Auction\AuctionDisputePolicy;
@@ -18,7 +17,6 @@ use App\Policies\Auction\AuctionRefundPolicy;
 use App\Policies\Auction\AuctionSettlementPolicy;
 use App\Policies\Auction\PaymentSubmissionPolicy;
 use App\Policies\Auction\SellerPayoutPolicy;
-use App\Policies\ContentReview\ContentReviewPolicy;
 use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
@@ -76,7 +74,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(RefundTransaction::class, AuctionRefundPolicy::class);
         Gate::policy(AuctionDispute::class, AuctionDisputePolicy::class);
         Gate::policy(AuctionSellerPayout::class, SellerPayoutPolicy::class);
-        Gate::policy(ContentReview::class, ContentReviewPolicy::class);
         Gate::define('auction.dashboard.view', [AuctionDashboardPolicy::class, 'view']);
 
         $this->configureBidRateLimiting();

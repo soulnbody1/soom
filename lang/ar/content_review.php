@@ -30,7 +30,6 @@ return [
         'subject_not_reviewable' => 'هذا المحتوى ليس في حالة قابلة للمراجعة.',
         'content_changed' => 'تم تغيير المحتوى بعد بدء هذه المراجعة.',
         'unknown_error' => 'فشلت المراجعة الآلية لسبب غير متوقع.',
-        'content_review_override_not_allowed' => 'تجاوز توصية الذكاء الاصطناعي يتطلب صلاحية مخصصة.',
         'review_not_cancellable' => 'يمكن إلغاء المراجعة في حالة الانتظار أو التنفيذ فقط.',
         'review_already_decided' => 'تم اتخاذ القرار في هذه المراجعة بالفعل.',
         'subject_type_not_supported' => 'نوع المحتوى هذا غير مدعوم في نظام المراجعة.',

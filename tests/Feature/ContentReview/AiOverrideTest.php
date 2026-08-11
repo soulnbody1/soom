@@ -81,16 +81,15 @@ final class AiOverrideTest extends TestCase
         $this->assertSame('reject', $decision->ai_recommendation?->value);
     }
 
-    public function test_an_override_without_the_dedicated_permission_is_refused(): void
+    public function test_any_admin_may_override_when_a_reason_is_given(): void
     {
         [$review, $auction] = $this->assistedReview();
 
-        $this->decide($this->decider(), $review, 'reject', 'No.')
-            ->assertStatus(403)
-            ->assertJsonPath('code', 'content_review_override_not_allowed');
+        $this->decide($this->admin(), $review, 'reject', 'The images do not match.')->assertOk();
 
-        $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
-        $this->assertSame(0, $this->humanDecisionCount());
+        $this->assertSame(AuctionStatus::Rejected, $auction->refresh()->status);
+        $this->assertSame(1, $this->humanDecisionCount());
+        $this->assertSame(DecisionRelation::Overridden, $this->humanDecision($review)->relation_to_recommendation);
     }
 
     public function test_an_override_without_a_reason_is_refused(): void
@@ -125,17 +124,21 @@ final class AiOverrideTest extends TestCase
             ->assertJsonValidationErrors('reason');
     }
 
-    public function test_the_manual_endpoint_cannot_bypass_the_override_permission(): void
+    /**
+     * The older route enforces the reason one layer earlier, in validation, so an
+     * override still cannot land without one. Nothing is recorded either way.
+     */
+    public function test_the_manual_endpoint_cannot_bypass_the_mandatory_override_reason(): void
     {
         [$review, $auction] = $this->assistedReview();
 
         $this->actingAs($this->decider(), 'sanctum')
             ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
                 'action' => 'reject',
-                'reason' => 'Rejected through the older route.',
+                'reason' => '   ',
             ])
-            ->assertStatus(403)
-            ->assertJsonPath('code', 'content_review_override_not_allowed');
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('reason');
 
         $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
         $this->assertSame(0, $this->humanDecisionCount());
@@ -147,7 +150,7 @@ final class AiOverrideTest extends TestCase
         );
     }
 
-    public function test_the_manual_endpoint_records_an_override_when_it_is_permitted(): void
+    public function test_the_manual_endpoint_records_an_override_with_a_reason(): void
     {
         [$review, $auction] = $this->assistedReview();
         $admin = $this->overrider();
@@ -253,12 +256,12 @@ final class AiOverrideTest extends TestCase
 
     private function decider(): User
     {
-        return $this->auctionReviewer(['content_review.view']);
+        return $this->auctionReviewer();
     }
 
     private function overrider(): User
     {
-        return $this->auctionReviewer(['content_review.view', 'content_review.override']);
+        return $this->auctionReviewer();
     }
 
     private function humanDecisionCount(): int

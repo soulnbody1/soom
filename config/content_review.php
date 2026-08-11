@@ -105,22 +105,4 @@ return [
         'limit' => (int) env('CONTENT_REVIEW_RECONCILE_LIMIT', 200),
     ],
 
-    'admin_permissions' => [
-        'content_review.view',
-        'content_review.run',
-        'content_review.cancel',
-        'content_review.force_manual',
-        'content_review.override',
-        'content_review.settings.manage',
-        'content_review.policy.manage',
-        'content_review.costs.view',
-        'content_review.technical.view',
-        'content_review.metrics.view',
-    ],
-
-    'role_admin_permissions' => [
-        'content_review.view',
-        'content_review.run',
-        'content_review.cancel',
-    ],
 ];

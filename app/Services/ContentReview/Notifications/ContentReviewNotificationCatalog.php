@@ -19,7 +19,7 @@ final class ContentReviewNotificationCatalog
     public const SCOPE_ALERT = 'alert';
 
     /**
-     * admin: delivered to employees holding content_review.view.
+     * admin: delivered to every admin.
      * scope: the rate limiting key — per (event, subject), per event globally, or per
      * (event, alert code) for the shared recovery event.
      *

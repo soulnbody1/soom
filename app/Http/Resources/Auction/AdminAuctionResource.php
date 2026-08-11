@@ -11,7 +11,6 @@ use App\Http\Resources\ContentReview\ContentReviewResource;
 use App\Models\Auction\AuctionConfigurationSnapshot;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
-use App\Models\ContentReview\ContentReview;
 use App\Services\ContentReview\Support\ContentReviewActionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -146,9 +145,7 @@ final class AdminAuctionResource extends JsonResource
             }
         }
 
-        if ($user && Gate::forUser($user)->allows('viewAny', ContentReview::class)) {
-            $data['ai_review'] = $this->aiReviewBlock($request);
-        }
+        $data['ai_review'] = $this->aiReviewBlock($request);
 
         if ($canResolveDisputes) {
             $data['disputes'] = $this->whenLoaded('disputes', fn () => $this->disputes->map(fn ($dispute): array => [
@@ -175,7 +172,7 @@ final class AdminAuctionResource extends JsonResource
             'mode' => $mode->value,
             'mode_label' => __('content_review.modes.'.$mode->value),
             'current' => $review === null ? null : (new ContentReviewResource($review))->toArray($request),
-            'available_actions' => app(ContentReviewActionResolver::class)->for($request->user(), $review, $mode),
+            'available_actions' => app(ContentReviewActionResolver::class)->for($review, $mode),
         ];
     }
 

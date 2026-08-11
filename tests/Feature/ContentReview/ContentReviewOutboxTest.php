@@ -122,25 +122,22 @@ final class ContentReviewOutboxTest extends TestCase
         $this->assertSame($auction->public_id, $message->payload['subject_reference']);
     }
 
-    public function test_only_admins_holding_the_view_permission_receive_the_alert(): void
+    public function test_every_admin_receives_the_alert_and_no_ordinary_user_does(): void
     {
-        config()->set('content_review.role_admin_permissions', []);
-
-        $permitted = $this->admin(['content_review.view']);
-        $otherAdmin = $this->admin(['auction.review']);
+        $firstAdmin = $this->admin();
+        $secondAdmin = $this->admin(['auction.review']);
         $seller = $this->seller();
 
         $this->escalatedReview();
         app(DispatchOutboxMessagesAction::class)->execute();
 
-        $this->assertSame(1, $this->alertCount($permitted));
-        $this->assertSame(0, $this->alertCount($otherAdmin));
+        $this->assertSame(1, $this->alertCount($firstAdmin));
+        $this->assertSame(1, $this->alertCount($secondAdmin));
         $this->assertSame(0, $this->alertCount($seller));
     }
 
     public function test_replaying_the_outbox_never_duplicates_an_admin_alert(): void
     {
-        config()->set('content_review.role_admin_permissions', ['content_review.view']);
         $admin = $this->admin();
 
         $this->escalatedReview();
@@ -164,7 +161,6 @@ final class ContentReviewOutboxTest extends TestCase
 
     public function test_the_per_subject_cooldown_suppresses_a_repeated_alert_for_the_same_subject(): void
     {
-        config()->set('content_review.role_admin_permissions', ['content_review.view']);
         $admin = $this->admin();
 
         $review = $this->escalatedReview();
@@ -184,7 +180,6 @@ final class ContentReviewOutboxTest extends TestCase
 
     public function test_an_operational_alert_is_rate_limited_globally(): void
     {
-        config()->set('content_review.role_admin_permissions', ['content_review.view']);
         $admin = $this->admin();
 
         $this->contentReviewMessage('content_review.budget_exhausted', ['error_code' => 'budget_exhausted']);
