@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\ContentReview\Contracts;
 
+use App\Domain\ContentReview\Enums\ContentReviewDecisionType;
 use App\Domain\ContentReview\Enums\ContentReviewOutcome;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\DTO\ContentReview\AutomationContext;
 use App\DTO\ContentReview\ReviewContentDTO;
+use App\Models\User;
 
 interface ReviewSubjectAdapter
 {
@@ -24,4 +26,13 @@ interface ReviewSubjectAdapter
     public function automationContext(int $subjectId): AutomationContext;
 
     public function applyDecision(int $subjectId, ContentReviewOutcome $outcome, string $reason): bool;
+
+    public function applyHumanDecision(
+        int $subjectId,
+        ContentReviewDecisionType $decision,
+        int $adminId,
+        string $reason,
+    ): bool;
+
+    public function allowsHumanDecision(User $user, int $subjectId, ContentReviewDecisionType $decision): bool;
 }

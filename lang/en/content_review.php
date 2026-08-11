@@ -9,6 +9,8 @@ return [
         'policy_published' => 'Content review policy published.',
         'provider_tested' => 'Provider connectivity checked.',
         'review_fetched' => 'Content review fetched.',
+        'recommendation_confirmed' => 'The automated recommendation was confirmed.',
+        'recommendation_overridden' => 'A decision was taken against the automated recommendation.',
         'reviews_fetched' => 'Content reviews fetched.',
         'metrics_fetched' => 'Content review metrics fetched.',
         'no_review' => 'No automated review exists for this content.',
@@ -44,6 +46,13 @@ return [
         'provider_not_configured' => 'No review service is configured.',
         'version_conflict' => 'Another version was published at the same time. Reload and try again.',
         'subject_not_found' => 'The content to review was not found.',
+        'review_not_ready' => 'This review has not finished, so its recommendation cannot be acted on yet.',
+        'review_superseded' => 'This review was replaced or cancelled, so its recommendation can no longer be used.',
+        'recommendation_missing' => 'This review carries no approve or reject recommendation to act on.',
+        'override_reason_required' => 'A reason is required to decide against the automated recommendation.',
+        'review_not_assisted' => 'The mode this review ran in does not support confirming or overriding a recommendation.',
+        'decision_conflict' => 'The state changed while the decision was being taken. Reload and try again.',
+        'decision_not_permitted' => 'You are not allowed to take this decision on this content.',
     ],
 
     'subject_types' => [

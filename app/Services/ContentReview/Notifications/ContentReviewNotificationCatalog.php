@@ -26,6 +26,8 @@ final class ContentReviewNotificationCatalog
         'content_review.escalated' => ['admin' => true, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
         'content_review.auto_decided' => ['admin' => true, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
         'content_review.stale' => ['admin' => true, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.confirmed' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
+        'content_review.overridden' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
         'content_review.failed' => ['admin' => false, 'subject_scoped' => true, 'screen' => self::SCREEN_REVIEW_QUEUE],
         'content_review.provider_unavailable' => ['admin' => true, 'subject_scoped' => false, 'screen' => self::SCREEN_REVIEW_HEALTH],
         'content_review.circuit_open' => ['admin' => true, 'subject_scoped' => false, 'screen' => self::SCREEN_REVIEW_HEALTH],

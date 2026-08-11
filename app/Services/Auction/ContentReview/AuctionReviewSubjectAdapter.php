@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\Services\Auction\ContentReview;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Domain\ContentReview\Enums\ContentReviewDecisionType;
 use App\Domain\ContentReview\Enums\ContentReviewOutcome;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\DTO\ContentReview\AutomationContext;
 use App\DTO\ContentReview\ReviewContentDTO;
 use App\Models\Auction\Auction;
+use App\Models\User;
 use App\Services\Auction\Actions\ReviewAuctionAction;
 use App\Services\ContentReview\Contracts\ReviewSubjectAdapter;
 use App\Services\ContentReview\Support\ContentSanitizer;
 use App\Services\ContentReview\Support\ReviewModeResolver;
+use Illuminate\Support\Facades\Gate;
 
 final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
 {
@@ -140,6 +143,44 @@ final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
         $this->review->rejectLocked($subjectId, null, $reason, 'ai');
 
         return true;
+    }
+
+    public function applyHumanDecision(
+        int $subjectId,
+        ContentReviewDecisionType $decision,
+        int $adminId,
+        string $reason,
+    ): bool {
+        if (! $this->isReviewable($subjectId)) {
+            return false;
+        }
+
+        if ($decision === ContentReviewDecisionType::Approved) {
+            $this->review->approveLocked($subjectId, $adminId, $reason, 'admin');
+
+            return true;
+        }
+
+        if ($decision === ContentReviewDecisionType::Rejected) {
+            $this->review->rejectLocked($subjectId, $adminId, $reason, 'admin');
+
+            return true;
+        }
+
+        return false;
+    }
+
+    public function allowsHumanDecision(User $user, int $subjectId, ContentReviewDecisionType $decision): bool
+    {
+        $auction = Auction::query()->find($subjectId);
+
+        if ($auction === null) {
+            return false;
+        }
+
+        $ability = $decision === ContentReviewDecisionType::Approved ? 'approve' : 'review';
+
+        return Gate::forUser($user)->allows($ability, $auction);
     }
 
     private function textBlocks(Auction $auction): array

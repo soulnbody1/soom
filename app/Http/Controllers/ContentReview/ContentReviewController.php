@@ -6,9 +6,11 @@ namespace App\Http\Controllers\ContentReview;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContentReview\ContentReviewHistoryRequest;
+use App\Http\Requests\ContentReview\DecideContentReviewRequest;
 use App\Http\Resources\ContentReview\ContentReviewResource;
 use App\Models\ContentReview\ContentReview;
 use App\Repositories\ContentReview\ContentReviewRepository;
+use App\Services\ContentReview\Actions\ApplyContentReviewDecisionAction;
 use App\Services\ContentReview\Actions\CancelContentReviewAction;
 use App\Services\ContentReview\Actions\ForceManualReviewAction;
 use App\Services\ContentReview\Actions\RetryContentReviewAction;
@@ -106,6 +108,34 @@ final class ContentReviewController extends Controller
         return $this->sendResponse(
             new ContentReviewResource($action->execute($contentReview, Auth::id())),
             __('content_review.messages.review_cancelled')
+        );
+    }
+
+    public function decide(
+        DecideContentReviewRequest $request,
+        ContentReview $contentReview,
+        ApplyContentReviewDecisionAction $action,
+        ContentReviewRepository $reviews
+    ): JsonResponse {
+        Gate::authorize('view', $contentReview);
+
+        $result = $action->applyHumanDecision(
+            $contentReview->subject_type,
+            (int) $contentReview->subject_id,
+            $request->decision(),
+            $request->user(),
+            $request->reason(),
+            (string) $contentReview->public_id,
+        );
+
+        $review = $reviews->findByPublicId((string) $contentReview->public_id);
+        $review?->load('decisions.decidedBy:id,name');
+
+        return $this->sendResponse(
+            $review === null ? null : new ContentReviewResource($review),
+            __($result->overrodeRecommendation()
+                ? 'content_review.messages.recommendation_overridden'
+                : 'content_review.messages.recommendation_confirmed')
         );
     }
 

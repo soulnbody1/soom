@@ -82,6 +82,11 @@ final class ContentReviewRepository
         return ContentReview::where('public_id', $publicId)->lockForUpdate()->first();
     }
 
+    public function lockActiveForSubject(ReviewableSubjectType $type, int $subjectId): ?ContentReview
+    {
+        return ContentReview::forSubject($type, $subjectId)->active()->lockForUpdate()->first();
+    }
+
     public function leaseForProcessing(ContentReview $review, string $worker, int $leaseSeconds): bool
     {
         $now = Carbon::now();

@@ -171,7 +171,19 @@ final class ContentReviewPermissionTest extends TestCase
         $this->assertSame(['run'], $this->availableActions($runner, $review));
 
         $full = $this->fullyPermittedAdmin();
-        $this->assertSame(['run', 'force_manual', 'override'], $this->availableActions($full, $review));
+        $this->assertSame(['run', 'force_manual'], $this->availableActions($full, $review));
+    }
+
+    public function test_confirm_and_override_appear_only_on_an_assisted_recommendation(): void
+    {
+        $review = $this->completedReview(ReviewMode::AiAssisted);
+        $this->withoutRoleFallback();
+
+        $withoutOverride = $this->admin(['content_review.view', 'content_review.force_manual']);
+        $this->assertSame(['force_manual', 'confirm'], $this->availableActions($withoutOverride, $review));
+
+        $full = $this->fullyPermittedAdmin();
+        $this->assertSame(['run', 'force_manual', 'confirm', 'override'], $this->availableActions($full, $review));
     }
 
     public function test_the_api_never_returns_the_raw_provider_response_or_the_api_key(): void
@@ -233,10 +245,10 @@ final class ContentReviewPermissionTest extends TestCase
             ->json('data.available_actions');
     }
 
-    private function completedReview(): ContentReview
+    private function completedReview(ReviewMode $mode = ReviewMode::Shadow): ContentReview
     {
         $this->publishPolicy();
-        $this->publishSettings(ReviewMode::Shadow);
+        $this->publishSettings($mode);
         $this->submitForReview();
 
         $this->fakeProvider()->respondWith($this->cleanResultPayload());

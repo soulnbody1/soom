@@ -43,6 +43,13 @@ final class ContentReviewDecisionRepository
         ]);
     }
 
+    public function hasHumanDecision(int $reviewId): bool
+    {
+        return ContentReviewDecision::where('review_id', $reviewId)
+            ->where('decided_by_type', DecisionActorType::Admin->value)
+            ->exists();
+    }
+
     public function forSubject(ReviewableSubjectType $subjectType, int $subjectId): Collection
     {
         return ContentReviewDecision::with('decidedBy:id,name')

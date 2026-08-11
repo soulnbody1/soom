@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Services\ContentReview\Support;
 
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
+use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Models\ContentReview\ContentReview;
+use App\Models\ContentReview\ContentReviewDecision;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 
@@ -19,6 +21,8 @@ final class ContentReviewActionResolver
     public const CANCEL = 'cancel';
 
     public const FORCE_MANUAL = 'force_manual';
+
+    public const CONFIRM = 'confirm';
 
     public const OVERRIDE = 'override';
 
@@ -44,6 +48,26 @@ final class ContentReviewActionResolver
     public function isCancellable(ContentReview $review): bool
     {
         return $review->status->isPending() && $review->decided_at === null;
+    }
+
+    public function hasHumanDecision(ContentReview $review): bool
+    {
+        if (! $review->relationLoaded('decisions')) {
+            return false;
+        }
+
+        return $review->decisions->contains(
+            static fn (ContentReviewDecision $decision): bool => $decision->decided_by_type === DecisionActorType::Admin
+        );
+    }
+
+    public function awaitsHumanDecision(ContentReview $review): bool
+    {
+        return $review->status === ContentReviewStatus::Completed
+            && $review->recommendation !== null
+            && $review->mode->isAtLeastAsPermissiveAs(ReviewMode::AiAssisted)
+            && ! $this->isStale($review)
+            && ! $this->hasHumanDecision($review);
     }
 
     /**
@@ -74,8 +98,12 @@ final class ContentReviewActionResolver
             $actions[] = self::FORCE_MANUAL;
         }
 
-        if ($gate->allows('override', ContentReview::class)) {
-            $actions[] = self::OVERRIDE;
+        if ($review !== null && $this->awaitsHumanDecision($review)) {
+            $actions[] = self::CONFIRM;
+
+            if ($gate->allows('override', ContentReview::class)) {
+                $actions[] = self::OVERRIDE;
+            }
         }
 
         return $actions;

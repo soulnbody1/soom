@@ -22,6 +22,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/content-reviews
     Route::get('/{contentReview}', [ContentReviewController::class, 'show']);
     Route::post('/{contentReview}/retry', [ContentReviewController::class, 'retry']);
     Route::post('/{contentReview}/cancel', [ContentReviewController::class, 'cancel']);
+    Route::post('/{contentReview}/decide', [ContentReviewController::class, 'decide']);
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/content-review')->group(function () {

@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Auction;
 
 use App\Domain\Auction\Enums\AuctionParticipantStatus;
 use App\Domain\Auction\Enums\PaymentPurpose;
+use App\Domain\ContentReview\Enums\ContentReviewDecisionType;
+use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\DTO\Auction\CreateAuctionInputDTO;
 use App\DTO\Auction\UpdateDraftAuctionInputDTO;
 use App\Http\Controllers\Controller;
@@ -44,12 +46,12 @@ use App\Services\Auction\Actions\OpenAuctionDisputeAction;
 use App\Services\Auction\Actions\RegisterParticipantAction;
 use App\Services\Auction\Actions\ReopenRejectedAuctionAction;
 use App\Services\Auction\Actions\ResolveAuctionDisputeAction;
-use App\Services\Auction\Actions\ReviewAuctionAction;
 use App\Services\Auction\Actions\SubmitAuctionForReviewAction;
 use App\Services\Auction\Actions\SubmitPaymentSubmissionAction;
 use App\Services\Auction\Actions\UpdateDraftAuctionAction;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\ParticipationStateResolver;
+use App\Services\ContentReview\Actions\ApplyContentReviewDecisionAction;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -177,16 +179,25 @@ final class AuctionController extends Controller
         return $this->auctionResponse($action->execute($auction, Auth::id()), __('auction.messages.auction_submitted'));
     }
 
-    public function review(ReviewAuctionRequest $request, Auction $auction, ReviewAuctionAction $action): JsonResponse
-    {
+    public function review(
+        ReviewAuctionRequest $request,
+        Auction $auction,
+        ApplyContentReviewDecisionAction $action
+    ): JsonResponse {
         $data = $request->validated();
         Gate::authorize($data['action'] === 'approve' ? 'approve' : 'review', $auction);
 
-        $reviewed = $data['action'] === 'approve'
-            ? $action->approve($auction, Auth::id(), $data['reason'])
-            : $action->reject($auction, Auth::id(), $data['reason']);
+        $action->applyHumanDecision(
+            ReviewableSubjectType::Auction,
+            (int) $auction->id,
+            $data['action'] === 'approve'
+                ? ContentReviewDecisionType::Approved
+                : ContentReviewDecisionType::Rejected,
+            $request->user(),
+            (string) $data['reason'],
+        );
 
-        return $this->auctionResponse($reviewed, __('auction.messages.auction_reviewed'));
+        return $this->auctionResponse($auction->refresh(), __('auction.messages.auction_reviewed'));
     }
 
     public function cancel(CancelAuctionRequest $request, Auction $auction, CancelAuctionAction $action): JsonResponse

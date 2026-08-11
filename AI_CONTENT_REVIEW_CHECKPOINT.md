@@ -1,6 +1,6 @@
 # AI Content Review — Checkpoint
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 Backend branch: `soom-auctions` · Dashboard branch: `main` · No commit, no push performed.
 
 ## Status
@@ -13,13 +13,13 @@ Backend branch: `soom-auctions` · Dashboard branch: `main` · No commit, no pus
 | 3 — analysis core, providers | Done |
 | 4 — adapter, actions, job, sweeper, guards | Done |
 | 5 — admin API, permissions, outbox router | Done |
-| 6 — dashboard (read-only + operational UI) | **Done in this session** |
-| 7 — `ai_assisted` + override guard | **Not started — next** |
-| 8 — `ai_automatic` + image cache | Not started |
+| 6 — dashboard (read-only + operational UI) | Done |
+| 7 — `ai_assisted` confirm / override | **Done in this session** |
+| 8 — `ai_automatic` + image cache | **Not started — next** |
 | 9 — observability, docs, rollout | Not started |
 
-**The backend was not touched in this session.** `git status` in `C:\Users\pc\Desktop\SB\soom`
-is clean; every change lives in `C:\Users\pc\Desktop\SB\soom-dashboard`.
+Batch 7 touched **both** repositories. Batches 1–6 were not re-implemented and nothing was
+refactored beyond what the new contract required.
 
 ---
 
@@ -208,6 +208,7 @@ POST   /api/admin/content-review/provider/test                           content
 - **`content_review.confirm` was not added.** Confirming a recommendation is Batch 7 and is
   authorised by the existing `auction.review` / `auction.approve`; adding the permission now would be
   dead config. `content_review.technical.view` **was** added (gates provider/model/versions/duration).
+  *(Batch 7 kept this decision.)*
 
 ### Redaction boundary
 The API returns provider name, model, policy/settings version, duration (behind
@@ -377,29 +378,189 @@ the same 26 pre-existing data-leak failures as the `HEAD` baseline).
 
 ---
 
-## NEXT TASK (start of Batch 7)
+## Batch 7 — what shipped
 
-Batch 7 is **backend + dashboard together** and was deliberately not started: it does not fit in the
-remaining context of this session, and the standing instruction is not to leave a batch half done.
+### Backend — new files
+```
+app/DTO/ContentReview/HumanDecisionResult.php
+app/Http/Requests/ContentReview/DecideContentReviewRequest.php
+app/Services/ContentReview/Support/ContentReviewOverrideGuard.php
+app/Services/ContentReview/Support/ContentReviewDecisionRecorder.php
+tests/Feature/ContentReview/AiAssistedFlowTest.php                       (12)
+tests/Feature/ContentReview/AiOverrideTest.php                           (12)
+tests/Feature/Auction/ContentReviewDecisionConcurrencyMysqlTest.php       (4, MySQL only)
+```
 
-Scope, unchanged:
+### Backend — modified files
+```
+app/Services/ContentReview/Actions/ApplyContentReviewDecisionAction.php  (applyHumanDecision)
+app/Services/ContentReview/Contracts/ReviewSubjectAdapter.php            (+2 methods)
+app/Services/Auction/ContentReview/AuctionReviewSubjectAdapter.php       (+2 methods)
+app/Services/ContentReview/Support/ContentReviewActionResolver.php       (confirm, awaitsHumanDecision)
+app/Services/ContentReview/Notifications/ContentReviewNotificationCatalog.php  (2 events)
+app/Repositories/ContentReview/ContentReviewRepository.php               (lockActiveForSubject)
+app/Repositories/ContentReview/ContentReviewDecisionRepository.php       (hasHumanDecision)
+app/Http/Controllers/ContentReview/ContentReviewController.php           (decide)
+app/Http/Controllers/Auction/AuctionController.php                       (review → one domain)
+routes/api/content_review.php                                            (POST …/decide)
+lang/{ar,en}/content_review.php                                          (7 error codes, 2 messages)
+tests/Feature/ContentReview/ContentReviewPermissionTest.php              (available_actions contract)
+```
 
-- Show the AI recommendation to the reviewer at decision time.
-- Confirm the recommendation, or decide against it.
-- `relation_to_recommendation` = `confirmed` | `overridden`; override reason mandatory.
-- Record the real admin (`decided_by_type = admin`, `decided_by_id` = the actual user).
-  Never fabricate a user for AI: `actor_type = ai`, `changed_by = null`,
-  `decided_by_type = ai`, `decided_by_id = null`.
-- A manual decision is final; a late AI result must not change the auction
-  (`ApplyContentReviewDecisionAction` already returns early on `decided_at !== null` — extend, do
-  not duplicate, that guard).
-- Audit + outbox + notifications, confirmation dialogs, conflict handling, permission checks.
-- Test the race between an admin decision and an arriving AI result.
+### The new endpoint
+```
+POST /api/admin/content-reviews/{contentReview}/decide
+     { "decision": "approve" | "reject", "reason"?: string (max 1000) }
+```
 
-Starting points already in place: `content_review.override` exists as a permission and is already
-surfaced in `available_actions`; `ContentReviewActions.tsx` filters it out with a comment marking it
-as Batch 7; `DecisionRelation` and `ContentReviewDecisionRecord` are fully typed on both sides.
-`content_review.confirm` was intentionally never added — confirming is authorised by the existing
-`auction.review` / `auction.approve`.
+### Key decisions
 
-**The overall task is NOT complete.** Batches 7–9 remain.
+- **There is exactly one place a human decision is applied.**
+  `ApplyContentReviewDecisionAction::applyHumanDecision()` serves both
+  `POST …/content-reviews/{id}/decide` **and** the pre-existing
+  `POST /api/admin/auctions/{auction}/review`. The older route can therefore no longer be used to
+  escape the override rule — proven by
+  `AiOverrideTest::test_the_manual_endpoint_cannot_bypass_the_override_permission`. This also
+  satisfies `ContentReviewArchitectureTest`'s "only the apply action opens a transaction" rule
+  without widening its allow-list.
+- **The auction domain is reached only through the adapter.** `ReviewSubjectAdapter` gained
+  `applyHumanDecision()` (delegates to `ReviewAuctionAction::approveLocked/rejectLocked` with
+  `actorType = 'admin'` and the real admin id) and `allowsHumanDecision()` (runs the *subject's*
+  policy — `auction.approve` / `auction.review`). The content-review controller and action stay free
+  of every forbidden auction reference.
+- **`content_review.confirm` was still not added.** Confirming is authorised by the subject policy,
+  exactly as the manual route always was; a second permission would be dead config. Only
+  **override** carries its own permission, and it is absent from `role_admin_permissions`, so a
+  plain admin never inherits it.
+- **A human decision does not rewrite the AI's row.** The review keeps its `status`, `outcome`,
+  `recommendation`, `confidence`, `reason_code` and `decided_at` untouched; the human verdict lives
+  only in `content_review_decisions`. Proven by
+  `AiAssistedFlowTest::test_the_original_review_row_is_not_rewritten_by_a_human_decision`.
+- **"Already decided" is the existence of an admin decision row, not `decided_at`.** The AI pipeline
+  sets `decided_at` on *every* completed attempt (including an escalation), so using it as the human
+  guard would have refused exactly the escalated reviews a human must then decide.
+  `ContentReviewDecisionRepository::hasHumanDecision()` is checked inside the transaction, after the
+  review row lock — so two concurrent admins serialise on that lock and the loser gets
+  `409 review_already_decided`.
+- **Lock ordering is unchanged from Batch 4**: `content_reviews` → `auctions`. The human path locks
+  the review first (`lockActiveForSubject` / `lockByPublicId`), then the adapter locks the auction —
+  the same order the AI path uses, so the two can never deadlock against each other.
+- **Preconditions are evaluated inside the transaction, after the locks**, in this order:
+  superseded/inactive/cancelled → `review_superseded`; not `completed` → `review_not_ready`;
+  an admin decision already exists → `review_already_decided`; content hash moved →
+  `review_stale`. The `/decide` route additionally requires the frozen mode to be at least
+  `ai_assisted` (`review_not_assisted`) and an approve/reject recommendation
+  (`recommendation_missing`).
+- **Shadow mode records the relation but does not gate.** The true
+  `confirmed`/`overridden` relation is always stored — that agreement rate is what shadow mode
+  exists to measure — but the override *permission* and the mandatory reason are enforced only when
+  the review's frozen mode is `ai_assisted` or higher. `/decide` refuses a shadow review outright.
+- **`available_actions` no longer lies.** `override` used to be listed purely on the permission;
+  `confirm` and `override` are now both listed only while the attempt still awaits a human decision
+  (completed, has a recommendation, not stale, mode ≥ `ai_assisted`, no admin decision yet). The one
+  existing assertion that pinned the old behaviour was updated, and a new test pins the new one.
+- **New stable error codes follow the existing naming**, which drops the `content_review_` prefix
+  (the sole exception, `content_review_override_not_allowed`, is reused as-is):
+  `review_not_ready`, `review_superseded`, `recommendation_missing`, `override_reason_required`,
+  `review_not_assisted`, `decision_conflict`, `decision_not_permitted`. `review_stale`,
+  `review_already_decided` and `subject_not_reviewable` were reused, not duplicated.
+- **Two outbox events, no extra notification.** `content_review.confirmed` and
+  `content_review.overridden` are published on the existing `content_review.events` topic with
+  `admin => false`: the seller is already notified by the ordinary `auction.status_changed` flow, and
+  alerting every `content_review.view` holder on each decision would be noise. The outbox row plus
+  the decision row are the audit. Both are written inside the one decision transaction, so
+  idempotency follows from the same lock that makes the decision unique.
+- **Audit stores IDs and a snapshot, never bulk data.** The decision row carries
+  `ai_recommendation` + `ai_confidence` as they stood at decision time, the relation, the real
+  `decided_by_id`, and the reason. Findings are not copied — the review row already holds them and
+  is linked by `review_id`. No chain of thought, no raw provider response.
+
+### Dashboard — new files
+```
+src/app/dashboard/auctions/components/contentReview/ContentReviewDecisionActions.tsx
+src/app/dashboard/auctions/__tests__/ContentReviewDecisionActions.test.tsx          (20)
+src/app/dashboard/auctions/__tests__/AuctionReviewDialogRecommendation.test.tsx      (7)
+```
+
+### Dashboard — modified files
+```
+src/app/dashboard/auctions/lib/contentReviewTypes.ts        (confirm key, HumanDecision, 7 codes)
+src/app/dashboard/auctions/lib/errors.ts                    (codes + conflict set)
+src/app/dashboard/auctions/hooks/useContentReviewMutations.ts (useDecideContentReview)
+src/app/dashboard/auctions/components/contentReview/AiReviewPanel.tsx
+src/app/dashboard/auctions/components/contentReview/ContentReviewActions.tsx
+src/app/dashboard/auctions/components/AuctionReviewDialog.tsx
+src/i18n/languages/{ar,en}.json                             (+17 keys each, incl. 7 error labels)
+```
+
+### Dashboard key decisions
+
+- **The controls are driven by `available_actions`, never by re-derived client state.** Now that the
+  backend only lists `confirm`/`override` while a decision is genuinely pending, the panel renders
+  exactly what the server offers. A `needs_human` recommendation renders nothing.
+- **The button label follows the recommendation**: "تأكيد توصية الموافقة" vs "تأكيد توصية الرفض",
+  and the override button names the opposite decision.
+- **The override reason is mandatory client-side too** — submit stays disabled until a non-whitespace
+  reason is entered — but the backend is still the authority and its `override_reason_required` is
+  rendered in-dialog if it ever fires.
+- **Duplicate submits are blocked by a ref, not by `isPending`.** `isPending` only flips on the next
+  render, so two clicks in one frame both reached the server; a test pins the single request.
+- **403 joins 409/422 as an in-dialog refusal.** `content_review_override_not_allowed` and
+  `decision_not_permitted` are decisions the operator must read against fresh data, not a toast that
+  vanishes.
+- **The manual review dialog now shows the live recommendation and warns before an override.** It
+  reads the `ai_review.current` block the detail page already holds — no extra request — and the
+  warning only appears for a completed, non-stale approve/reject recommendation that contradicts the
+  selected action.
+
+---
+
+## Verification (Batch 7)
+
+Backend (`C:\Users\pc\Desktop\SB\soom`):
+
+- `php artisan test` → **653 passed, 29 skipped, 0 failed** (was 628/25 after Batch 5; +25 tests,
+  and 4 of the skips are the new MySQL-only concurrency cases).
+- `php artisan test --filter=ContentReview` → 289 passed, 4 skipped.
+- `AuctionConfigurationSnapshotTest`, `AuctionFinancialFlowTest`, `AuctionNotificationDispatchTest`,
+  `AuctionReopenAndUpdateTest` → 62 passed.
+- `composer test:auction:mysql` from a dropped-and-recreated database →
+  **361 tests, 26 failing**. Baseline re-measured the same way from a detached
+  `git worktree` at `HEAD` (`f3ed298`) → **357 tests, 26 failing**. The failing-name sets are
+  **byte-identical** (`Compare-Object` over the sorted junit-derived lists returned nothing). The
+  +4 tests are this batch's concurrency cases and they all pass. **The 26 pre-existing data-leak
+  failures were not repaired and did not grow.**
+- `ContentReviewDecisionConcurrencyMysqlTest` + `AuctionConfigurationSnapshotMysqlTest` +
+  `AuctionReopenConcurrencyMysqlTest` → 6 passed. The four races proven with two real OS processes:
+  double confirm, confirm vs override, double override, admin vs late AI. In every one exactly one
+  worker returns `ok`, the loser returns a stable code, and there is exactly one transition out of
+  `pending_review`, one admin decision row, at most one snapshot and at most one seller deposit.
+- Pint → **PASS on all 80 files** this batch created or modified.
+
+Dashboard (`C:\Users\pc\Desktop\SB\soom-dashboard`):
+
+- `npx tsc --noEmit` → clean (exit 0).
+- `npx next lint` on every new/modified file → no errors, no warnings.
+- `npx vitest run` → **13 files, 144 tests, 0 failures** (was 11 files / 117 tests).
+- `npm run build` → succeeds, 20 routes.
+
+---
+
+## NEXT TASK (start of Batch 8)
+
+**First step:** add migration M5 plus `app/Models/ContentReview/ContentReviewImageCheck.php` and its
+repository, then teach `ContentReviewImageLoader` to reuse a cached check by `image_sha256`.
+
+Then the automation gates: `AutomationEligibilityResolver` (category allowlist, value cap, image
+requirement) consumed by `AuctionReviewSubjectAdapter::automationContext()`, which today inlines
+those three rules; the settings `automation` block becomes enforced rather than advisory. Dashboard:
+the automation sub-form in the settings tab plus a type-to-confirm step when switching into
+`ai_automatic`. Tests: `AiAutomaticApproveTest`, `AiAutomaticRejectTest`, `AutomationEligibilityTest`,
+`ImageCacheTest`, `AuctionAiReviewIntegrationTest`.
+
+Useful starting points already in place: `ApplyContentReviewDecisionAction::execute()` already
+refuses a mutating outcome unless the *current* mode is `ai_automatic` and is at least as permissive
+as the frozen one; `ContentReviewDecisionConcurrencyMysqlTest` already exercises `ai_automatic`
+against a racing admin, so the late-AI guard is covered before Batch 8 starts.
+
+**The overall task is NOT complete.** Batches 8–9 remain.

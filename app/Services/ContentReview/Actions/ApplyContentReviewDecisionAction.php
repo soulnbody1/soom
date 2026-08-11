@@ -10,13 +10,19 @@ use App\Domain\ContentReview\Enums\ContentReviewOutcome;
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\DecisionRelation;
+use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Domain\ContentReview\Exceptions\ContentReviewException;
+use App\DTO\ContentReview\HumanDecisionResult;
 use App\DTO\ContentReview\ReviewDecisionDTO;
 use App\Models\ContentReview\ContentReview;
+use App\Models\User;
 use App\Repositories\ContentReview\ContentReviewDecisionRepository;
 use App\Repositories\ContentReview\ContentReviewRepository;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
 use App\Services\ContentReview\Support\ContentHasher;
+use App\Services\ContentReview\Support\ContentReviewDecisionRecorder;
+use App\Services\ContentReview\Support\ContentReviewOverrideGuard;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use App\Services\ContentReview\Support\ReviewSubjectRegistry;
 use Illuminate\Support\Carbon;
@@ -24,6 +30,10 @@ use Illuminate\Support\Facades\DB;
 
 final class ApplyContentReviewDecisionAction
 {
+    public const EVENT_CONFIRMED = 'content_review.confirmed';
+
+    public const EVENT_OVERRIDDEN = 'content_review.overridden';
+
     public function __construct(
         private readonly ContentReviewRepository $reviews,
         private readonly ContentReviewDecisionRepository $decisions,
@@ -31,7 +41,156 @@ final class ApplyContentReviewDecisionAction
         private readonly ReviewModeResolver $modes,
         private readonly ContentHasher $hasher,
         private readonly ContentReviewEventPublisher $events,
+        private readonly ContentReviewOverrideGuard $overrides,
+        private readonly ContentReviewDecisionRecorder $recorder,
     ) {}
+
+    public function applyHumanDecision(
+        ReviewableSubjectType $type,
+        int $subjectId,
+        ContentReviewDecisionType $decision,
+        User $actor,
+        string $reason,
+        ?string $reviewPublicId = null,
+    ): HumanDecisionResult {
+        if (! $this->registry->supports($type)) {
+            throw ContentReviewException::domain('subject_type_not_supported');
+        }
+
+        $adapter = $this->registry->for($type);
+        $bound = $reviewPublicId !== null;
+
+        if (! $adapter->allowsHumanDecision($actor, $subjectId, $decision)) {
+            throw ContentReviewException::domain('decision_not_permitted', [], 403);
+        }
+
+        return DB::transaction(function () use (
+            $type,
+            $subjectId,
+            $decision,
+            $actor,
+            $reason,
+            $reviewPublicId,
+            $bound,
+            $adapter
+        ): HumanDecisionResult {
+            $review = $reviewPublicId === null
+                ? $this->reviews->lockActiveForSubject($type, $subjectId)
+                : $this->reviews->lockByPublicId($reviewPublicId);
+
+            if ($bound && ($review === null
+                || $review->subject_type !== $type
+                || (int) $review->subject_id !== $subjectId)) {
+                throw ContentReviewException::domain('review_not_found', [], 404);
+            }
+
+            $blocker = $review === null ? null : $this->humanDecisionBlocker($review, $subjectId);
+
+            if ($blocker === 'review_already_decided') {
+                throw ContentReviewException::domain($blocker, [], 409);
+            }
+
+            if ($blocker !== null && $bound) {
+                throw ContentReviewException::domain($blocker, [], 409);
+            }
+
+            if ($blocker !== null) {
+                $review = null;
+            }
+
+            if ($bound && ! $this->overrides->isBinding($review)) {
+                throw ContentReviewException::domain('review_not_assisted');
+            }
+
+            $relation = $this->overrides->relationFor($review, $decision);
+
+            if ($bound && ! in_array($relation, [DecisionRelation::Confirmed, DecisionRelation::Overridden], true)) {
+                throw ContentReviewException::domain('recommendation_missing');
+            }
+
+            $this->overrides->assertAllowed($actor, $review, $relation, $reason);
+
+            if (! $adapter->applyHumanDecision($subjectId, $decision, (int) $actor->id, $this->humanReason($review, $reason))) {
+                throw ContentReviewException::domain('subject_not_reviewable', [], 409);
+            }
+
+            if ($review === null) {
+                return new HumanDecisionResult($decision, DecisionRelation::None);
+            }
+
+            $record = $this->recorder->recordHumanDecision(
+                $review,
+                $type,
+                $subjectId,
+                $decision,
+                $relation,
+                (int) $actor->id,
+                $reason,
+            );
+
+            $this->events->publish(
+                $review,
+                $relation === DecisionRelation::Overridden ? self::EVENT_OVERRIDDEN : self::EVENT_CONFIRMED,
+                [
+                    'decision' => $decision->value,
+                    'relation_to_recommendation' => $relation->value,
+                    'recommendation' => $review->recommendation?->value,
+                    'confidence' => $review->confidence === null ? null : (int) $review->confidence,
+                    'decided_by_id' => (int) $actor->id,
+                    'decision_id' => (string) $record->public_id,
+                ],
+            );
+
+            return new HumanDecisionResult($decision, $relation, $review, $record);
+        }, 3);
+    }
+
+    private function humanDecisionBlocker(ContentReview $review, int $subjectId): ?string
+    {
+        if ($review->current_marker === null
+            || $review->superseded_at !== null
+            || $review->status === ContentReviewStatus::Superseded
+            || $review->status === ContentReviewStatus::Cancelled) {
+            return 'review_superseded';
+        }
+
+        if ($review->status !== ContentReviewStatus::Completed) {
+            return 'review_not_ready';
+        }
+
+        if ($this->decisions->hasHumanDecision((int) $review->id)) {
+            return 'review_already_decided';
+        }
+
+        $content = $this->registry->for($review->subject_type)->buildContent($subjectId);
+
+        if ($content === null || $this->hasher->hashContent($content) !== $review->content_hash) {
+            return 'review_stale';
+        }
+
+        return null;
+    }
+
+    private function humanReason(?ContentReview $review, string $reason): string
+    {
+        $reason = trim($reason);
+
+        if ($reason !== '' || $review === null) {
+            return $reason;
+        }
+
+        $summary = trim((string) $review->summary_ar);
+
+        if ($summary !== '') {
+            return $summary;
+        }
+
+        $recommendation = $review->recommendation;
+
+        return $recommendation === null
+            ? (string) __('content_review.outcomes.advisory_only')
+            : (string) __('content_review.recommendations.'.$recommendation->value);
+    }
 
     public function execute(ContentReview $review, ReviewDecisionDTO $decision, string $reason): ContentReview
     {
