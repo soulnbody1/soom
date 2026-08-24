@@ -159,8 +159,9 @@ final class ContentReviewSettingsApiTest extends TestCase
     public static function invalidSettings(): array
     {
         return [
-            'unknown provider' => [['provider' => 'openai']],
+            'unknown provider' => [['provider' => 'not-a-provider']],
             'unpriced model' => [['model' => 'gpt-9']],
+            'a model that belongs to another provider' => [['provider' => 'openrouter', 'model' => 'claude-sonnet-5']],
             'unknown mode' => [['mode' => 'fully_autonomous']],
             'timeout below the floor' => [['timeout_seconds' => 1]],
             'zero attempts' => [['max_attempts' => 0]],
@@ -168,6 +169,35 @@ final class ContentReviewSettingsApiTest extends TestCase
             'an active mode while disabled' => [['enabled' => false, 'mode' => 'ai_assisted']],
             'negative budget' => [['daily_budget_micros' => -1]],
         ];
+    }
+
+    public function test_a_model_is_validated_against_the_provider_being_published(): void
+    {
+        $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
+            ->postJson('/api/admin/content-review/settings', [
+                'scope' => 'auction',
+                'settings' => array_replace($this->settingsPayload(ReviewMode::Shadow), [
+                    'provider' => 'openrouter',
+                    'model' => 'claude-sonnet-5',
+                ]),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'validation_failed');
+
+        $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
+            ->postJson('/api/admin/content-review/settings', [
+                'scope' => 'auction',
+                'settings' => array_replace($this->settingsPayload(ReviewMode::Shadow), [
+                    'provider' => 'openrouter',
+                    'model' => 'google/gemini-2.5-flash',
+                ]),
+            ])
+            ->assertStatus(201);
+
+        $stored = (array) ContentReviewSetting::where('scope', 'auction')->where('is_active', true)->firstOrFail()->settings;
+
+        $this->assertSame('openrouter', $stored['provider']);
+        $this->assertSame('google/gemini-2.5-flash', $stored['model']);
     }
 
     public function test_an_unknown_scope_is_rejected(): void

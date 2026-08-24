@@ -4,29 +4,17 @@ declare(strict_types=1);
 
 namespace App\DTO\ContentReview;
 
-final readonly class ProviderReviewResponse extends BaseContentReviewDTO
+final readonly class ProviderCallMetrics extends BaseContentReviewDTO
 {
     public function __construct(
-        public array $payload,
         public string $model,
         public ?int $inputTokens,
         public ?int $outputTokens,
         public ?int $costMicros,
         public int $latencyMs,
-        public ?string $providerRequestId,
+        public ?string $providerRequestId = null,
+        public ?string $finishReason = null,
     ) {}
-
-    public function metrics(): ProviderCallMetrics
-    {
-        return new ProviderCallMetrics(
-            $this->model,
-            $this->inputTokens,
-            $this->outputTokens,
-            $this->costMicros,
-            $this->latencyMs,
-            $this->providerRequestId,
-        );
-    }
 
     public function toArray(): array
     {
@@ -36,6 +24,7 @@ final readonly class ProviderReviewResponse extends BaseContentReviewDTO
             'output_tokens' => $this->outputTokens,
             'cost_micros' => $this->costMicros,
             'latency_ms' => $this->latencyMs,
+            'finish_reason' => $this->finishReason,
         ];
     }
 }

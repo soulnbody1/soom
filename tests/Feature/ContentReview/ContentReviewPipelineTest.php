@@ -12,6 +12,7 @@ use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
+use App\DTO\ContentReview\ProviderCallMetrics;
 use App\Jobs\ContentReview\ProcessContentReviewJob;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionConfigurationSnapshot;
@@ -450,6 +451,44 @@ final class ContentReviewPipelineTest extends TestCase
         $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
     }
 
+    public function test_a_failed_call_that_spent_tokens_is_still_accounted_for(): void
+    {
+        $auction = $this->eligibleAutomaticAuction();
+        $this->fakeProvider()->failWith(
+            ContentReviewErrorCode::OutputTruncated,
+            new ProviderCallMetrics('vendor/served-model', 1371, 2000, 1500, 24235, 'gen-1', 'length')
+        );
+
+        $this->runPipeline();
+
+        $review = ContentReview::firstOrFail();
+
+        $this->assertSame(ContentReviewStatus::Failed, $review->status);
+        $this->assertSame(ContentReviewErrorCode::OutputTruncated, $review->error_code);
+        $this->assertSame(ContentReviewOutcome::EscalatedToHuman, $review->outcome);
+        $this->assertSame('fake', $review->provider);
+        $this->assertSame('vendor/served-model', $review->model);
+        $this->assertSame(1371, (int) $review->input_tokens);
+        $this->assertSame(2000, (int) $review->output_tokens);
+        $this->assertSame(1500, (int) $review->cost_micros);
+        $this->assertSame(1, (int) $review->attempt);
+        $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
+    }
+
+    public function test_a_failure_that_never_reached_the_provider_records_no_spend(): void
+    {
+        $this->eligibleAutomaticAuction();
+        $this->fakeProvider()->failWith(ContentReviewErrorCode::ProviderAuthFailed);
+
+        $this->runPipeline();
+
+        $review = ContentReview::firstOrFail();
+
+        $this->assertNull($review->model);
+        $this->assertNull($review->input_tokens);
+        $this->assertNull($review->cost_micros);
+    }
+
     public function test_an_off_contract_structured_result_escalates_to_a_human(): void
     {
         $auction = $this->eligibleAutomaticAuction();
@@ -504,14 +543,14 @@ final class ContentReviewPipelineTest extends TestCase
     {
         $guard = app(ContentReviewBudgetGuard::class);
 
-        $estimate = $guard->estimateMicros('claude-sonnet-5', 2000);
+        $estimate = $guard->estimateMicros('anthropic', 'claude-sonnet-5', 2000);
         $this->assertGreaterThan(0, $estimate);
 
         $budget = $estimate * 3;
         $settings = ['daily_budget_micros' => $budget, 'monthly_budget_micros' => $budget];
         $reservations = [];
 
-        while (($reservation = $guard->reserve($settings, 'claude-sonnet-5', 2000)) !== null) {
+        while (($reservation = $guard->reserve($settings, 'anthropic', 'claude-sonnet-5', 2000)) !== null) {
             $reservations[] = $reservation;
             $this->assertLessThanOrEqual($budget, $guard->reservedMicros('daily'));
         }
@@ -525,7 +564,7 @@ final class ContentReviewPipelineTest extends TestCase
 
         $this->assertSame(0, $guard->reservedMicros('daily'));
         $this->assertSame($budget, $guard->remainingMicros($settings, 'daily'));
-        $this->assertNotNull($guard->reserve($settings, 'claude-sonnet-5', 2000));
+        $this->assertNotNull($guard->reserve($settings, 'anthropic', 'claude-sonnet-5', 2000));
     }
 
     public function test_a_full_concurrency_pool_releases_the_job_without_consuming_an_attempt(): void

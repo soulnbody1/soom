@@ -26,9 +26,14 @@ final class AnthropicContentReviewProvider implements ContentReviewProvider
         return 'anthropic';
     }
 
+    public function isConfigured(): bool
+    {
+        return $this->apiKey() !== '';
+    }
+
     public function analyze(ProviderReviewRequest $request): ProviderReviewResponse
     {
-        $apiKey = (string) config('services.anthropic.api_key');
+        $apiKey = $this->apiKey();
 
         if ($apiKey === '') {
             throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderAuthFailed);
@@ -77,10 +82,15 @@ final class AnthropicContentReviewProvider implements ContentReviewProvider
             $model,
             $inputTokens,
             $outputTokens,
-            $this->costs->costMicros($model, $inputTokens, $outputTokens),
+            $this->costs->costMicros($this->name(), $model, $inputTokens, $outputTokens),
             $latencyMs,
             $this->requestId($response),
         );
+    }
+
+    private function apiKey(): string
+    {
+        return trim((string) config('services.anthropic.api_key'));
     }
 
     private function requestId(Response $response): ?string

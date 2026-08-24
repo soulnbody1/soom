@@ -11,6 +11,7 @@ use App\Domain\ContentReview\ValueObjects\ReviewPolicy;
 use App\DTO\ContentReview\ProviderReviewRequest;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
 use App\Services\ContentReview\Support\ProviderCallGuard;
+use App\Services\ContentReview\Support\ProviderSelectionResolver;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use App\Services\ContentReview\Support\ReviewPolicyResolver;
 use App\Services\ContentReview\Support\ReviewPromptRenderer;
@@ -28,6 +29,7 @@ final class TestContentReviewProviderAction
         private readonly ReviewPolicyResolver $policies,
         private readonly ReviewPromptRenderer $renderer,
         private readonly ProviderCallGuard $callGuard,
+        private readonly ProviderSelectionResolver $selection,
     ) {}
 
     public function execute(ReviewableSubjectType $type): array
@@ -35,8 +37,8 @@ final class TestContentReviewProviderAction
         $this->callGuard->assertOutsideTransaction();
 
         $settings = $this->modes->effectiveSettings($type);
-        $providerName = $this->providerName($settings);
-        $model = $this->model($settings);
+        $providerName = $this->selection->provider($settings);
+        $model = $this->selection->model($settings);
         $policy = $this->policies->activeRecord($type)?->toValueObject() ?? ReviewPolicy::fromArray([]);
 
         $request = new ProviderReviewRequest(
@@ -50,6 +52,8 @@ final class TestContentReviewProviderAction
             self::PROBE_MAX_OUTPUT_TOKENS,
             $this->timeoutSeconds($settings),
             $policy->locales(),
+            [],
+            $this->selection->descriptor($settings),
         );
 
         $startedAt = microtime(true);
@@ -87,24 +91,6 @@ final class TestContentReviewProviderAction
     private function elapsedMs(mixed $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
-    }
-
-    private function providerName(array $settings): string
-    {
-        $provider = $settings['provider'] ?? null;
-
-        return is_string($provider) && $provider !== ''
-            ? $provider
-            : (string) config('content_review.provider', 'fake');
-    }
-
-    private function model(array $settings): string
-    {
-        $model = $settings['model'] ?? null;
-
-        return is_string($model) && $model !== ''
-            ? $model
-            : (string) config('content_review.model', 'claude-sonnet-5');
     }
 
     private function timeoutSeconds(array $settings): int

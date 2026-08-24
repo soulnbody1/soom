@@ -14,6 +14,7 @@ final class ContentReviewProviderFactory
     private const PROVIDERS = [
         'fake' => FakeContentReviewProvider::class,
         'anthropic' => AnthropicContentReviewProvider::class,
+        'openrouter' => OpenRouterContentReviewProvider::class,
     ];
 
     public function __construct(private readonly Container $container) {}
@@ -33,5 +34,14 @@ final class ContentReviewProviderFactory
     public function available(): array
     {
         return array_keys(self::PROVIDERS);
+    }
+
+    public function isConfigured(string $name): bool
+    {
+        try {
+            return $this->make($name)->isConfigured();
+        } catch (ContentReviewProviderException) {
+            return false;
+        }
     }
 }

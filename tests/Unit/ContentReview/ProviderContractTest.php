@@ -9,6 +9,7 @@ use App\DTO\ContentReview\ProviderReviewRequest;
 use App\Services\ContentReview\Providers\AnthropicContentReviewProvider;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
 use App\Services\ContentReview\Providers\FakeContentReviewProvider;
+use App\Services\ContentReview\Providers\OpenRouterContentReviewProvider;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
 use App\Services\ContentReview\Support\ProviderCostCalculator;
 use Illuminate\Http\Client\ConnectionException;
@@ -315,29 +316,25 @@ test('stored error messages stay inside the column width', function (): void {
 });
 
 test('the cost calculator uses integer arithmetic only and refuses unknown models', function (): void {
-    $calculator = new ProviderCostCalculator;
+    $calculator = app(ProviderCostCalculator::class);
 
     expect($calculator->version())->toBe('2026-06-24')
-        ->and($calculator->knows('claude-sonnet-5'))->toBeTrue()
-        ->and($calculator->knows('gpt-not-a-model'))->toBeFalse()
-        ->and($calculator->costMicros('gpt-not-a-model', 100, 100))->toBeNull()
-        ->and($calculator->costMicros('claude-sonnet-5', null, 100))->toBeNull()
-        ->and($calculator->costMicros('claude-sonnet-5', 100, null))->toBeNull()
-        ->and($calculator->costMicros('claude-sonnet-5', -1, 100))->toBeNull()
-        ->and($calculator->costMicros('claude-sonnet-5', 0, 0))->toBe(0)
-        ->and($calculator->costMicros('claude-sonnet-5', 1_000_000, 1_000_000))->toBe(18_000_000)
-        ->and($calculator->costMicros('claude-opus-5', 1_000_000, 1_000_000))->toBe(30_000_000)
-        ->and($calculator->costMicros('claude-haiku-4-5', 1, 1))->toBe(6);
+        ->and($calculator->costMicros('anthropic', 'gpt-not-a-model', 100, 100))->toBeNull()
+        ->and($calculator->costMicros('anthropic', 'claude-sonnet-5', null, 100))->toBeNull()
+        ->and($calculator->costMicros('anthropic', 'claude-sonnet-5', 100, null))->toBeNull()
+        ->and($calculator->costMicros('anthropic', 'claude-sonnet-5', -1, 100))->toBeNull()
+        ->and($calculator->costMicros('anthropic', 'claude-sonnet-5', 0, 0))->toBe(0)
+        ->and($calculator->costMicros('anthropic', 'claude-sonnet-5', 1_000_000, 1_000_000))->toBe(18_000_000)
+        ->and($calculator->costMicros('anthropic', 'claude-opus-5', 1_000_000, 1_000_000))->toBe(30_000_000)
+        ->and($calculator->costMicros('anthropic', 'claude-haiku-4-5', 1, 1))->toBe(6);
 });
 
-test('the pricing table is versioned and every rate is a non negative integer', function (): void {
-    expect(config('content_review.pricing.version'))->toBeString()->not->toBe('');
+test('a model is only priced under the provider that offers it', function (): void {
+    $calculator = app(ProviderCostCalculator::class);
 
-    foreach ((array) config('content_review.pricing.models') as $model => $rates) {
-        expect($model)->toBeString()
-            ->and($rates['input'])->toBeInt()->toBeGreaterThanOrEqual(0)
-            ->and($rates['output'])->toBeInt()->toBeGreaterThanOrEqual(0);
-    }
+    expect($calculator->costMicros('openrouter', 'claude-sonnet-5', 100, 100))->toBeNull()
+        ->and($calculator->costMicros('anthropic', 'claude-sonnet-5', 1_000_000, 1_000_000))->toBe(18_000_000)
+        ->and($calculator->costMicros('openrouter', 'google/gemini-2.5-flash', 1_000_000, 1_000_000))->toBe(2_800_000);
 });
 
 test('the factory resolves the configured provider and rejects unknown ones', function (): void {
@@ -345,12 +342,32 @@ test('the factory resolves the configured provider and rejects unknown ones', fu
 
     expect($factory->make('fake'))->toBeInstanceOf(FakeContentReviewProvider::class)
         ->and($factory->make('anthropic'))->toBeInstanceOf(AnthropicContentReviewProvider::class)
-        ->and($factory->available())->toBe(['fake', 'anthropic'])
+        ->and($factory->make('openrouter'))->toBeInstanceOf(OpenRouterContentReviewProvider::class)
+        ->and($factory->available())->toBe(['fake', 'anthropic', 'openrouter'])
         ->and($factory->make('fake')->name())->toBe('fake')
-        ->and($factory->make('anthropic')->name())->toBe('anthropic');
+        ->and($factory->make('anthropic')->name())->toBe('anthropic')
+        ->and($factory->make('openrouter')->name())->toBe('openrouter');
 
     expectProviderErrorCode(
         fn () => $factory->make('nonexistent'),
         ContentReviewErrorCode::ProviderUnavailable
     );
+});
+
+test('provider readiness is answered by the driver, never by a name comparison', function (): void {
+    $factory = app(ContentReviewProviderFactory::class);
+
+    config()->set('services.anthropic.api_key', '');
+    config()->set('services.openrouter.api_key', '');
+
+    expect($factory->isConfigured('fake'))->toBeTrue()
+        ->and($factory->isConfigured('anthropic'))->toBeFalse()
+        ->and($factory->isConfigured('openrouter'))->toBeFalse()
+        ->and($factory->isConfigured('nonexistent'))->toBeFalse();
+
+    config()->set('services.anthropic.api_key', PROVIDER_TEST_API_KEY);
+    config()->set('services.openrouter.api_key', 'sk-or-v1-configured');
+
+    expect($factory->isConfigured('anthropic'))->toBeTrue()
+        ->and($factory->isConfigured('openrouter'))->toBeTrue();
 });

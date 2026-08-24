@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Models\ContentReview\ContentReviewPolicy;
 use App\Models\ContentReview\ContentReviewSetting;
+use App\Services\ContentReview\Support\ProviderModelCatalog;
 use Illuminate\Database\Seeder;
 
 final class ContentReviewSeeder extends Seeder
@@ -86,6 +87,13 @@ final class ContentReviewSeeder extends Seeder
             return;
         }
 
+        $catalog = app(ProviderModelCatalog::class);
+        $provider = (string) config('content_review.provider', 'fake');
+        $configuredModel = (string) config('content_review.model', '');
+        $model = $catalog->has($provider, $configuredModel)
+            ? $configuredModel
+            : (string) ($catalog->defaultModel($provider) ?? $configuredModel);
+
         ContentReviewSetting::create([
             'scope' => $scope,
             'version_number' => 1,
@@ -94,8 +102,8 @@ final class ContentReviewSeeder extends Seeder
             'settings' => [
                 'enabled' => false,
                 'mode' => 'manual',
-                'provider' => (string) config('content_review.provider', 'fake'),
-                'model' => (string) config('content_review.model', 'claude-sonnet-5'),
+                'provider' => $provider,
+                'model' => $model,
                 'timeout_seconds' => 45,
                 'max_attempts' => 3,
                 'backoff_seconds' => [60, 300, 900],

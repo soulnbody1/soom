@@ -18,6 +18,7 @@ final class AutomationEligibilityResolver
         private readonly ContentHasher $hasher,
         private readonly ContentReviewCircuitBreaker $breaker,
         private readonly ContentReviewBudgetGuard $budget,
+        private readonly ProviderSelectionResolver $selection,
     ) {}
 
     public function resolve(ContentReview $review): AutomationContext
@@ -133,10 +134,11 @@ final class AutomationEligibilityResolver
         }
 
         $settings = $this->modes->effectiveSettings($review->subject_type);
-        $model = (string) ($review->model ?? $settings['model'] ?? config('content_review.model'));
+        $provider = (string) ($review->provider ?? $this->selection->provider($settings));
+        $model = (string) ($review->model ?? $this->selection->model($settings));
         $maxOutputTokens = max(256, (int) ($settings['max_output_tokens'] ?? 2000));
 
-        if ($model !== '' && $this->budget->exhaustedPeriod($settings, $model, $maxOutputTokens) !== null) {
+        if ($model !== '' && $this->budget->exhaustedPeriod($settings, $provider, $model, $maxOutputTokens) !== null) {
             $reasons[] = 'budget_exhausted';
         }
 

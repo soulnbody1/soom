@@ -136,6 +136,52 @@ test('providers never touch persistence', function () {
     expect($violations)->toBe([]);
 });
 
+function contentReviewCodeWithoutComments(string $file): string
+{
+    $code = '';
+
+    foreach (token_get_all(file_get_contents($file)) as $token) {
+        if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+            continue;
+        }
+
+        $code .= is_array($token) ? $token[1] : $token;
+    }
+
+    return $code;
+}
+
+test('vendor names never leak outside the provider layer', function () {
+    $vendors = ['anthropic', 'openrouter', 'claude', 'openai', 'gemini'];
+    $violations = [];
+
+    foreach (contentReviewFiles([
+        'Domain/ContentReview',
+        'Services/ContentReview',
+        'Models/ContentReview',
+        'Repositories/ContentReview',
+        'DTO/ContentReview',
+        'Jobs/ContentReview',
+        'Http/Controllers/ContentReview',
+        'Http/Requests/ContentReview',
+        'Http/Resources/ContentReview',
+    ]) as $file) {
+        if (str_contains(str_replace(DIRECTORY_SEPARATOR, '/', $file), '/Services/ContentReview/Providers/')) {
+            continue;
+        }
+
+        $contents = strtolower(contentReviewCodeWithoutComments($file));
+
+        foreach ($vendors as $vendor) {
+            if (str_contains($contents, $vendor)) {
+                $violations[] = basename($file).':'.$vendor;
+            }
+        }
+    }
+
+    expect($violations)->toBe([]);
+});
+
 test('the content review subsystem uses no floating point types', function () {
     $violations = [];
 

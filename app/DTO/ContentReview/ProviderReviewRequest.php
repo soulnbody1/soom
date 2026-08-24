@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\DTO\ContentReview;
 
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
+use App\Domain\ContentReview\Enums\StructuredOutputStrategy;
 
 final readonly class ProviderReviewRequest extends BaseContentReviewDTO
 {
@@ -20,7 +21,13 @@ final readonly class ProviderReviewRequest extends BaseContentReviewDTO
         public int $timeoutSeconds,
         public array $locales,
         public array $imageContext = [],
+        public ?ProviderModelDescriptor $modelDescriptor = null,
     ) {}
+
+    public function structuredOutputStrategy(): StructuredOutputStrategy
+    {
+        return $this->modelDescriptor?->structured ?? StructuredOutputStrategy::Tool;
+    }
 
     public function toArray(): array
     {

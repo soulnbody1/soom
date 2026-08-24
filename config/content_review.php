@@ -1,5 +1,14 @@
 <?php
 
+$anthropicModels = [
+    'claude-fable-5' => ['input' => 10_000_000, 'output' => 50_000_000, 'vision' => true, 'structured' => 'tool'],
+    'claude-opus-5' => ['input' => 5_000_000, 'output' => 25_000_000, 'vision' => true, 'structured' => 'tool'],
+    'claude-opus-4-8' => ['input' => 5_000_000, 'output' => 25_000_000, 'vision' => true, 'structured' => 'tool'],
+    'claude-sonnet-5' => ['input' => 3_000_000, 'output' => 15_000_000, 'vision' => true, 'structured' => 'tool'],
+    'claude-sonnet-4-6' => ['input' => 3_000_000, 'output' => 15_000_000, 'vision' => true, 'structured' => 'tool'],
+    'claude-haiku-4-5' => ['input' => 1_000_000, 'output' => 5_000_000, 'vision' => true, 'structured' => 'tool'],
+];
+
 return [
     'enabled' => (bool) env('CONTENT_REVIEW_ENABLED', false),
 
@@ -35,13 +44,26 @@ return [
     'pricing' => [
         'version' => env('CONTENT_REVIEW_PRICING_VERSION', '2026-06-24'),
         'currency' => 'USD',
-        'models' => [
-            'claude-fable-5' => ['input' => 10_000_000, 'output' => 50_000_000],
-            'claude-opus-5' => ['input' => 5_000_000, 'output' => 25_000_000],
-            'claude-opus-4-8' => ['input' => 5_000_000, 'output' => 25_000_000],
-            'claude-sonnet-5' => ['input' => 3_000_000, 'output' => 15_000_000],
-            'claude-sonnet-4-6' => ['input' => 3_000_000, 'output' => 15_000_000],
-            'claude-haiku-4-5' => ['input' => 1_000_000, 'output' => 5_000_000],
+    ],
+
+    'providers' => [
+        'fake' => [
+            'default_model' => env('CONTENT_REVIEW_MODEL', 'claude-sonnet-5'),
+            'models' => $anthropicModels,
+        ],
+
+        'anthropic' => [
+            'default_model' => env('ANTHROPIC_CONTENT_REVIEW_MODEL', 'claude-sonnet-5'),
+            'models' => $anthropicModels,
+        ],
+
+        'openrouter' => [
+            'default_model' => env('OPENROUTER_CONTENT_REVIEW_MODEL', 'google/gemini-2.5-flash'),
+            'models' => [
+                'google/gemini-2.5-flash' => ['input' => 300_000, 'output' => 2_500_000, 'vision' => true, 'structured' => 'tool'],
+                'anthropic/claude-sonnet-4.5' => ['input' => 3_000_000, 'output' => 15_000_000, 'vision' => true, 'structured' => 'tool'],
+                'openai/gpt-4o-mini' => ['input' => 150_000, 'output' => 600_000, 'vision' => true, 'structured' => 'json_schema'],
+            ],
         ],
     ],
 

@@ -8,6 +8,8 @@ final class ProviderCostCalculator
 {
     private const TOKENS_PER_PRICING_UNIT = 1_000_000;
 
+    public function __construct(private readonly ProviderModelCatalog $catalog) {}
+
     public function version(): ?string
     {
         $version = config('content_review.pricing.version');
@@ -15,16 +17,11 @@ final class ProviderCostCalculator
         return is_string($version) && $version !== '' ? $version : null;
     }
 
-    public function knows(string $model): bool
+    public function costMicros(string $provider, string $model, ?int $inputTokens, ?int $outputTokens): ?int
     {
-        return $this->rates($model) !== null;
-    }
+        $descriptor = $this->catalog->descriptor($provider, $model);
 
-    public function costMicros(string $model, ?int $inputTokens, ?int $outputTokens): ?int
-    {
-        $rates = $this->rates($model);
-
-        if ($rates === null || $inputTokens === null || $outputTokens === null) {
+        if ($descriptor === null || $inputTokens === null || $outputTokens === null) {
             return null;
         }
 
@@ -32,32 +29,8 @@ final class ProviderCostCalculator
             return null;
         }
 
-        return $this->apply($inputTokens, $rates['input']) + $this->apply($outputTokens, $rates['output']);
-    }
-
-    private function rates(string $model): ?array
-    {
-        $models = config('content_review.pricing.models');
-
-        if (! is_array($models)) {
-            return null;
-        }
-
-        $rates = $models[$model] ?? null;
-
-        if (! is_array($rates) || ! isset($rates['input'], $rates['output'])) {
-            return null;
-        }
-
-        if (! is_int($rates['input']) || ! is_int($rates['output'])) {
-            return null;
-        }
-
-        if ($rates['input'] < 0 || $rates['output'] < 0) {
-            return null;
-        }
-
-        return ['input' => $rates['input'], 'output' => $rates['output']];
+        return $this->apply($inputTokens, $descriptor->inputMicros)
+            + $this->apply($outputTokens, $descriptor->outputMicros);
     }
 
     private function apply(int $tokens, int $microsPerUnit): int

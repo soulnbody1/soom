@@ -8,6 +8,7 @@ use App\Domain\ContentReview\Enums\ImageCheckVerdict;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewRiskLevel;
+use App\Domain\ContentReview\Enums\StructuredOutputStrategy;
 use App\Models\Auction\AuctionMedia;
 use App\Models\ContentReview\ContentReviewImageCheck;
 use App\Repositories\ContentReview\ContentReviewImageCheckRepository;
@@ -356,5 +357,34 @@ final class ImageCacheTest extends TestCase
         $this->assertSame(0, ContentReviewImageCheck::count());
         $this->assertFalse($review->image_review['analysis_enabled']);
         $this->assertSame([], (array) $this->fakeProvider()->lastRequest()->images);
+    }
+
+    public function test_a_model_that_cannot_read_images_is_never_sent_one(): void
+    {
+        config()->set('content_review.providers.fake.models.claude-sonnet-5.vision', false);
+
+        $auction = $this->reviewedAuction(ReviewMode::AiAssisted);
+        $this->fakeProvider()->respondWith($this->cleanResultPayload());
+
+        $review = $this->processActiveReview($auction);
+
+        $this->assertSame(0, ContentReviewImageCheck::count());
+        $this->assertSame(0, (int) $review->images_analyzed);
+        $this->assertFalse($review->image_review['analysis_enabled']);
+        $this->assertSame([], (array) $this->fakeProvider()->lastRequest()->images);
+    }
+
+    public function test_the_model_capabilities_travel_with_the_provider_request(): void
+    {
+        $auction = $this->reviewedAuction(ReviewMode::AiAssisted);
+        $this->fakeProvider()->respondWith($this->cleanResultPayload());
+
+        $this->processActiveReview($auction);
+
+        $descriptor = $this->fakeProvider()->lastRequest()->modelDescriptor;
+
+        $this->assertNotNull($descriptor);
+        $this->assertSame('claude-sonnet-5', $descriptor->id);
+        $this->assertSame(StructuredOutputStrategy::Tool, $descriptor->structured);
     }
 }

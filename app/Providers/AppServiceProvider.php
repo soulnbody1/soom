@@ -25,6 +25,8 @@ use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
 use App\Services\ContentReview\Contracts\ContentReviewProvider;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
 use App\Services\ContentReview\Providers\FakeContentReviewProvider;
+use App\Services\ContentReview\Support\ProviderModelCatalog;
+use App\Services\ContentReview\Support\ProviderSelectionResolver;
 use App\Services\ContentReview\Support\ReviewSubjectRegistry;
 use App\Services\Outbox\OutboxContentReviewEventPublisher;
 use App\Services\Outbox\OutboxTopicRouter;
@@ -44,6 +46,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AuctionRefundProcessorInterface::class, ManualReviewRefundProcessor::class);
 
         $this->app->singleton(FakeContentReviewProvider::class);
+
+        $this->app->singleton(ProviderModelCatalog::class);
+        $this->app->singleton(ProviderSelectionResolver::class);
 
         $this->app->bind(
             ContentReviewProvider::class,

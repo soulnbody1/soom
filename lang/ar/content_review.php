@@ -22,6 +22,7 @@ return [
         'provider_unavailable' => 'مزود المراجعة غير متاح.',
         'provider_auth_failed' => 'رفض مزود المراجعة بيانات الاعتماد.',
         'invalid_structured_output' => 'أعاد مزود المراجعة نتيجة لا تطابق العقد المطلوب.',
+        'provider_output_truncated' => 'استنفد النموذج ميزانية الإخراج قبل أن يُكمل إجابته.',
         'content_unavailable' => 'تعذر تجهيز المحتوى للمراجعة.',
         'image_fetch_failed' => 'تعذرت قراءة صورة أو أكثر للمراجعة.',
         'budget_exhausted' => 'تم استنفاد ميزانية المراجعة الآلية.',
@@ -34,6 +35,7 @@ return [
         'review_already_decided' => 'تم اتخاذ القرار في هذه المراجعة بالفعل.',
         'subject_type_not_supported' => 'نوع المحتوى هذا غير مدعوم في نظام المراجعة.',
         'settings_invalid' => 'إعدادات المراجعة المرسلة غير صالحة.',
+        'model_not_available_for_provider' => 'النموذج المختار غير متاح لدى المزوّد :provider.',
         'policy_invalid' => 'سياسة المراجعة المرسلة غير صالحة.',
         'policy_in_use' => 'لا يمكن تعديل إصدار سياسة تم استخدامه بالفعل.',
         'settings_in_use' => 'لا يمكن تعديل إصدار إعدادات تم استخدامه بالفعل.',
@@ -187,6 +189,12 @@ return [
         'image_flagged' => 'تم وسم إحدى الصور في المراجعة الآلية',
         'provider_circuit_open' => 'خدمة المراجعة غير مستقرة حاليًا',
         'budget_exhausted' => 'تم استنفاد ميزانية المراجعة الآلية',
+    ],
+
+    'structured_output' => [
+        'tool' => 'استدعاء أداة إلزامي',
+        'json_schema' => 'مخطط JSON صارم',
+        'json_object' => 'كائن JSON',
     ],
 
     'image_verdicts' => [

@@ -22,6 +22,7 @@ return [
         'provider_unavailable' => 'The review service is unavailable.',
         'provider_auth_failed' => 'The review service rejected the credentials.',
         'invalid_structured_output' => 'The review service returned a result that does not match the required contract.',
+        'provider_output_truncated' => 'The model ran out of output budget before it finished its answer.',
         'content_unavailable' => 'The content could not be prepared for review.',
         'image_fetch_failed' => 'One or more images could not be read for review.',
         'budget_exhausted' => 'The automated review budget has been exhausted.',
@@ -34,6 +35,7 @@ return [
         'review_already_decided' => 'This review has already been decided.',
         'subject_type_not_supported' => 'This content type is not supported by the review system.',
         'settings_invalid' => 'The submitted review settings are invalid.',
+        'model_not_available_for_provider' => 'The selected model is not available for the :provider provider.',
         'policy_invalid' => 'The submitted review policy is invalid.',
         'policy_in_use' => 'A review policy version that has already been used cannot be modified.',
         'settings_in_use' => 'A settings version that has already been used cannot be modified.',
@@ -187,6 +189,12 @@ return [
         'image_flagged' => 'An image was flagged by the automated review',
         'provider_circuit_open' => 'The review service is currently unhealthy',
         'budget_exhausted' => 'The automated review budget is exhausted',
+    ],
+
+    'structured_output' => [
+        'tool' => 'Forced tool call',
+        'json_schema' => 'Strict JSON schema',
+        'json_object' => 'JSON object',
     ],
 
     'image_verdicts' => [

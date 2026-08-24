@@ -13,6 +13,7 @@ use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewRecommendation;
 use App\Domain\ContentReview\Enums\ReviewRiskLevel;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
+use App\Domain\ContentReview\Enums\StructuredOutputStrategy;
 use App\Domain\ContentReview\Enums\ViolationSeverity;
 use Illuminate\Support\Facades\Lang;
 
@@ -29,6 +30,7 @@ dataset('content review enum groups', [
     'relations' => [DecisionRelation::class, 'relations'],
     'decisions' => [ContentReviewDecisionType::class, 'decisions'],
     'error codes' => [ContentReviewErrorCode::class, 'errors'],
+    'structured output strategies' => [StructuredOutputStrategy::class, 'structured_output'],
 ]);
 
 test('every enum value has an arabic and an english label', function (string $enum, string $group) {

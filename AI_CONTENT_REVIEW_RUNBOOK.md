@@ -16,8 +16,8 @@ row, no job, no provider call, no extra query.
 |---|---|---|
 | `CONTENT_REVIEW_ENABLED` | `false` | Master switch. `false` collapses the resolved mode to `manual` no matter what is published. |
 | `CONTENT_REVIEW_DEFAULT_MODE` | `manual` | Fallback mode when no settings version is published. |
-| `CONTENT_REVIEW_PROVIDER` | `fake` | `fake` or `anthropic`. A published settings version overrides it. |
-| `CONTENT_REVIEW_MODEL` | `claude-sonnet-5` | Must be a key of `config('content_review.pricing.models')`, otherwise a review has no cost. |
+| `CONTENT_REVIEW_PROVIDER` | `fake` | `fake`, `anthropic` or `openrouter`. A published settings version overrides it. |
+| `CONTENT_REVIEW_MODEL` | `claude-sonnet-5` | Must be a model the selected provider offers. A model the provider does not catalogue falls back to that provider's `default_model` rather than being sent verbatim. |
 | `CONTENT_REVIEW_QUEUE` | `content-review` | The dedicated queue name. |
 | `CONTENT_REVIEW_TIMEOUT_SECONDS` | `45` | Per provider call. |
 | `CONTENT_REVIEW_MAX_ATTEMPTS` | `3` | Attempts per request, then the review fails and escalates. |
@@ -35,6 +35,12 @@ row, no job, no provider call, no extra query.
 | `CONTENT_REVIEW_METRICS_MAX_RANGE_DAYS` | `92` | Largest custom metrics range the API accepts. |
 | `ANTHROPIC_API_KEY` | — | Read from `config('services.anthropic.api_key')`. **Never** committed, logged, or returned by any endpoint. |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Provider base URL. |
+| `ANTHROPIC_CONTENT_REVIEW_MODEL` | `claude-sonnet-5` | The anthropic driver's default model. |
+| `OPENROUTER_API_KEY` | — | Read from `config('services.openrouter.api_key')`. Same secrecy rules as the Anthropic key. |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | Provider base URL. |
+| `OPENROUTER_SITE_URL` | — | Optional `HTTP-Referer` attribution header. |
+| `OPENROUTER_APP_NAME` | `Soom` | Optional `X-Title` attribution header. |
+| `OPENROUTER_CONTENT_REVIEW_MODEL` | `google/gemini-2.5-flash` | The openrouter driver's default model. Must be a pinned slug, never a router. |
 
 Two infrastructure requirements:
 
@@ -321,7 +327,52 @@ test and staging environments only.
 
 ---
 
-## 12. Authorization model
+## 12. Adding a provider
+
+The subsystem is provider-agnostic below the `ContentReviewProvider` contract, so a new vendor is
+four things and nothing else. An architecture test (`vendor names never leak outside the provider
+layer`) fails the build if any of it spreads further.
+
+1. **Credentials** in `config/services.php`, never in `config/content_review.php` — a test asserts
+   the domain config carries no secrets, and the settings endpoint rejects any payload key
+   containing `key` or `secret`.
+2. **A catalog entry** under `config/content_review.php` → `providers.<name>`, with a
+   `default_model` and one row per model: `input` and `output` in micros per 1M tokens, `vision`,
+   and `structured` (`tool` | `json_schema` | `json_object`). Zero rates mean free, not unpriced.
+3. **A driver** in `app/Services/ContentReview/Providers/` implementing `name()`, `isConfigured()`
+   and `analyze()`. It may not touch `App\Models`, `App\Repositories` or `DB::`, and it must map
+   every failure onto a `ContentReviewErrorCode`.
+4. **One line** in `ContentReviewProviderFactory::PROVIDERS`. That is what makes it selectable in
+   the admin screen, reportable on `/health` and acceptable to the settings validator.
+
+`ProviderCatalogTest` then enforces that the driver has a catalog, that every rate is a
+non-negative integer, and that the declared default model is one the provider actually offers.
+
+**Never catalogue a router.** OpenRouter exposes ids such as `openrouter/auto` that resolve to a
+different model on every call. A catalog entry describes capabilities, and a router has none that
+hold: in one live run the same id landed on a safety classifier that can only answer
+`User Safety: safe`, and on a reasoning model that spent the entire output ceiling thinking and was
+cut off mid-JSON. Pin a slug whose model page on <https://openrouter.ai/models> lists structured
+outputs, and image input if image analysis is on.
+
+Three behaviours worth knowing before you pick a model:
+
+- **A model priced at zero never consumes budget.** `estimateMicros` returns 0, so a free model
+  keeps running with an exhausted daily cap. That is correct, but it means the budget guard is not
+  a throttle for free tiers.
+- **Images follow the model, not the setting.** A model catalogued with `vision: false` has its
+  images withheld by the pipeline, so `images_analyzed` stays 0 rather than claiming a screening
+  that never happened.
+- **`max_output_tokens` is a ceiling on reasoning too.** On OpenRouter it caps every output token,
+  thinking included, so a reasoning model can burn the whole budget before writing a character of
+  the answer. That surfaces as `provider_output_truncated`, which is the signal to raise the
+  ceiling — the default 2000 suits models that do not think out loud, and a reasoning model wants
+  several times that. The code is deliberately not retryable: the same prompt under the same
+  ceiling truncates again.
+
+---
+
+## 13. Authorization model
 
 There is **one kind of admin**. The content review subsystem defines no permission of its
 own: every admin endpoint is protected by `auth:sanctum` plus the `role:admin` middleware,
@@ -349,7 +400,7 @@ provider account, not the operator.
 
 ---
 
-## 13. What is never exposed
+## 14. What is never exposed
 
 Checked by `ContentReviewPermissionTest`, `LogRedactionTest` and `ContentReviewMetricsApiTest`,
 each of which plants a canary and asserts it never appears:

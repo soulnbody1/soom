@@ -6,6 +6,7 @@ namespace App\Services\ContentReview\Providers;
 
 use App\Domain\ContentReview\Enums\ContentReviewErrorCode;
 use App\Domain\ContentReview\Exceptions\ContentReviewProviderException;
+use App\DTO\ContentReview\ProviderCallMetrics;
 use App\DTO\ContentReview\ProviderReviewRequest;
 use App\DTO\ContentReview\ProviderReviewResponse;
 use App\Services\ContentReview\Contracts\ContentReviewProvider;
@@ -16,6 +17,8 @@ final class FakeContentReviewProvider implements ContentReviewProvider
 
     private ?ContentReviewErrorCode $failure = null;
 
+    private ?ProviderCallMetrics $failureMetrics = null;
+
     private int $calls = 0;
 
     private array $requests = [];
@@ -23,6 +26,11 @@ final class FakeContentReviewProvider implements ContentReviewProvider
     public function name(): string
     {
         return 'fake';
+    }
+
+    public function isConfigured(): bool
+    {
+        return true;
     }
 
     public function respondWith(array $payload, ?int $costMicros = 1200, ?int $inputTokens = 500, ?int $outputTokens = 120): self
@@ -38,9 +46,10 @@ final class FakeContentReviewProvider implements ContentReviewProvider
         return $this;
     }
 
-    public function failWith(ContentReviewErrorCode $code): self
+    public function failWith(ContentReviewErrorCode $code, ?ProviderCallMetrics $metrics = null): self
     {
         $this->failure = $code;
+        $this->failureMetrics = $metrics;
 
         return $this;
     }
@@ -64,6 +73,7 @@ final class FakeContentReviewProvider implements ContentReviewProvider
     {
         $this->queue = [];
         $this->failure = null;
+        $this->failureMetrics = null;
         $this->calls = 0;
         $this->requests = [];
 
@@ -76,7 +86,9 @@ final class FakeContentReviewProvider implements ContentReviewProvider
         $this->requests[] = $request;
 
         if ($this->failure !== null) {
-            throw ContentReviewProviderException::of($this->failure);
+            throw $this->failureMetrics === null
+                ? ContentReviewProviderException::of($this->failure)
+                : ContentReviewProviderException::afterCall($this->failure, $this->failureMetrics);
         }
 
         $scripted = array_shift($this->queue) ?? [

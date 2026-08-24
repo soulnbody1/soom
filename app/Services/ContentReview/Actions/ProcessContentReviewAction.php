@@ -14,6 +14,8 @@ use App\DTO\ContentReview\DeterministicCheckResult;
 use App\DTO\ContentReview\ImageCheckResult;
 use App\DTO\ContentReview\ImageReviewSummary;
 use App\DTO\ContentReview\PreparedImage;
+use App\DTO\ContentReview\ProviderCallMetrics;
+use App\DTO\ContentReview\ProviderModelDescriptor;
 use App\DTO\ContentReview\ProviderReviewRequest;
 use App\DTO\ContentReview\ProviderReviewResponse;
 use App\DTO\ContentReview\ReviewContentDTO;
@@ -33,6 +35,7 @@ use App\Services\ContentReview\Support\DeterministicContentChecks;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
 use App\Services\ContentReview\Support\ProviderCallGuard;
 use App\Services\ContentReview\Support\ProviderHealthJournal;
+use App\Services\ContentReview\Support\ProviderSelectionResolver;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use App\Services\ContentReview\Support\ReviewPolicyResolver;
 use App\Services\ContentReview\Support\ReviewPromptRenderer;
@@ -63,6 +66,7 @@ final class ProcessContentReviewAction
         private readonly ContentReviewImageScreener $screener,
         private readonly StructuredReviewResultValidator $validator,
         private readonly ContentReviewProviderFactory $providers,
+        private readonly ProviderSelectionResolver $selection,
         private readonly ContentReviewCircuitBreaker $breaker,
         private readonly ContentReviewBudgetGuard $budget,
         private readonly ContentReviewConcurrencyLimiter $limiter,
@@ -135,9 +139,11 @@ final class ProcessContentReviewAction
             return self::RESULT_PROCESSED;
         }
 
-        $model = $this->model($settings);
+        $provider = $this->selection->provider($settings);
+        $model = $this->selection->model($settings);
+        $descriptor = $this->selection->descriptor($settings);
         $maxOutputTokens = $this->maxOutputTokens($settings);
-        $exhausted = $this->budget->exhaustedPeriod($settings, $model, $maxOutputTokens);
+        $exhausted = $this->budget->exhaustedPeriod($settings, $provider, $model, $maxOutputTokens);
 
         if ($exhausted !== null) {
             $this->guardFailure($review, $checks, ContentReviewErrorCode::BudgetExhausted, 'budget_exhausted');
@@ -157,7 +163,7 @@ final class ProcessContentReviewAction
             return self::RESULT_NO_SLOT;
         }
 
-        $reservation = $this->budget->reserve($settings, $model, $maxOutputTokens);
+        $reservation = $this->budget->reserve($settings, $provider, $model, $maxOutputTokens);
 
         if ($reservation === null) {
             $this->limiter->release($slot);
@@ -166,16 +172,21 @@ final class ProcessContentReviewAction
             return self::RESULT_PROCESSED;
         }
 
-        $plan = $this->imagePlan($content, $policy, $settings, $model);
+        $plan = $this->imagePlan($content, $policy, $settings, $model, $descriptor);
         $this->persistImageSummary($review, $content, $policy, $plan, []);
 
         try {
-            $response = $this->callProvider($review, $content, $policy, $settings, $model, $maxOutputTokens, $plan);
+            $response = $this->callProvider($review, $content, $policy, $settings, $model, $descriptor, $maxOutputTokens, $plan);
         } catch (ContentReviewProviderException $exception) {
             $this->breaker->recordFailure($settings);
             $this->health->recordFailure($exception->errorCode());
             $this->alertIfProviderJustBecameUnavailable($settings, $exception->errorCode());
-            $this->handleProviderFailure($review, $checks, $exception);
+
+            if ($exception->metrics() !== null) {
+                $this->persistProviderMetrics($review, $exception->metrics(), $settings);
+            }
+
+            $this->handleProviderFailure($review->refresh(), $checks, $exception);
 
             return self::RESULT_PROCESSED;
         } catch (Throwable $exception) {
@@ -203,7 +214,7 @@ final class ProcessContentReviewAction
         try {
             $result = $this->validator->validate($response->payload, $policy);
         } catch (ContentReviewException) {
-            $this->persistProviderMetrics($review, $response);
+            $this->persistProviderMetrics($review, $response->metrics(), $settings);
             $this->handleProviderFailure(
                 $review->refresh(),
                 $checks,
@@ -239,6 +250,7 @@ final class ProcessContentReviewAction
         ReviewPolicy $policy,
         array $settings,
         string $model,
+        ?ProviderModelDescriptor $descriptor,
         int $maxOutputTokens,
         array $plan,
     ): ProviderReviewResponse {
@@ -258,14 +270,22 @@ final class ProcessContentReviewAction
             $this->timeoutSeconds($settings),
             $policy->locales(),
             $imageContext,
+            $descriptor,
         );
 
-        return $this->providers->make($this->providerName($settings))->analyze($request);
+        return $this->providers->make($this->selection->provider($settings))->analyze($request);
     }
 
-    private function imagePlan(ReviewContentDTO $content, ReviewPolicy $policy, array $settings, string $model): array
-    {
-        if (($settings['analyze_images'] ?? true) !== true || ! $policy->analyzeImages()) {
+    private function imagePlan(
+        ReviewContentDTO $content,
+        ReviewPolicy $policy,
+        array $settings,
+        string $model,
+        ?ProviderModelDescriptor $descriptor,
+    ): array {
+        $supportsImages = $descriptor === null || $descriptor->supportsImages;
+
+        if (! $supportsImages || ($settings['analyze_images'] ?? true) !== true || ! $policy->analyzeImages()) {
             return ['enabled' => false, 'prepared' => [], 'cached' => [], 'pending' => []];
         }
 
@@ -338,7 +358,7 @@ final class ProcessContentReviewAction
 
     private function resolvedProviderName(array $settings): string
     {
-        return $this->providers->make($this->providerName($settings))->name();
+        return $this->providers->make($this->selection->provider($settings))->name();
     }
 
     private function policyVersionKey(ReviewPolicy $policy): int
@@ -346,15 +366,15 @@ final class ProcessContentReviewAction
         return max(0, (int) $policy->policyVersion);
     }
 
-    private function persistProviderMetrics(ContentReview $review, ProviderReviewResponse $response): void
+    private function persistProviderMetrics(ContentReview $review, ProviderCallMetrics $metrics, array $settings): void
     {
         $this->reviews->update($review, [
-            'provider' => $this->providers->make($this->providerName($this->modes->effectiveSettings($review->subject_type)))->name(),
-            'model' => $response->model,
-            'input_tokens' => $response->inputTokens,
-            'output_tokens' => $response->outputTokens,
-            'cost_micros' => $response->costMicros,
-            'duration_ms' => $response->latencyMs,
+            'provider' => $this->resolvedProviderName($settings),
+            'model' => $metrics->model,
+            'input_tokens' => $metrics->inputTokens,
+            'output_tokens' => $metrics->outputTokens,
+            'cost_micros' => $metrics->costMicros,
+            'duration_ms' => $metrics->latencyMs,
         ]);
     }
 
@@ -381,7 +401,7 @@ final class ProcessContentReviewAction
             'policy_checks' => $result->policyChecks,
             'categories' => $result->categories,
             'deterministic_findings' => $checks->findings,
-            'provider' => $this->providers->make($this->providerName($settings))->name(),
+            'provider' => $this->providers->make($this->selection->provider($settings))->name(),
             'model' => $response->model,
             'prompt_version' => $this->renderer->version($policy),
             'result_schema_version' => $policy->resultSchemaVersion,
@@ -553,23 +573,6 @@ final class ProcessContentReviewAction
         $this->events->publishOperational('content_review.provider_unavailable', [
             'error_code' => $code->value,
         ]);
-    }
-
-    private function providerName(array $settings): ?string
-    {
-        $provider = $settings['provider'] ?? null;
-
-        return is_string($provider) && $provider !== '' ? $provider : null;
-    }
-
-    private function model(array $settings): string
-    {
-        $defaults = (array) config('content_review.defaults');
-        $model = $settings['model'] ?? config('content_review.model');
-
-        return is_string($model) && $model !== ''
-            ? $model
-            : (string) ($defaults['model'] ?? 'claude-sonnet-5');
     }
 
     private function maxOutputTokens(array $settings): int

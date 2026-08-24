@@ -20,23 +20,26 @@ final class ContentReviewHealthReporter
         private readonly ProviderHealthJournal $journal,
         private readonly ContentReviewMetricsRepository $metrics,
         private readonly ContentReviewWorkerHeartbeat $heartbeat,
+        private readonly ProviderSelectionResolver $selection,
+        private readonly ProviderModelCatalog $catalog,
     ) {}
 
     public function report(ReviewableSubjectType $type): array
     {
         $settings = $this->modes->effectiveSettings($type);
         $mode = $this->modes->resolve($type);
-        $provider = $this->providerName($settings);
-        $model = $this->model($settings);
+        $provider = $this->selection->provider($settings);
+        $model = $this->selection->model($settings);
 
         $report = [
             'enabled' => config('content_review.enabled') === true,
-            'configured' => $this->isConfigured($provider),
+            'configured' => $this->providers->isConfigured($provider),
             'provider' => $provider,
             'model' => $model,
             'mode' => $mode->value,
             'mode_label' => __('content_review.modes.'.$mode->value),
             'available_providers' => $this->providers->available(),
+            'available_models' => $this->catalog->toArray(),
             'circuit' => [
                 'state' => $this->breaker->isOpen() ? 'open' : 'closed',
                 'failure_count' => $this->breaker->failureCount(),
@@ -108,32 +111,5 @@ final class ContentReviewHealthReporter
         $timestamp = $this->breaker->openUntil();
 
         return $timestamp === null ? null : Carbon::createFromTimestamp($timestamp)->toIso8601String();
-    }
-
-    private function isConfigured(string $provider): bool
-    {
-        return match ($provider) {
-            'fake' => true,
-            'anthropic' => trim((string) config('services.anthropic.api_key')) !== '',
-            default => false,
-        };
-    }
-
-    private function providerName(array $settings): string
-    {
-        $provider = $settings['provider'] ?? null;
-
-        return is_string($provider) && $provider !== ''
-            ? $provider
-            : (string) config('content_review.provider', 'fake');
-    }
-
-    private function model(array $settings): string
-    {
-        $model = $settings['model'] ?? null;
-
-        return is_string($model) && $model !== ''
-            ? $model
-            : (string) config('content_review.model', 'claude-sonnet-5');
     }
 }

@@ -11,6 +11,7 @@ enum ContentReviewErrorCode: string
     case ProviderUnavailable = 'provider_unavailable';
     case ProviderAuthFailed = 'provider_auth_failed';
     case InvalidStructuredOutput = 'invalid_structured_output';
+    case OutputTruncated = 'provider_output_truncated';
     case ContentUnavailable = 'content_unavailable';
     case ImageFetchFailed = 'image_fetch_failed';
     case BudgetExhausted = 'budget_exhausted';

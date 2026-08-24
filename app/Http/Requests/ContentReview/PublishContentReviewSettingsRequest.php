@@ -7,6 +7,7 @@ namespace App\Http\Requests\ContentReview;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
+use App\Services\ContentReview\Support\ProviderModelCatalog;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -44,7 +45,7 @@ final class PublishContentReviewSettingsRequest extends FormRequest
             'settings.enabled' => ['required', 'boolean'],
             'settings.mode' => ['required', 'string', Rule::in(array_column(ReviewMode::cases(), 'value'))],
             'settings.provider' => ['required', 'string', Rule::in(app(ContentReviewProviderFactory::class)->available())],
-            'settings.model' => ['required', 'string', Rule::in($this->allowedModels())],
+            'settings.model' => ['required', 'string', 'max:80'],
             'settings.timeout_seconds' => ['required', 'integer', 'min:5', 'max:300'],
             'settings.max_attempts' => ['required', 'integer', 'min:1', 'max:10'],
             'settings.backoff_seconds' => ['required', 'array', 'min:1', 'max:10'],
@@ -78,6 +79,16 @@ final class PublishContentReviewSettingsRequest extends FormRequest
 
             if ($daily > $monthly) {
                 $validator->errors()->add('settings.daily_budget_micros', __('content_review.errors.settings_invalid'));
+            }
+
+            $provider = (string) ($settings['provider'] ?? '');
+            $model = (string) ($settings['model'] ?? '');
+
+            if ($provider !== '' && $model !== '' && ! $this->catalog()->has($provider, $model)) {
+                $validator->errors()->add(
+                    'settings.model',
+                    __('content_review.errors.model_not_available_for_provider', ['provider' => $provider])
+                );
             }
 
             $mode = ReviewMode::tryFrom((string) ($settings['mode'] ?? ''));
@@ -127,11 +138,8 @@ final class PublishContentReviewSettingsRequest extends FormRequest
         return array_merge(['global'], array_column(ReviewableSubjectType::cases(), 'value'));
     }
 
-    /**
-     * @return array<int, string>
-     */
-    private function allowedModels(): array
+    private function catalog(): ProviderModelCatalog
     {
-        return array_keys((array) config('content_review.pricing.models', []));
+        return app(ProviderModelCatalog::class);
     }
 }

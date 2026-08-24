@@ -225,6 +225,7 @@ final class AutomationEligibilityTest extends TestCase
 
         $this->assertNotNull(app(ContentReviewBudgetGuard::class)->exhaustedPeriod(
             ['daily_budget_micros' => 0, 'monthly_budget_micros' => 0],
+            'anthropic',
             'claude-sonnet-5',
             2000
         ));

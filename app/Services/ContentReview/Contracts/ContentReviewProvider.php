@@ -11,5 +11,7 @@ interface ContentReviewProvider
 {
     public function name(): string;
 
+    public function isConfigured(): bool;
+
     public function analyze(ProviderReviewRequest $request): ProviderReviewResponse;
 }
