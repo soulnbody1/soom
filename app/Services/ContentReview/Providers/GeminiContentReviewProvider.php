@@ -9,19 +9,12 @@ use App\Domain\ContentReview\Enums\StructuredOutputStrategy;
 use App\Domain\ContentReview\Exceptions\ContentReviewProviderException;
 use App\DTO\ContentReview\ProviderCallMetrics;
 use App\DTO\ContentReview\ProviderReviewRequest;
-use App\DTO\ContentReview\ProviderReviewResponse;
-use App\Services\ContentReview\Contracts\ContentReviewProvider;
 use App\Services\ContentReview\Support\ProviderCostCalculator;
 use App\Services\ContentReview\Support\StrictJsonSchemaAdapter;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
-use Throwable;
 
-final class GeminiContentReviewProvider implements ContentReviewProvider
+final class GeminiContentReviewProvider extends HttpContentReviewProvider
 {
-    private const TOOL_NAME = 'record_content_review';
-
     /** Generation from which thinkingLevel replaces the legacy numeric thinkingBudget. */
     private const THINKING_LEVEL_MIN_GENERATION = 3;
 
@@ -55,54 +48,56 @@ final class GeminiContentReviewProvider implements ContentReviewProvider
         return 'gemini';
     }
 
-    public function isConfigured(): bool
+    protected function configKey(): string
     {
-        return $this->apiKey() !== '';
+        return 'gemini';
     }
 
-    public function analyze(ProviderReviewRequest $request): ProviderReviewResponse
+    protected function headers(string $apiKey): array
     {
-        $apiKey = $this->apiKey();
+        return [
+            'x-goog-api-key' => $apiKey,
+            'content-type' => 'application/json',
+        ];
+    }
 
-        if ($apiKey === '') {
-            throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderAuthFailed);
-        }
+    protected function endpoint(ProviderReviewRequest $request): string
+    {
+        return $this->baseUrl('https://generativelanguage.googleapis.com/v1beta')
+            .'/models/'.$request->model.':generateContent';
+    }
 
-        $startedAt = microtime(true);
+    protected function body(ProviderReviewRequest $request): array
+    {
+        $strategy = $request->structuredOutputStrategy();
 
-        try {
-            $response = Http::withHeaders([
-                'x-goog-api-key' => $apiKey,
-                'content-type' => 'application/json',
-            ])
-                ->timeout($request->timeoutSeconds)
-                ->post($this->endpoint($request), $this->body($request));
-        } catch (ConnectionException) {
-            throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderTimeout);
-        } catch (Throwable) {
-            throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderUnavailable);
-        }
+        return array_replace([
+            'systemInstruction' => ['parts' => [['text' => $this->systemPrompt($request, $strategy)]]],
+            'contents' => [['role' => 'user', 'parts' => $this->contentParts($request)]],
+            'generationConfig' => $this->generationConfig($request, $strategy),
+        ], $this->toolParameters($request, $strategy));
+    }
 
-        $this->assertSuccessful($response);
+    protected function truncationFinishReason(): string
+    {
+        return 'MAX_TOKENS';
+    }
 
-        $metrics = $this->metrics($response, $request, (int) round((microtime(true) - $startedAt) * 1000));
+    protected function textPart(string $text): array
+    {
+        return ['text' => $text];
+    }
 
-        return new ProviderReviewResponse(
-            $this->extractPayload($request, $response, $metrics),
-            $metrics->model,
-            $metrics->inputTokens,
-            $metrics->outputTokens,
-            $metrics->costMicros,
-            $metrics->latencyMs,
-            $metrics->providerRequestId,
-        );
+    protected function imagePart(string $mime, string $bytes): array
+    {
+        return ['inlineData' => ['mimeType' => $mime, 'data' => base64_encode($bytes)]];
     }
 
     /**
      * The reported model is the requested one: Gemini echoes a resolved modelVersion that can be
      * a dated or preview build the catalog does not price, which would drop the cost silently.
      */
-    private function metrics(Response $response, ProviderReviewRequest $request, int $latencyMs): ProviderCallMetrics
+    protected function metrics(Response $response, ProviderReviewRequest $request, int $latencyMs): ProviderCallMetrics
     {
         $model = $request->model;
         $inputTokens = $this->intOrNull($response->json('usageMetadata.promptTokenCount'));
@@ -119,6 +114,76 @@ final class GeminiContentReviewProvider implements ContentReviewProvider
         );
     }
 
+    protected function extractPayload(ProviderReviewRequest $request, Response $response, ProviderCallMetrics $metrics): array
+    {
+        if (is_array($response->json())) {
+            $decoded = $request->structuredOutputStrategy() === StructuredOutputStrategy::Tool
+                ? $this->functionCallArguments($response)
+                : $this->decodeText($this->candidateText($response));
+
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        $this->failUnusableOutput($metrics);
+    }
+
+    protected function requestId(Response $response): ?string
+    {
+        return $this->stringOrNull($response->header('x-goog-request-id'))
+            ?? $this->stringOrNull($response->header('x-request-id'));
+    }
+
+    protected function assertSuccessful(Response $response): void
+    {
+        if ($response->successful()) {
+            if (is_array($response->json('error'))) {
+                throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderUnavailable);
+            }
+
+            return;
+        }
+
+        throw ContentReviewProviderException::of($this->classify($response));
+    }
+
+    /**
+     * Gemini folds unrelated conditions into HTTP 400, so error.status decides first and the HTTP
+     * code is only the fallback. Only a schema or response-format rejection is invalid output.
+     */
+    private function classify(Response $response): ContentReviewErrorCode
+    {
+        $status = strtoupper($this->stringOrNull($response->json('error.status')) ?? '');
+
+        return match ($status) {
+            'INVALID_ARGUMENT' => $this->mentionsSchema($this->stringOrNull($response->json('error.message')) ?? '')
+                ? ContentReviewErrorCode::InvalidStructuredOutput
+                : ContentReviewErrorCode::ProviderUnavailable,
+            'FAILED_PRECONDITION', 'UNAUTHENTICATED', 'PERMISSION_DENIED' => ContentReviewErrorCode::ProviderAuthFailed,
+            'RESOURCE_EXHAUSTED' => ContentReviewErrorCode::ProviderRateLimited,
+            'DEADLINE_EXCEEDED' => ContentReviewErrorCode::ProviderTimeout,
+            'NOT_FOUND', 'UNAVAILABLE', 'INTERNAL' => ContentReviewErrorCode::ProviderUnavailable,
+            default => $this->classifyByStatusCode($response->status()),
+        };
+    }
+
+    /**
+     * Used for classification only. The message itself is never returned, stored or logged.
+     */
+    private function mentionsSchema(string $message): bool
+    {
+        $message = strtolower($message);
+
+        foreach (self::SCHEMA_ERROR_MARKERS as $marker) {
+            if (str_contains($message, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Thinking tokens are billed as output, so they belong in the output total.
      */
@@ -132,34 +197,6 @@ final class GeminiContentReviewProvider implements ContentReviewProvider
         }
 
         return ($answer ?? 0) + ($thoughts ?? 0);
-    }
-
-    private function endpoint(ProviderReviewRequest $request): string
-    {
-        return rtrim((string) config('services.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta'), '/')
-            .'/models/'.$request->model.':generateContent';
-    }
-
-    private function body(ProviderReviewRequest $request): array
-    {
-        $strategy = $request->structuredOutputStrategy();
-
-        return array_replace([
-            'systemInstruction' => ['parts' => [['text' => $this->systemPrompt($request, $strategy)]]],
-            'contents' => [['role' => 'user', 'parts' => $this->buildParts($request)]],
-            'generationConfig' => $this->generationConfig($request, $strategy),
-        ], $this->toolParameters($request, $strategy));
-    }
-
-    private function systemPrompt(ProviderReviewRequest $request, StructuredOutputStrategy $strategy): string
-    {
-        if ($strategy !== StructuredOutputStrategy::JsonObject) {
-            return $request->policyInstructions;
-        }
-
-        return $request->policyInstructions
-            ."\n\nReturn a single JSON object that validates against this schema, and nothing else:\n"
-            .(string) json_encode($request->resultSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -224,7 +261,7 @@ final class GeminiContentReviewProvider implements ContentReviewProvider
             'tools' => [[
                 'functionDeclarations' => [[
                     'name' => self::TOOL_NAME,
-                    'description' => 'Record the structured content review result.',
+                    'description' => self::TOOL_DESCRIPTION,
                     'parametersJsonSchema' => $request->resultSchema,
                 ]],
             ]],
@@ -235,136 +272,6 @@ final class GeminiContentReviewProvider implements ContentReviewProvider
                 ],
             ],
         ];
-    }
-
-    private function buildParts(ProviderReviewRequest $request): array
-    {
-        $parts = [];
-
-        foreach ($request->images as $image) {
-            if (($image['bytes'] ?? null) === null) {
-                continue;
-            }
-
-            $ref = (string) ($image['ref'] ?? '');
-
-            if ($ref !== '') {
-                $parts[] = ['text' => 'IMAGE '.$ref];
-            }
-
-            $parts[] = [
-                'inlineData' => [
-                    'mimeType' => (string) $image['mime'],
-                    'data' => base64_encode((string) $image['bytes']),
-                ],
-            ];
-        }
-
-        $parts[] = ['text' => $this->buildTextBlocks($request)];
-
-        return $parts;
-    }
-
-    private function buildTextBlocks(ProviderReviewRequest $request): string
-    {
-        $parts = [];
-
-        foreach ($request->textBlocks as $block) {
-            $field = (string) ($block['field'] ?? 'other');
-            $locale = (string) ($block['locale'] ?? 'ar');
-            $value = (string) ($block['value'] ?? '');
-
-            $parts[] = "<<<FIELD:{$field}:{$locale}>>>\n{$value}\n<<<END>>>";
-        }
-
-        $facts = [];
-
-        foreach ($request->structuredFacts as $key => $value) {
-            $facts[] = $key.': '.(is_scalar($value) ? (string) $value : json_encode($value, JSON_UNESCAPED_UNICODE));
-        }
-
-        return implode("\n\n", array_merge($parts, ['<<<FIELD:facts>>>', implode("\n", $facts), '<<<END>>>']));
-    }
-
-    private function assertSuccessful(Response $response): void
-    {
-        if ($response->successful()) {
-            if (is_array($response->json('error'))) {
-                throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderUnavailable);
-            }
-
-            return;
-        }
-
-        throw ContentReviewProviderException::of($this->classify($response));
-    }
-
-    /**
-     * Gemini folds unrelated conditions into HTTP 400, so error.status decides first and the HTTP
-     * code is only the fallback. Only a schema or response-format rejection is invalid output.
-     */
-    private function classify(Response $response): ContentReviewErrorCode
-    {
-        $status = strtoupper($this->stringOrNull($response->json('error.status')) ?? '');
-
-        return match ($status) {
-            'INVALID_ARGUMENT' => $this->mentionsSchema($this->stringOrNull($response->json('error.message')) ?? '')
-                ? ContentReviewErrorCode::InvalidStructuredOutput
-                : ContentReviewErrorCode::ProviderUnavailable,
-            'FAILED_PRECONDITION', 'UNAUTHENTICATED', 'PERMISSION_DENIED' => ContentReviewErrorCode::ProviderAuthFailed,
-            'RESOURCE_EXHAUSTED' => ContentReviewErrorCode::ProviderRateLimited,
-            'DEADLINE_EXCEEDED' => ContentReviewErrorCode::ProviderTimeout,
-            'NOT_FOUND', 'UNAVAILABLE', 'INTERNAL' => ContentReviewErrorCode::ProviderUnavailable,
-            default => $this->classifyByStatusCode($response->status()),
-        };
-    }
-
-    private function classifyByStatusCode(int $status): ContentReviewErrorCode
-    {
-        return match (true) {
-            in_array($status, [401, 402, 403], true) => ContentReviewErrorCode::ProviderAuthFailed,
-            in_array($status, [408, 504], true) => ContentReviewErrorCode::ProviderTimeout,
-            $status === 429 => ContentReviewErrorCode::ProviderRateLimited,
-            default => ContentReviewErrorCode::ProviderUnavailable,
-        };
-    }
-
-    /**
-     * Used for classification only. The message itself is never returned, stored or logged.
-     */
-    private function mentionsSchema(string $message): bool
-    {
-        $message = strtolower($message);
-
-        foreach (self::SCHEMA_ERROR_MARKERS as $marker) {
-            if (str_contains($message, $marker)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function extractPayload(ProviderReviewRequest $request, Response $response, ProviderCallMetrics $metrics): array
-    {
-        if (! is_array($response->json())) {
-            throw ContentReviewProviderException::afterCall(ContentReviewErrorCode::InvalidStructuredOutput, $metrics);
-        }
-
-        $decoded = $request->structuredOutputStrategy() === StructuredOutputStrategy::Tool
-            ? $this->functionCallArguments($response)
-            : $this->decodeText($this->candidateText($response));
-
-        if (is_array($decoded)) {
-            return $decoded;
-        }
-
-        throw ContentReviewProviderException::afterCall(
-            $metrics->finishReason === 'MAX_TOKENS'
-                ? ContentReviewErrorCode::OutputTruncated
-                : ContentReviewErrorCode::InvalidStructuredOutput,
-            $metrics
-        );
     }
 
     private function functionCallArguments(Response $response): ?array
@@ -411,39 +318,5 @@ final class GeminiContentReviewProvider implements ContentReviewProvider
         $decoded = json_decode($this->stripCodeFence($raw), true);
 
         return is_array($decoded) ? $decoded : null;
-    }
-
-    private function stripCodeFence(string $raw): string
-    {
-        $trimmed = trim($raw);
-
-        if (! str_starts_with($trimmed, '```')) {
-            return $trimmed;
-        }
-
-        $trimmed = (string) preg_replace('/^```[a-zA-Z0-9_-]*\s*/', '', $trimmed);
-
-        return trim((string) preg_replace('/```$/', '', trim($trimmed)));
-    }
-
-    private function requestId(Response $response): ?string
-    {
-        return $this->stringOrNull($response->header('x-goog-request-id'))
-            ?? $this->stringOrNull($response->header('x-request-id'));
-    }
-
-    private function apiKey(): string
-    {
-        return trim((string) config('services.gemini.api_key'));
-    }
-
-    private function intOrNull(mixed $value): ?int
-    {
-        return is_numeric($value) ? (int) $value : null;
-    }
-
-    private function stringOrNull(mixed $value): ?string
-    {
-        return is_string($value) && $value !== '' ? $value : null;
     }
 }

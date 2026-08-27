@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ContentReview\Support;
 
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Repositories\ContentReview\ContentReviewMetricsRepository;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
 use Illuminate\Support\Carbon;
@@ -86,24 +87,9 @@ final class ContentReviewHealthReporter
         ];
     }
 
-    private function budgetPeriod(array $settings, string $period, Carbon $since): array
+    private function budgetPeriod(ReviewSettings $settings, string $period, Carbon $since): array
     {
-        $budget = $this->budget->budgetFor($settings, $period);
-        $spent = $this->budget->spentMicros($period);
-        $reserved = $this->budget->reservedMicros($period);
-        $remaining = $this->budget->remainingMicros($settings, $period);
-        $unpriced = $this->metrics->unpricedSince($since);
-
-        return [
-            'budget_micros' => $budget,
-            'spent_micros' => $spent,
-            'reserved_micros' => $reserved,
-            'remaining_micros' => $remaining,
-            'utilization_percent' => $budget <= 0 ? null : intdiv(($spent + $reserved) * 100, $budget),
-            'exhausted' => $remaining <= 0,
-            'unpriced_reviews' => $unpriced,
-            'totals_complete' => $unpriced === 0,
-        ];
+        return $this->budget->periodSnapshot($settings, $period, $this->metrics->unpricedSince($since));
     }
 
     private function openUntil(): ?string

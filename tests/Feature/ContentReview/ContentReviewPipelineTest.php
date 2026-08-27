@@ -12,6 +12,7 @@ use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\DTO\ContentReview\ProviderCallMetrics;
 use App\Jobs\ContentReview\ProcessContentReviewJob;
 use App\Models\Auction\Auction;
@@ -510,7 +511,7 @@ final class ContentReviewPipelineTest extends TestCase
         $breaker = app(ContentReviewCircuitBreaker::class);
 
         for ($failure = 0; $failure < 5; $failure++) {
-            $breaker->recordFailure(['circuit_breaker' => ['failure_threshold' => 5, 'window_seconds' => 300, 'open_seconds' => 600]]);
+            $breaker->recordFailure(new ReviewSettings(['circuit_breaker' => ['failure_threshold' => 5, 'window_seconds' => 300, 'open_seconds' => 600]]));
         }
 
         $this->assertTrue($breaker->isOpen());
@@ -547,7 +548,7 @@ final class ContentReviewPipelineTest extends TestCase
         $this->assertGreaterThan(0, $estimate);
 
         $budget = $estimate * 3;
-        $settings = ['daily_budget_micros' => $budget, 'monthly_budget_micros' => $budget];
+        $settings = new ReviewSettings(['daily_budget_micros' => $budget, 'monthly_budget_micros' => $budget]);
         $reservations = [];
 
         while (($reservation = $guard->reserve($settings, 'anthropic', 'claude-sonnet-5', 2000)) !== null) {
@@ -573,7 +574,7 @@ final class ContentReviewPipelineTest extends TestCase
         $this->fakeProvider()->respondWith($this->cleanPayload());
 
         $limiter = app(ContentReviewConcurrencyLimiter::class);
-        $held = $limiter->acquire(['max_concurrent' => 1]);
+        $held = $limiter->acquire(new ReviewSettings(['max_concurrent' => 1]));
         $this->assertNotNull($held);
 
         $review = ContentReview::firstOrFail();

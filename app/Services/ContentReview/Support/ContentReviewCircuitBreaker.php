@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ContentReview\Support;
 
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use Illuminate\Support\Facades\Cache;
 
 final class ContentReviewCircuitBreaker
@@ -38,9 +39,9 @@ final class ContentReviewCircuitBreaker
         Cache::forget(self::ALERT_KEY);
     }
 
-    public function recordFailure(array $settings): void
+    public function recordFailure(ReviewSettings $settings): void
     {
-        $breaker = $this->breakerSettings($settings);
+        $breaker = $settings->circuitBreaker();
 
         $failures = (int) Cache::get(self::FAILURE_KEY, 0) + 1;
         Cache::put(self::FAILURE_KEY, $failures, $breaker['window_seconds']);
@@ -52,9 +53,9 @@ final class ContentReviewCircuitBreaker
         Cache::put(self::OPEN_KEY, time() + $breaker['open_seconds'], $breaker['open_seconds']);
     }
 
-    public function shouldAlert(array $settings): bool
+    public function shouldAlert(ReviewSettings $settings): bool
     {
-        $breaker = $this->breakerSettings($settings);
+        $breaker = $settings->circuitBreaker();
 
         return Cache::add(self::ALERT_KEY, 1, $breaker['open_seconds']);
     }
@@ -62,20 +63,5 @@ final class ContentReviewCircuitBreaker
     public function reset(): void
     {
         $this->recordSuccess();
-    }
-
-    private function breakerSettings(array $settings): array
-    {
-        $defaults = (array) config('content_review.defaults.circuit_breaker');
-        $configured = $settings['circuit_breaker'] ?? [];
-        $configured = is_array($configured) ? $configured : [];
-
-        $merged = array_replace($defaults, $configured);
-
-        return [
-            'failure_threshold' => max(1, (int) ($merged['failure_threshold'] ?? 5)),
-            'window_seconds' => max(1, (int) ($merged['window_seconds'] ?? 300)),
-            'open_seconds' => max(1, (int) ($merged['open_seconds'] ?? 600)),
-        ];
     }
 }

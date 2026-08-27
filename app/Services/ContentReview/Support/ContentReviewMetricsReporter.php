@@ -9,6 +9,7 @@ use App\Domain\ContentReview\Enums\ContentReviewOutcome;
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\DTO\ContentReview\MetricsRange;
 use App\Repositories\ContentReview\ContentReviewMetricsRepository;
 use Illuminate\Support\Carbon;
@@ -207,23 +208,9 @@ final class ContentReviewMetricsReporter
         ];
     }
 
-    private function costPeriod(array $settings, string $period, Carbon $since): array
+    private function costPeriod(ReviewSettings $settings, string $period, Carbon $since): array
     {
-        $budget = $this->budget->budgetFor($settings, $period);
-        $spent = $this->budget->spentMicros($period);
-        $reserved = $this->budget->reservedMicros($period);
-        $unpriced = $this->metrics->unpricedSince($since);
-
-        return [
-            'budget_micros' => $budget,
-            'spent_micros' => $spent,
-            'reserved_micros' => $reserved,
-            'remaining_micros' => $this->budget->remainingMicros($settings, $period),
-            'utilization_percent' => $this->percent($spent + $reserved, $budget),
-            'exhausted' => $budget > 0 && $this->budget->remainingMicros($settings, $period) <= 0,
-            'unpriced_reviews' => $unpriced,
-            'totals_complete' => $unpriced === 0,
-        ];
+        return $this->budget->periodSnapshot($settings, $period, $this->metrics->unpricedSince($since));
     }
 
     private function bucket(array $counts, array $cases): array

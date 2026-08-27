@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ContentReview\Support;
 
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Repositories\ContentReview\ContentReviewMetricsRepository;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
 use Illuminate\Support\Carbon;
@@ -173,7 +174,7 @@ final class ContentReviewAlertMonitor
         return $this->observation($this->breaker->isOpen(), 'critical', $this->breaker->failureCount(), null);
     }
 
-    private function budgetState(array $settings): array
+    private function budgetState(ReviewSettings $settings): array
     {
         $exhausted = false;
 

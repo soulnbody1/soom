@@ -33,9 +33,7 @@ final class ContentReviewActionResolver
 
     public function isStale(ContentReview $review): bool
     {
-        return $review->current_marker === null
-            || $review->superseded_at !== null
-            || $review->status === ContentReviewStatus::Superseded;
+        return $review->isSuperseded();
     }
 
     public function isRetryable(ContentReview $review): bool

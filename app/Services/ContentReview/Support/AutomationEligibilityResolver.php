@@ -67,10 +67,7 @@ final class AutomationEligibilityResolver
     {
         $reasons = [];
 
-        if ($review->current_marker === null
-            || $review->superseded_at !== null
-            || $review->status === ContentReviewStatus::Superseded
-            || $review->status === ContentReviewStatus::Cancelled) {
+        if ($review->isSuperseded()) {
             $reasons[] = 'review_not_current';
         }
 
@@ -136,9 +133,8 @@ final class AutomationEligibilityResolver
         $settings = $this->modes->effectiveSettings($review->subject_type);
         $provider = (string) ($review->provider ?? $this->selection->provider($settings));
         $model = (string) ($review->model ?? $this->selection->model($settings));
-        $maxOutputTokens = max(256, (int) ($settings['max_output_tokens'] ?? 2000));
 
-        if ($model !== '' && $this->budget->exhaustedPeriod($settings, $provider, $model, $maxOutputTokens) !== null) {
+        if ($model !== '' && $this->budget->exhaustedPeriod($settings, $provider, $model, $settings->maxOutputTokens()) !== null) {
             $reasons[] = 'budget_exhausted';
         }
 

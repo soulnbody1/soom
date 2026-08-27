@@ -147,8 +147,10 @@ test('http status codes map onto the closed error code set', function (int $stat
     );
 })->with([
     'unauthorized' => [401, ContentReviewErrorCode::ProviderAuthFailed],
+    'payment required' => [402, ContentReviewErrorCode::ProviderAuthFailed],
     'forbidden' => [403, ContentReviewErrorCode::ProviderAuthFailed],
     'request timeout' => [408, ContentReviewErrorCode::ProviderTimeout],
+    'gateway timeout' => [504, ContentReviewErrorCode::ProviderTimeout],
     'rate limited' => [429, ContentReviewErrorCode::ProviderRateLimited],
     'bad request' => [400, ContentReviewErrorCode::ProviderUnavailable],
     'server error' => [500, ContentReviewErrorCode::ProviderUnavailable],
@@ -156,6 +158,47 @@ test('http status codes map onto the closed error code set', function (int $stat
     'unavailable' => [503, ContentReviewErrorCode::ProviderUnavailable],
     'overloaded' => [529, ContentReviewErrorCode::ProviderUnavailable],
 ]);
+
+test('a 200 that carries an error object is not treated as a usable response', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(['error' => ['message' => 'overloaded']], 200)]);
+
+    expectProviderErrorCode(
+        fn () => anthropicProvider()->analyze(providerRequest()),
+        ContentReviewErrorCode::ProviderUnavailable
+    );
+});
+
+test('a response cut short by the token limit is reported as truncated, not as invalid output', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicBody([
+        'content' => [['type' => 'text', 'text' => '{"recommendation":"appr']],
+        'stop_reason' => 'max_tokens',
+    ]))]);
+
+    expectProviderErrorCode(
+        fn () => anthropicProvider()->analyze(providerRequest()),
+        ContentReviewErrorCode::OutputTruncated
+    );
+});
+
+test('an unusable response still carries the tokens and cost the vendor already billed', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicBody([
+        'content' => [['type' => 'text', 'text' => 'no tool call here']],
+    ]))]);
+
+    $exception = expectProviderErrorCode(
+        fn () => anthropicProvider()->analyze(providerRequest()),
+        ContentReviewErrorCode::InvalidStructuredOutput
+    );
+
+    $metrics = $exception->metrics();
+
+    expect($metrics)->not->toBeNull()
+        ->and($metrics->inputTokens)->toBe(500)
+        ->and($metrics->outputTokens)->toBe(120)
+        ->and($metrics->costMicros)->toBe(
+            app(ProviderCostCalculator::class)->costMicros('anthropic', 'claude-sonnet-5', 500, 120)
+        );
+});
 
 test('a connection failure is reported as a provider timeout', function (): void {
     Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out'));

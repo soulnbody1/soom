@@ -147,10 +147,7 @@ final class ApplyContentReviewDecisionAction
 
     private function humanDecisionBlocker(ContentReview $review, int $subjectId): ?string
     {
-        if ($review->current_marker === null
-            || $review->superseded_at !== null
-            || $review->status === ContentReviewStatus::Superseded
-            || $review->status === ContentReviewStatus::Cancelled) {
+        if ($review->isSuperseded()) {
             return 'review_superseded';
         }
 

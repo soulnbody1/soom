@@ -7,6 +7,7 @@ namespace Tests\Feature\ContentReview;
 use App\Domain\ContentReview\Enums\ContentReviewOutcome;
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\DTO\ContentReview\AutomationContext;
 use App\Models\Auction\Auction;
 use App\Models\ContentReview\ContentReview;
@@ -202,7 +203,7 @@ final class AutomationEligibilityTest extends TestCase
         $breaker = app(ContentReviewCircuitBreaker::class);
 
         for ($failure = 0; $failure < 5; $failure++) {
-            $breaker->recordFailure(['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]]);
+            $breaker->recordFailure(new ReviewSettings(['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]]));
         }
 
         $this->assertTrue($breaker->isOpen());
@@ -224,7 +225,7 @@ final class AutomationEligibilityTest extends TestCase
         ]);
 
         $this->assertNotNull(app(ContentReviewBudgetGuard::class)->exhaustedPeriod(
-            ['daily_budget_micros' => 0, 'monthly_budget_micros' => 0],
+            new ReviewSettings(['daily_budget_micros' => 0, 'monthly_budget_micros' => 0]),
             'anthropic',
             'claude-sonnet-5',
             2000

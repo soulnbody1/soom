@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ContentReview\Support;
 
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
 
@@ -13,7 +14,7 @@ final class ContentReviewConcurrencyLimiter
 
     private array $held = [];
 
-    public function acquire(array $settings): ?string
+    public function acquire(ReviewSettings $settings): ?string
     {
         $max = $this->maxConcurrent($settings);
         $ttl = max(30, (int) config('content_review.concurrency.slot_ttl_seconds', 900));
@@ -52,10 +53,8 @@ final class ContentReviewConcurrencyLimiter
         return max(1, (int) config('content_review.concurrency.release_delay_seconds', 30));
     }
 
-    public function maxConcurrent(array $settings): int
+    public function maxConcurrent(ReviewSettings $settings): int
     {
-        $defaults = (array) config('content_review.defaults');
-
-        return max(1, (int) ($settings['max_concurrent'] ?? $defaults['max_concurrent'] ?? 5));
+        return $settings->maxConcurrent();
     }
 }

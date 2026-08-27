@@ -7,6 +7,7 @@ namespace Tests\Feature\ContentReview;
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Models\Auction\OutboxMessage;
 use App\Models\ContentReview\ContentReview;
 use App\Notifications\ContentReviewAdminNotification;
@@ -100,7 +101,7 @@ final class AlertRateLimitTest extends TestCase
 
     public function test_an_open_circuit_and_a_recovered_circuit_are_both_reported(): void
     {
-        $settings = ['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]];
+        $settings = new ReviewSettings(['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]]);
         app(ContentReviewCircuitBreaker::class)->recordFailure($settings);
 
         $opened = $this->monitor()->sweep(ReviewableSubjectType::Auction);
@@ -148,7 +149,7 @@ final class AlertRateLimitTest extends TestCase
         $this->admin();
         $this->staleQueuedReview();
         app(ContentReviewCircuitBreaker::class)->recordFailure(
-            ['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]]
+            new ReviewSettings(['circuit_breaker' => ['failure_threshold' => 1, 'window_seconds' => 300, 'open_seconds' => 600]])
         );
 
         $this->monitor()->sweep(ReviewableSubjectType::Auction);

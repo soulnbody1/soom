@@ -50,7 +50,7 @@ final class TestContentReviewProviderAction
             [],
             $model,
             self::PROBE_MAX_OUTPUT_TOKENS,
-            $this->timeoutSeconds($settings),
+            $settings->timeoutSeconds(),
             $policy->locales(),
             [],
             $this->selection->descriptor($settings),
@@ -91,12 +91,5 @@ final class TestContentReviewProviderAction
     private function elapsedMs(mixed $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
-    }
-
-    private function timeoutSeconds(array $settings): int
-    {
-        $defaults = (array) config('content_review.defaults');
-
-        return max(5, (int) ($settings['timeout_seconds'] ?? $defaults['timeout_seconds'] ?? 45));
     }
 }

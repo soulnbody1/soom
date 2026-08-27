@@ -260,8 +260,7 @@ final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
 
     private function automationSettings(): array
     {
-        $settings = $this->modes->effectiveSettings(ReviewableSubjectType::Auction);
-        $automation = $settings['automation'] ?? [];
+        $automation = $this->modes->effectiveSettings(ReviewableSubjectType::Auction)->settings['automation'] ?? [];
 
         return is_array($automation) ? $automation : [];
     }

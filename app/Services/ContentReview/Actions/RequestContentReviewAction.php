@@ -8,6 +8,7 @@ use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Jobs\ContentReview\ProcessContentReviewJob;
 use App\Models\ContentReview\ContentReview;
 use App\Repositories\ContentReview\ContentReviewRepository;
@@ -90,7 +91,7 @@ final class RequestContentReviewAction
             'prompt_version' => $policy === null ? null : (string) $policy->prompt_version,
             'result_schema_version' => $policy === null ? 1 : (int) $policy->result_schema_version,
             'attempt' => $attempt,
-            'max_attempts' => $attempt - 1 + $this->maxAttempts($effective),
+            'max_attempts' => $attempt - 1 + $effective->maxAttempts(),
             'image_count' => count($content->images),
             'requested_by' => $requestedBy,
             'current_marker' => 1,
@@ -104,39 +105,13 @@ final class RequestContentReviewAction
         return $review;
     }
 
-    public function dispatch(ContentReview $review, array $settings): void
+    public function dispatch(ContentReview $review, ReviewSettings $settings): void
     {
         ProcessContentReviewJob::dispatch(
             (string) $review->public_id,
-            $this->maxAttempts($settings),
-            $this->timeoutSeconds($settings),
-            $this->backoffSeconds($settings),
+            $settings->maxAttempts(),
+            $settings->timeoutSeconds(),
+            $settings->backoffSeconds(),
         )->afterCommit();
-    }
-
-    private function maxAttempts(array $settings): int
-    {
-        $defaults = (array) config('content_review.defaults');
-
-        return max(1, min(255, (int) ($settings['max_attempts'] ?? $defaults['max_attempts'] ?? 3)));
-    }
-
-    private function timeoutSeconds(array $settings): int
-    {
-        $defaults = (array) config('content_review.defaults');
-
-        return max(5, (int) ($settings['timeout_seconds'] ?? $defaults['timeout_seconds'] ?? 45));
-    }
-
-    private function backoffSeconds(array $settings): array
-    {
-        $defaults = (array) config('content_review.defaults');
-        $backoff = $settings['backoff_seconds'] ?? $defaults['backoff_seconds'] ?? [60, 300, 900];
-
-        if (! is_array($backoff) || $backoff === []) {
-            $backoff = [60, 300, 900];
-        }
-
-        return array_values(array_map(static fn ($value): int => max(1, (int) $value), $backoff));
     }
 }

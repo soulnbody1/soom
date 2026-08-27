@@ -6,6 +6,7 @@ namespace App\Services\ContentReview\Support;
 
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Models\ContentReview\ContentReviewSetting;
 use App\Repositories\ContentReview\ContentReviewSettingRepository;
 
@@ -41,19 +42,14 @@ final class ReviewModeResolver
         return $this->settings->active($type->value) ?? $this->settings->active(self::GLOBAL_SCOPE);
     }
 
-    public function effectiveSettings(ReviewableSubjectType $type): array
+    public function effectiveSettings(ReviewableSubjectType $type): ReviewSettings
     {
-        $defaults = (array) config('content_review.defaults');
         $active = $this->activeSettings($type);
 
-        if ($active === null) {
-            return $defaults;
-        }
-
-        return array_replace($defaults, array_filter(
-            (array) $active->settings,
-            static fn ($value): bool => $value !== null
-        ));
+        return ReviewSettings::merge(
+            (array) config('content_review.defaults'),
+            $active === null ? [] : (array) $active->settings
+        );
     }
 
     private function modeFrom(ContentReviewSetting $setting): ReviewMode

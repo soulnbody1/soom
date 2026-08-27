@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\ContentReview\Enums\StructuredOutputStrategy;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
 use App\Services\ContentReview\Support\ProviderModelCatalog;
 use App\Services\ContentReview\Support\ProviderSelectionResolver;
@@ -10,6 +11,11 @@ use App\Services\ContentReview\Support\ProviderSelectionResolver;
 function catalog(): ProviderModelCatalog
 {
     return app(ProviderModelCatalog::class);
+}
+
+function reviewSettings(array $settings = []): ReviewSettings
+{
+    return new ReviewSettings($settings);
 }
 
 function selection(): ProviderSelectionResolver
@@ -95,22 +101,22 @@ test('the selection resolver keeps the published settings ahead of config', func
     config()->set('content_review.provider', 'fake');
     config()->set('content_review.model', 'claude-sonnet-5');
 
-    expect(selection()->provider([]))->toBe('fake')
-        ->and(selection()->model([]))->toBe('claude-sonnet-5')
-        ->and(selection()->provider(['provider' => 'openrouter']))->toBe('openrouter')
-        ->and(selection()->model(['provider' => 'openrouter', 'model' => 'openai/gpt-4o-mini']))->toBe('openai/gpt-4o-mini');
+    expect(selection()->provider(reviewSettings()))->toBe('fake')
+        ->and(selection()->model(reviewSettings()))->toBe('claude-sonnet-5')
+        ->and(selection()->provider(reviewSettings(['provider' => 'openrouter'])))->toBe('openrouter')
+        ->and(selection()->model(reviewSettings(['provider' => 'openrouter', 'model' => 'openai/gpt-4o-mini'])))->toBe('openai/gpt-4o-mini');
 });
 
 test('a model that does not belong to the selected provider falls back to that provider default', function (): void {
     config()->set('content_review.provider', 'fake');
     config()->set('content_review.model', 'claude-sonnet-5');
 
-    expect(selection()->model(['provider' => 'openrouter', 'model' => 'claude-sonnet-5']))
+    expect(selection()->model(reviewSettings(['provider' => 'openrouter', 'model' => 'claude-sonnet-5'])))
         ->toBe('google/gemini-2.5-flash');
 });
 
 test('the descriptor travels with the resolved provider and model', function (): void {
-    $descriptor = selection()->descriptor(['provider' => 'openrouter', 'model' => 'openai/gpt-4o-mini']);
+    $descriptor = selection()->descriptor(reviewSettings(['provider' => 'openrouter', 'model' => 'openai/gpt-4o-mini']));
 
     expect($descriptor->id)->toBe('openai/gpt-4o-mini')
         ->and($descriptor->structured)->toBe(StructuredOutputStrategy::JsonSchema)

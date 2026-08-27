@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ContentReview\Support;
 
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Repositories\ContentReview\ContentReviewRepository;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -46,7 +47,7 @@ final class ContentReviewBudgetGuard
         return max(0, (int) Cache::get(self::RESERVED_PREFIX.$this->periodKey($period), 0));
     }
 
-    public function remainingMicros(array $settings, string $period): int
+    public function remainingMicros(ReviewSettings $settings, string $period): int
     {
         $budget = $this->budgetFor($settings, $period);
 
@@ -57,7 +58,7 @@ final class ContentReviewBudgetGuard
         return max(0, $budget - $this->spentMicros($period) - $this->reservedMicros($period));
     }
 
-    public function exhaustedPeriod(array $settings, string $provider, string $model, int $maxOutputTokens): ?string
+    public function exhaustedPeriod(ReviewSettings $settings, string $provider, string $model, int $maxOutputTokens): ?string
     {
         $estimate = $this->estimateMicros($provider, $model, $maxOutputTokens);
 
@@ -70,7 +71,7 @@ final class ContentReviewBudgetGuard
         return null;
     }
 
-    public function reserve(array $settings, string $provider, string $model, int $maxOutputTokens): ?string
+    public function reserve(ReviewSettings $settings, string $provider, string $model, int $maxOutputTokens): ?string
     {
         $estimate = $this->estimateMicros($provider, $model, $maxOutputTokens);
         $ttl = max(60, (int) config('content_review.budget.reservation_ttl_seconds', 900));
@@ -153,12 +154,34 @@ final class ContentReviewBudgetGuard
         return Cache::add(self::ALERT_PREFIX.$this->periodKey($period), 1, $ttl);
     }
 
-    public function budgetFor(array $settings, string $period): int
+    public function budgetFor(ReviewSettings $settings, string $period): int
     {
-        $key = $period === 'daily' ? 'daily_budget_micros' : 'monthly_budget_micros';
-        $defaults = (array) config('content_review.defaults');
+        return $settings->budgetMicros($period);
+    }
 
-        return max(0, (int) ($settings[$key] ?? $defaults[$key] ?? 0));
+    /**
+     * The one reading of a budget period, so the health and metrics endpoints can never
+     * disagree about the same number. An unset budget means unlimited, not exhausted.
+     *
+     * @return array<string, int|bool|null>
+     */
+    public function periodSnapshot(ReviewSettings $settings, string $period, int $unpricedReviews): array
+    {
+        $budget = $this->budgetFor($settings, $period);
+        $spent = $this->spentMicros($period);
+        $reserved = $this->reservedMicros($period);
+        $remaining = $this->remainingMicros($settings, $period);
+
+        return [
+            'budget_micros' => $budget,
+            'spent_micros' => $spent,
+            'reserved_micros' => $reserved,
+            'remaining_micros' => $remaining,
+            'utilization_percent' => $budget <= 0 ? null : intdiv(($spent + $reserved) * 100, $budget),
+            'exhausted' => $budget > 0 && $remaining <= 0,
+            'unpriced_reviews' => $unpricedReviews,
+            'totals_complete' => $unpricedReviews === 0,
+        ];
     }
 
     private function periodStart(string $period): Carbon
