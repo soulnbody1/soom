@@ -218,7 +218,7 @@ POST /api/admin/content-review/provider/test
 | `provider_auth_failed` | المفتاح فارغ أو 401/403 — تأكد من `config:clear` ومن الرصيد |
 | `provider_timeout` | ‏408 أو انقطاع اتصال |
 | `provider_rate_limited` | ‏429 |
-| `invalid_structured_output` | الرد لا يحوي المخرج المتفق عليه (‏`tool_use` باسم `record_content_review` عند Anthropic، أو `tool_calls`/`content` غير قابل للتحليل عند OpenRouter)، أو ‏400/422 من OpenRouter لرفضه المخطط |
+| `invalid_structured_output` | الرد لا يحوي المخرج المتفق عليه: ‏`tool_use` باسم `record_content_review` عند Anthropic، أو `tool_calls`/`content` غير قابل للتحليل عند OpenRouter، أو `functionCall`/`parts[].text` عند Gemini. وعند Gemini أيضًا ‏`INVALID_ARGUMENT` الذي **تذكر رسالته المخطط أو صيغة الرد** وحده — أمّا `INVALID_ARGUMENT` لسبب آخر فيظهر كـ`provider_unavailable` |
 | `provider_unavailable` | أي شيء آخر، أو اسم مزوّد غير معروف، أو رد 200 يحمل `error` من OpenRouter |
 
 ### بديل أرخص — التشغيل الأول عبر OpenRouter
@@ -265,6 +265,83 @@ OPENROUTER_CONTENT_REVIEW_MODEL=google/gemini-2.5-flash
 
 > تحقّق من الـslug مقابل <https://openrouter.ai/models> قبل النشر — الslug الخاطئ يظهر
 > كـ `provider_unavailable` وليس كخطأ إعدادات.
+
+### بديل مجاني — Google Gemini مباشرة
+
+مزوّد مستقل تمامًا (`gemini`) يتكلّم مع Google Gemini API مباشرةً بلا وسيط، ويستفيد من الـFree
+Tier في Google AI Studio. المفتاح من <https://aistudio.google.com/apikey>، وحدود الـFree Tier
+(RPM / RPD) معروضة في <https://aistudio.google.com/rate-limit>.
+
+```dotenv
+CONTENT_REVIEW_ENABLED=true
+CONTENT_REVIEW_PROVIDER=gemini
+
+GEMINI_API_KEY=AIza...
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_CONTENT_REVIEW_MODEL=gemini-3.6-flash
+GEMINI_THINKING_LEVEL=minimal
+```
+
+ثم انشر نسخة إعدادات بـ`"provider": "gemini"` و`"model": "gemini-3.6-flash"` — تذكّر أن صف
+الإعدادات المنشور **يغلب** `.env` (‏§1).
+
+الموديلات المكتلجة، وكلها `vision: true` و`structured: json_schema`:
+
+| الموديل | input / output (micros لكل 1M) | ملاحظة |
+|---|---|---|
+| `gemini-3.6-flash` | 750_000 / 3_750_000 | **الافتراضي.** سعر تمهيدي حتى 2026-12-31، ثم 1_500_000 / 7_500_000 |
+| `gemini-2.5-flash` | 300_000 / 2_500_000 | لم يعد يُتاح للحسابات الجديدة — مُبقى للحسابات القديمة |
+| `gemini-2.5-flash-lite` | 100_000 / 400_000 | نفس التحفّظ |
+
+> **‏`gemini-2.5-flash` لم يعد متاحًا للحسابات الجديدة.** الاختبار الحيّ أكّد ذلك: نفس المفتاح
+> الذي يفشل مع 2.5 يعمل مع `gemini-3.6-flash`. الموديلان 2.5 باقيان في الكتالوج للحسابات التي
+> ما تزال تملكهما، فإن كان حسابك جديدًا فسيظهر 2.5 كـ`provider_unavailable` (‏`NOT_FOUND`).
+
+أربع ملاحظات تخصّ Gemini تحديدًا:
+
+1. **ضبط التفكير يختلف باختلاف الجيل، والسائق يختار بنفسه.** كل موديلات Gemini تفكّر
+   افتراضيًا، وتوكنات التفكير تُقتطع من `max_output_tokens` نفسه، فبلا ضبط قد يبتلع النموذج
+   السقف كله ويعود `provider_output_truncated` قبل أن يكتب حرفًا. المفتاحان **متنافيان**:
+   إرسالهما معًا يعيد 400. لذلك يقرأ السائق جيل الموديل من الـid:
+
+   | الموديل | الحقل المُرسَل | الافتراضي هنا |
+   |---|---|---|
+   | ‏`gemini-3.x` فأعلى | `generationConfig.thinkingConfig.thinkingLevel` | `minimal` |
+   | ‏`gemini-2.5-*` | `generationConfig.thinkingConfig.thinkingBudget` | `0` |
+
+   ‏`minimal` وليس «إيقاف»: الجيل 3 لا يوفّر طريقة مدعومة لتعطيل التفكير، و`minimal` هو أقل
+   قدر من الـreasoning مع بقاء الـStructured Output ثابتًا. القيم المقبولة:
+   ‏`minimal` / `low` / `medium` / `high`؛ وأي قيمة أخرى تعني «لا ترسل `thinkingConfig`» فيقرّر
+   النموذج بنفسه. و`GEMINI_THINKING_BUDGET` يبقى مؤثّرًا على موديلات 2.5 وحدها.
+2. **التكلفة تُحسب من الكتالوج لا من المزوّد**، لأن Gemini لا يعيد تكلفة في الرد. وتوكنات
+   التفكير (`usageMetadata.thoughtsTokenCount`) تُحسب ضمن الإخراج حتى تبقى المحاسبة صحيحة إن
+   أُعيد تفعيل التفكير. الأسعار المكتلجة هي أسعار الـpaid tier، فبينما أنت على الـFree Tier
+   سيعرض `/metrics` تكلفة تقديرية لا يفوترها Google — وهو مقصود حتى يظل الـbudget guard عاملًا.
+   تنبيه تقويمي: سعر `gemini-3.6-flash` المكتلج هو السعر التمهيدي الساري حتى **2026-12-31**؛
+   بعدها يصبح الضعف (1_500_000 / 7_500_000)، فحدّث الكتالوج وارفع `CONTENT_REVIEW_PRICING_VERSION` وقتها.
+3. **المخطّط يُرسل عبر الحقل الـJSON-Schema-native مع تطبيع strict.** السائق يستعمل
+   ‏`generationConfig.responseJsonSchema` (لا `responseSchema`)، لكن Gemini يدقق المخطّط بصرامة:
+   مخطّط مغلق بـ`additionalProperties: false` مع خصائص خارج `required` يُرفض بـ
+   ‏`INVALID_ARGUMENT` ورسالة عامّة `Request contains an invalid argument.` لذلك يمرّ المخطّط
+   عبر `StrictJsonSchemaAdapter` نفسه المستعمل مع OpenRouter (كل الخصائص تصير required،
+   والاختيارية تقبل `null`، وتُحذف `maxLength`/`maxItems`/`minimum`/`maximum`). مسار الأداة
+   ‏(`parametersJsonSchema`) يبقى حرفيًا لأن لا شيء أثبت خلاف ذلك.
+4. **الأخطاء تُصنَّف بـ`error.status` قبل كود HTTP.** أهمّ حالتين تحت 400:
+   ‏`FAILED_PRECONDITION` = الـFree Tier غير متاح لبلدك/حسابك → يظهر `provider_auth_failed`؛
+   و`INVALID_ARGUMENT` = طلب أو معامل غير صالح → `provider_unavailable`، إلا إن ذكرت رسالته
+   المخطّط أو صيغة الرد فيكون `invalid_structured_output`.
+
+| `error.status` | الكود الظاهر | المعنى |
+|---|---|---|
+| `INVALID_ARGUMENT` (المخطّط) | `invalid_structured_output` | Gemini رفض المخطّط — يُصعَّد لبشري ولا يُعاد المحاولة |
+| `INVALID_ARGUMENT` (غير ذلك) | `provider_unavailable` | طلب مشوّه أو معامل غير مقبول لهذا الموديل |
+| `FAILED_PRECONDITION` | `provider_auth_failed` | الـFree Tier غير متاح للبلد/الحساب، أو الفوترة مطلوبة |
+| `UNAUTHENTICATED` / `PERMISSION_DENIED` | `provider_auth_failed` | مفتاح خاطئ أو غير مُصرَّح |
+| `NOT_FOUND` | `provider_unavailable` | اسم موديل غير معروف |
+| `RESOURCE_EXHAUSTED` | `provider_rate_limited` | تجاوز حصة الـFree Tier (RPM / RPD) |
+| `DEADLINE_EXCEEDED` | `provider_timeout` | |
+| `INTERNAL` / `UNAVAILABLE` | `provider_unavailable` | |
+
 
 ### المرحلة ج — مراجعة كاملة لمزاد حقيقي (shadow)
 

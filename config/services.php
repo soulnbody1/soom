@@ -64,4 +64,11 @@ return [
         'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+        'thinking_level' => env('GEMINI_THINKING_LEVEL', 'minimal'),
+        'thinking_budget' => (int) env('GEMINI_THINKING_BUDGET', 0),
+    ],
+
 ];

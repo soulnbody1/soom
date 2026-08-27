@@ -16,7 +16,7 @@ row, no job, no provider call, no extra query.
 |---|---|---|
 | `CONTENT_REVIEW_ENABLED` | `false` | Master switch. `false` collapses the resolved mode to `manual` no matter what is published. |
 | `CONTENT_REVIEW_DEFAULT_MODE` | `manual` | Fallback mode when no settings version is published. |
-| `CONTENT_REVIEW_PROVIDER` | `fake` | `fake`, `anthropic` or `openrouter`. A published settings version overrides it. |
+| `CONTENT_REVIEW_PROVIDER` | `fake` | `fake`, `anthropic`, `openrouter` or `gemini`. A published settings version overrides it. |
 | `CONTENT_REVIEW_MODEL` | `claude-sonnet-5` | Must be a model the selected provider offers. A model the provider does not catalogue falls back to that provider's `default_model` rather than being sent verbatim. |
 | `CONTENT_REVIEW_QUEUE` | `content-review` | The dedicated queue name. |
 | `CONTENT_REVIEW_TIMEOUT_SECONDS` | `45` | Per provider call. |
@@ -41,6 +41,11 @@ row, no job, no provider call, no extra query.
 | `OPENROUTER_SITE_URL` | — | Optional `HTTP-Referer` attribution header. |
 | `OPENROUTER_APP_NAME` | `Soom` | Optional `X-Title` attribution header. |
 | `OPENROUTER_CONTENT_REVIEW_MODEL` | `google/gemini-2.5-flash` | The openrouter driver's default model. Must be a pinned slug, never a router. |
+| `GEMINI_API_KEY` | — | Read from `config('services.gemini.api_key')`. Sent as the `x-goog-api-key` header, never in the query string. Same secrecy rules as the other keys. |
+| `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta` | Provider base URL. The driver appends `/models/<model>:generateContent`. |
+| `GEMINI_CONTENT_REVIEW_MODEL` | `gemini-3.6-flash` | The gemini driver's default model. |
+| `GEMINI_THINKING_LEVEL` | `minimal` | How much a **generation 3+** model may reason: `minimal`, `low`, `medium`, `high`. Anything else omits `thinkingConfig` and lets the model decide. Ignored by 2.5 models. |
+| `GEMINI_THINKING_BUDGET` | `0` | Output tokens a **2.5** model may spend on thinking. `0` disables it. A negative value omits `thinkingConfig` entirely. Ignored by generation 3+ models. |
 
 Two infrastructure requirements:
 
@@ -354,6 +359,47 @@ hold: in one live run the same id landed on a safety classifier that can only an
 `User Safety: safe`, and on a reasoning model that spent the entire output ceiling thinking and was
 cut off mid-JSON. Pin a slug whose model page on <https://openrouter.ai/models> lists structured
 outputs, and image input if image analysis is on.
+
+**Prefer the JSON-Schema-native field, and normalise only where the vendor proved it necessary.**
+The result schema is one contract shared by every driver, so a driver that mangles it has changed
+what the model was asked for. Use the field that speaks JSON Schema: the gemini driver sends
+`generationConfig.responseJsonSchema` and `functionDeclarations[].parametersJsonSchema` rather than
+the older `responseSchema` / `parameters`, which are OpenAPI proto messages that reject unknown
+keys outright.
+
+That is necessary but not sufficient. `responseJsonSchema` still validates strictly, and a live
+probe established the rule: a schema that closes itself with `additionalProperties: false` while
+leaving properties out of `required` is refused with `INVALID_ARGUMENT` and the unhelpful message
+`Request contains an invalid argument.` That is the same constraint the strict-schema path on
+OpenRouter already faces, so the gemini driver reuses
+`Support/StrictJsonSchemaAdapter` — every property becomes required, originally-optional ones widen
+to accept `null`, and the keywords outside the supported subset (`maxLength`, `maxItems`,
+`minimum`, `maximum`, …) are dropped. No Gemini-specific adapter exists, and none should be added
+without a live failure naming the keyword: the tool path still sends `parametersJsonSchema`
+verbatim because nothing has shown it needs otherwise.
+
+**Classify a failure by its cause, not by its HTTP code.** Gemini folds unrelated conditions into
+HTTP 400 and distinguishes them in `error.status`: `INVALID_ARGUMENT` is the schema being refused
+only when the message names the schema or the response format, otherwise it is a malformed request
+and maps to `provider_unavailable`; `FAILED_PRECONDITION` means the free tier is not available for
+the account or region, which is `provider_auth_failed`. Mapping every 400 onto
+`invalid_structured_output` would hide account problems behind a content-shaped error code.
+
+**Gemini thinks by default, and the knob depends on the generation.** Every Gemini model spends
+output tokens reasoning before it writes a character of the answer, so the default 2000-token
+ceiling can be consumed entirely by thinking and surface as `provider_output_truncated`. The two
+knobs are mutually exclusive — sending both returns a 400 — so the driver picks one per model:
+
+| Model | Field | Content Review default |
+|---|---|---|
+| `gemini-3.x` and later | `generationConfig.thinkingConfig.thinkingLevel` | `minimal` |
+| `gemini-2.5-*` | `generationConfig.thinkingConfig.thinkingBudget` | `0` |
+
+The generation is read off the model id (`gemini-<major>-`), so a future `gemini-4` line takes the
+`thinkingLevel` path with no code change. `minimal` rather than off: generation 3 has no supported
+way to disable thinking, and `minimal` is the least reasoning that keeps structured output stable.
+The driver counts `usageMetadata.thoughtsTokenCount` as output either way, so the cost stays honest
+when thinking is raised.
 
 Three behaviours worth knowing before you pick a model:
 

@@ -120,7 +120,7 @@ test('the descriptor travels with the resolved provider and model', function ():
 test('the exposed catalog carries what an operator needs to choose a model', function (): void {
     $exposed = catalog()->toArray();
 
-    expect($exposed)->toHaveKeys(['fake', 'anthropic', 'openrouter'])
+    expect($exposed)->toHaveKeys(['fake', 'anthropic', 'openrouter', 'gemini'])
         ->and($exposed['openrouter'][0])->toHaveKeys([
             'id', 'supports_images', 'structured', 'input_micros', 'output_micros', 'free',
         ]);

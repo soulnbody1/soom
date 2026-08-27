@@ -276,6 +276,7 @@ final class AdminContentReviewApiTest extends TestCase
     public function test_the_health_endpoint_publishes_the_model_catalog_without_any_credential(): void
     {
         config()->set('services.openrouter.api_key', 'sk-or-v1-super-secret-value');
+        config()->set('services.gemini.api_key', 'AIza-super-secret-value');
         $this->publishPolicy();
         $this->publishSettings(ReviewMode::Shadow, ['provider' => 'openrouter', 'model' => 'google/gemini-2.5-flash']);
 
@@ -285,14 +286,16 @@ final class AdminContentReviewApiTest extends TestCase
             ->assertJsonPath('data.provider', 'openrouter')
             ->assertJsonPath('data.model', 'google/gemini-2.5-flash')
             ->assertJsonPath('data.configured', true)
-            ->assertJsonPath('data.available_providers', ['fake', 'anthropic', 'openrouter'])
+            ->assertJsonPath('data.available_providers', ['fake', 'anthropic', 'openrouter', 'gemini'])
             ->assertJsonStructure(['data' => [
                 'available_models' => [
                     'openrouter' => [['id', 'supports_images', 'structured', 'input_micros', 'output_micros', 'free']],
+                    'gemini' => [['id', 'supports_images', 'structured', 'input_micros', 'output_micros', 'free']],
                 ],
             ]]);
 
         $this->assertStringNotContainsString('sk-or-v1-super-secret-value', $response->getContent());
+        $this->assertStringNotContainsString('AIza-super-secret-value', $response->getContent());
         $this->assertSame(0, $this->fakeProvider()->calls());
     }
 

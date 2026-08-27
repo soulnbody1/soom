@@ -15,6 +15,7 @@ final class ContentReviewProviderFactory
         'fake' => FakeContentReviewProvider::class,
         'anthropic' => AnthropicContentReviewProvider::class,
         'openrouter' => OpenRouterContentReviewProvider::class,
+        'gemini' => GeminiContentReviewProvider::class,
     ];
 
     public function __construct(private readonly Container $container) {}
