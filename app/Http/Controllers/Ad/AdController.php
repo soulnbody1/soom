@@ -72,7 +72,9 @@ class AdController extends Controller
     {
         $query = $search->apply($request);
         $active_ads = $query->count();
-        $ads = $query->withTrashed()->latest()->with((Ad::$defaultRelations))->paginate(20);
+        $query->withTrashed();
+        $this->applyAdStatusFilter($request, $query);
+        $ads = $query->latest()->with((Ad::$defaultRelations))->paginate(20);
         if ($ads->total() === 0) {
             return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
         }
@@ -175,10 +177,25 @@ class AdController extends Controller
         return $this->sendResponse($homeData, 'تم جلب الإعلانات بنجاح.');
     }
 
-    public function ads()
+    public function ads(Request $request)
     {
-        $ads = Ad::withTrashed()->Featured()->paginate(20);
-        return AdResource::collection($ads);
+        $query = Ad::withTrashed()->Featured();
+        $this->applyAdStatusFilter($request, $query);
+        $ads = $query->paginate(20);
+
+        return AdResource::collection($ads)
+            ->additional(['active_ads' => Ad::count()]);
+    }
+
+    protected function applyAdStatusFilter(Request $request, $query): void
+    {
+        $status = $request->input('status');
+
+        if ($status === 'active') {
+            $query->whereNull('deleted_at');
+        } elseif ($status === 'inactive') {
+            $query->whereNotNull('deleted_at');
+        }
     }
 
     public function toggleBlock($id)
