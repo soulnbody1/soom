@@ -303,6 +303,59 @@ final class UserFacingEndpointsTest extends TestCase
         $this->assertSame('9-17', $data['availability']);
     }
 
+    public function test_admin_can_save_support_contact_and_it_overrides_the_environment_fallback(): void
+    {
+        config()->set('support.contact', [
+            'whatsapp' => '+962790000000',
+            'phone' => '+962780000000',
+            'email' => 'env@example.test',
+            'availability' => 'env hours',
+        ]);
+
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/auctions/support-contact')
+            ->assertOk()
+            ->assertJsonPath('data.stored.phone', null)
+            ->assertJsonPath('data.effective.phone', '+962780000000');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/admin/auctions/support-contact', [
+                'whatsapp' => '+962799999999',
+                'phone' => null,
+                'email' => 'help@soom.test',
+                'availability' => 'Sun-Thu 9:00-17:00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.stored.whatsapp', '+962799999999')
+            ->assertJsonPath('data.effective.whatsapp', '+962799999999')
+            ->assertJsonPath('data.effective.phone', '+962780000000')
+            ->assertJsonPath('data.updated_by.id', $admin->id);
+
+        $data = $this->getJson('/api/soom/support-contact')->assertOk()->json('data');
+
+        $this->assertSame('+962799999999', $data['whatsapp']);
+        $this->assertSame('help@soom.test', $data['email']);
+        $this->assertSame('Sun-Thu 9:00-17:00', $data['availability']);
+        $this->assertSame('+962780000000', $data['phone']);
+    }
+
+    public function test_support_contact_rejects_invalid_values_and_denies_non_admins(): void
+    {
+        $this->actingAs($this->user('admin'), 'sanctum')
+            ->postJson('/api/admin/auctions/support-contact', [
+                'email' => 'not-an-email',
+                'phone' => 'call-us',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['email', 'phone']);
+
+        $this->actingAs($this->user('user'), 'sanctum')
+            ->getJson('/api/admin/auctions/support-contact')
+            ->assertStatus(403);
+    }
+
     private function paymentMethod(): PaymentMethod
     {
         return PaymentMethod::create([

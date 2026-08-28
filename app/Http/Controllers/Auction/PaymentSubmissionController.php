@@ -74,7 +74,7 @@ final class PaymentSubmissionController extends Controller
 
     #[Endpoint(
         title: 'إنشاء رابط مؤقت لإيصال الدفع',
-        description: 'ينشئ رابطًا مؤقتًا صالحًا لعشر دقائق لتحميل ملف الإيصال المرفوع. يُرجع 404 إذا تعذّر إنشاء الرابط من مخزن الملفات.'
+        description: 'ينشئ رابطًا مؤقتًا لتحميل ملف الإيصال المرفوع. الإيصال محفوظ في مخزن خاص (S3/Spaces) لا يمكن الوصول إليه مباشرة، فيُصدر النظام رابط pre-signed URL صالحًا لعشر دقائق فقط ويُرجع معه تاريخ انتهاء صلاحيته في expires_at. تُنفَّذ هذه العملية عبر مسارين لهما السلوك نفسه ويختلفان في الجمهور: مسار المستخدم GET /api/soom/payment-submissions/{paymentSubmission}/receipt-url لصاحب الإثبات ليعيد فتح إيصاله، ومسار الإدارة GET /api/admin/auctions/payment-submissions/{paymentSubmission}/receipt-url للمشرف أثناء مراجعة الدفعات. وفي الحالتين يُطبَّق التفويض نفسه: صاحب الإثبات أو من يملك صلاحية مراجعة الدفعات. يُرجع 404 إذا تعذّر إنشاء الرابط من مخزن الملفات.'
     )]
     #[PathParameter('paymentSubmission', description: 'المعرّف العام لإثبات الدفع (ULID).')]
     #[Response(200, description: 'الرابط المؤقت وتاريخ انتهاء صلاحيته.')]

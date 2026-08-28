@@ -22,6 +22,10 @@ final class RefundTransaction extends Model
         'obligation_type',
         'obligation_id',
         'user_id',
+        'destination_id',
+        'recipient_name',
+        'identifier_type',
+        'identifier_value',
         'status',
         'amount_minor',
         'held_refund_amount_minor',
@@ -42,6 +46,10 @@ final class RefundTransaction extends Model
         'manual_confirmed_by',
         'manual_confirmed_at',
         'manual_confirmation_reason',
+        'proof_disk',
+        'proof_path',
+        'proof_mime_type',
+        'proof_size_bytes',
         'processed_at',
         'succeeded_at',
         'failed_at',
@@ -81,6 +89,18 @@ final class RefundTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function destination(): BelongsTo
+    {
+        return $this->belongsTo(PayoutDestination::class, 'destination_id');
+    }
+
+    public function hasDestinationSnapshot(): bool
+    {
+        return $this->recipient_name !== null
+            && $this->identifier_type !== null
+            && $this->identifier_value !== null;
     }
 
     public function manualConfirmer(): BelongsTo

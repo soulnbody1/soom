@@ -30,6 +30,11 @@ final class AuctionRefundPolicy
             || $this->hasAuctionPermission($user, 'auction.refunds.confirm_manual');
     }
 
+    public function viewProof(User $user, RefundTransaction $refund): bool
+    {
+        return $this->viewAny($user);
+    }
+
     public function cancel(User $user, RefundTransaction $refund): bool
     {
         return $this->canManageRefunds($user)

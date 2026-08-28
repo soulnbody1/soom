@@ -72,6 +72,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::get('/', [AuctionController::class, 'all']);
     Route::get('/dashboard', [AuctionDashboardController::class, 'index']);
     Route::get('/operational-settings', [AuctionOperationalSettingsController::class, 'show']);
+    Route::get('/support-contact', [SupportContactController::class, 'edit']);
+    Route::post('/support-contact', [SupportContactController::class, 'store']);
     Route::get('/terms/{terms}', [AuctionTermsController::class, 'show']);
     Route::post('/terms', [AuctionTermsController::class, 'store']);
     Route::get('/configuration-versions', [AuctionConfigurationController::class, 'index']);
@@ -81,6 +83,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
     Route::get('/refunds', [RefundController::class, 'index']);
+    Route::get('/refunds/{refund}/proof-url', [RefundController::class, 'proofUrl']);
     Route::post('/refunds/{refund}/confirm', [RefundController::class, 'confirm']);
     Route::post('/refunds/{refund}/cancel', [RefundController::class, 'cancel']);
     Route::get('/payouts', [SellerPayoutController::class, 'index']);

@@ -24,6 +24,23 @@ final class PayoutDestinationRepository
             ->first();
     }
 
+    /**
+     * @param  int[]  $userIds
+     * @return array<int, PayoutDestination>
+     */
+    public function defaultsForUsers(array $userIds): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+
+        return PayoutDestination::whereIn('user_id', $userIds)
+            ->where('default_marker', 1)
+            ->get()
+            ->keyBy('user_id')
+            ->all();
+    }
+
     public function clearDefaultFor(int $userId): void
     {
         PayoutDestination::where('user_id', $userId)

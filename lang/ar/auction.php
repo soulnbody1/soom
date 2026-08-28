@@ -6,6 +6,7 @@ return [
         'participant_blocked' => 'تم حظر المشارك.',
         'participant_unblocked' => 'تم إلغاء حظر المشارك.',
         'support_contact_fetched' => 'تم جلب بيانات الدعم.',
+        'support_contact_saved' => 'تم حفظ بيانات الدعم.',
 
         'auctions_fetched' => 'تم جلب المزادات.',
         'admin_auctions_fetched' => 'تم جلب مزادات الإدارة.',
@@ -29,6 +30,7 @@ return [
         'payment_submission_reviewed' => 'تمت مراجعة طلب الدفع.',
         'refunds_fetched' => 'تم جلب عمليات الاسترداد.',
         'refund_confirmed' => 'تم تأكيد الاسترداد.',
+        'refund_proof_url_created' => 'تم إنشاء رابط إثبات الاسترداد.',
         'refund_cancelled' => 'تم إلغاء الاسترداد.',
         'payment_receipt_url_created' => 'تم إنشاء رابط إيصال الدفع.',
         'auction_bids_fetched' => 'تم جلب مزايدات المزاد.',
@@ -151,6 +153,8 @@ return [
         'refund_manual_confirmation_not_allowed' => 'لا يسمح بالتأكيد اليدوي لهذا الاسترداد.',
         'refund_manual_confirmation_unauthorized' => 'يتطلب تأكيد الاسترداد اليدوي صلاحية مستقلة.',
         'refund_manual_confirmation_reason_required' => 'يتطلب تأكيد الاسترداد اليدوي مرجعًا وسببًا موثقًا.',
+        'refund_destination_missing' => 'لا توجد وجهة تحويل محفوظة للعميل. يجب تحديد وجهة التحويل قبل تأكيد الاسترداد.',
+        'refund_proof_unavailable' => 'إثبات الاسترداد غير متاح.',
         'refund_cancellation_not_allowed' => 'لا يمكن إلغاء الاسترداد في حالته الحالية.',
         'refund_cancellation_unauthorized' => 'يتطلب إلغاء الاسترداد صلاحية مستقلة.',
         'refund_cancellation_reason_required' => 'يتطلب إلغاء الاسترداد سببًا موثقًا.',
@@ -224,6 +228,7 @@ return [
         'reserve_below_starting' => 'لا يمكن أن يكون سعر الاحتياطي أقل من سعر البداية.',
         'ends_at_after_starts_at' => 'يجب أن يكون وقت النهاية بعد وقت البداية.',
         'amount_required_on_currency_change' => 'أعد إرسال المبلغ عند تغيير العملة.',
+        'support_contact_phone' => 'أدخل رقمًا صحيحًا بالصيغة الدولية، مثل ‎+962790000000.',
     ],
     'notifications' => [
         'status' => [

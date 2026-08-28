@@ -21,6 +21,7 @@ use App\Models\Auction\OutboxMessage;
 use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
+use App\Models\Auction\PayoutDestination;
 use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
@@ -298,9 +299,127 @@ final class AuctionRefundLifecycleTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_manual_confirmation_snapshots_the_saved_destination_and_survives_later_changes(): void
+    {
+        [$refund, , , , $user] = $this->plannedRefund();
+        $refund->forceFill(['status' => RefundTransactionStatus::ManualReview])->save();
+        $admin = $this->user('admin');
+
+        $confirmed = app(ConfirmAuctionRefundManuallyAction::class)
+            ->execute($refund, $admin, 'manual-snapshot-ref', 'paid by bank transfer');
+
+        $destination = PayoutDestination::where('user_id', $user->id)->firstOrFail();
+        $this->assertSame($destination->id, $confirmed->destination_id);
+        $this->assertSame('JO94CBJO0010000000000131000302', $confirmed->identifier_value);
+        $this->assertSame('iban', $confirmed->identifier_type);
+
+        $destination->forceFill(['identifier_value' => 'JO11CBJO0010000000000131009999'])->save();
+
+        $this->assertSame('JO94CBJO0010000000000131000302', $confirmed->refresh()->identifier_value);
+    }
+
+    public function test_manual_confirmation_is_rejected_when_no_destination_is_known(): void
+    {
+        [$refund, , , , $user] = $this->plannedRefund();
+        $refund->forceFill(['status' => RefundTransactionStatus::ManualReview])->save();
+        PayoutDestination::where('user_id', $user->id)->forceDelete();
+
+        $this->expectException(AuctionException::class);
+        $this->expectExceptionMessage(__('auction.errors.refund_destination_missing'));
+
+        app(ConfirmAuctionRefundManuallyAction::class)
+            ->execute($refund, $this->user('admin'), 'manual-no-destination', 'paid by bank transfer');
+    }
+
+    public function test_manual_confirmation_accepts_a_destination_override(): void
+    {
+        [$refund, , , , $user] = $this->plannedRefund();
+        $refund->forceFill(['status' => RefundTransactionStatus::ManualReview])->save();
+        PayoutDestination::where('user_id', $user->id)->forceDelete();
+
+        $confirmed = app(ConfirmAuctionRefundManuallyAction::class)->execute(
+            $refund,
+            $this->user('admin'),
+            'manual-override-ref',
+            'paid by bank transfer',
+            destinationOverride: [
+                'recipient_name' => 'Override Recipient',
+                'identifier_type' => 'account_number',
+                'identifier_value' => '0123456789',
+            ],
+        );
+
+        $this->assertSame(RefundTransactionStatus::Succeeded, $confirmed->status);
+        $this->assertNull($confirmed->destination_id);
+        $this->assertSame('Override Recipient', $confirmed->recipient_name);
+        $this->assertSame('0123456789', $confirmed->identifier_value);
+    }
+
+    public function test_refund_confirm_endpoint_exposes_destination_and_rejects_missing_destination(): void
+    {
+        [$refund, , , , $user] = $this->plannedRefund();
+        $refund->forceFill(['status' => RefundTransactionStatus::ManualReview])->save();
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/auctions/refunds')
+            ->assertOk()
+            ->assertJsonPath('data.0.destination.source', 'user_default')
+            ->assertJsonPath('data.0.destination.identifier_type', 'iban')
+            ->assertJsonPath('data.0.has_proof', false);
+
+        PayoutDestination::where('user_id', $user->id)->forceDelete();
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/auctions/refunds')
+            ->assertOk()
+            ->assertJsonPath('data.0.destination', null);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/auctions/refunds/{$refund->public_id}/confirm", [
+                'confirmation_reference' => 'manual-endpoint-no-destination',
+                'reason' => 'paid by bank transfer',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/auctions/refunds/{$refund->public_id}/confirm", [
+                'confirmation_reference' => 'manual-endpoint-override',
+                'reason' => 'paid by bank transfer',
+                'recipient_name' => 'Override Recipient',
+                'identifier_type' => 'cliq_alias',
+                'identifier_value' => 'override.alias',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.destination.source', 'snapshot')
+            ->assertJsonPath('data.destination.identifier_value', 'override.alias');
+    }
+
+    public function test_refund_proof_url_endpoint_reports_missing_proof(): void
+    {
+        [$refund] = $this->plannedRefund();
+
+        $this->actingAs($this->user('admin'), 'sanctum')
+            ->getJson("/api/admin/auctions/refunds/{$refund->public_id}/proof-url")
+            ->assertStatus(404)
+            ->assertJsonPath('code', 'refund_proof_unavailable');
+    }
+
     private function bindProcessor(AuctionRefundProcessorInterface $processor): void
     {
         $this->app->instance(AuctionRefundProcessorInterface::class, $processor);
+    }
+
+    private function defaultDestination(User $user): PayoutDestination
+    {
+        return PayoutDestination::create([
+            'user_id' => $user->id,
+            'recipient_name' => $user->name,
+            'identifier_type' => 'iban',
+            'identifier_value' => 'JO94CBJO0010000000000131000302',
+            'is_default' => true,
+            'default_marker' => 1,
+        ]);
     }
 
     private function plannedRefund(string $idSuffix = ''): array
@@ -318,6 +437,7 @@ final class AuctionRefundLifecycleTest extends TestCase
             'held_at' => now()->subHour(),
         ]);
         $payment = $this->paymentForDeposit($auction, $deposit, $user, 10_000, $idSuffix);
+        $this->defaultDestination($user);
 
         $refund = app(RefundAuctionDepositAction::class)->execute($deposit, 'lifecycle refund '.$idSuffix);
 

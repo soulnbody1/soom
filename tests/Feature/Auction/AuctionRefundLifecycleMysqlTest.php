@@ -17,6 +17,7 @@ use App\Models\Auction\AuctionTermsVersion;
 use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
+use App\Models\Auction\PayoutDestination;
 use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\Country;
@@ -234,6 +235,14 @@ PHP;
             'held_at' => now()->subHour(),
         ]);
         $this->paymentForDeposit($auction, $deposit, $user, 10_000);
+        PayoutDestination::create([
+            'user_id' => $user->id,
+            'recipient_name' => $user->name,
+            'identifier_type' => 'iban',
+            'identifier_value' => 'JO94CBJO0010000000000131000302',
+            'is_default' => true,
+            'default_marker' => 1,
+        ]);
 
         return [app(RefundAuctionDepositAction::class)->execute($deposit, 'mysql lifecycle refund'), $deposit];
     }

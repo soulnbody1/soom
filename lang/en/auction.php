@@ -6,6 +6,7 @@ return [
         'participant_blocked' => 'The participant has been blocked.',
         'participant_unblocked' => 'The participant has been unblocked.',
         'support_contact_fetched' => 'Support contact details fetched.',
+        'support_contact_saved' => 'Support contact details saved.',
 
         'auctions_fetched' => 'Auctions fetched.',
         'admin_auctions_fetched' => 'Admin auctions fetched.',
@@ -29,6 +30,7 @@ return [
         'payment_submission_reviewed' => 'Payment submission reviewed.',
         'refunds_fetched' => 'Refunds fetched.',
         'refund_confirmed' => 'Refund confirmed.',
+        'refund_proof_url_created' => 'Refund proof URL created.',
         'refund_cancelled' => 'Refund cancelled.',
         'payment_receipt_url_created' => 'Payment receipt URL created.',
         'auction_bids_fetched' => 'Auction bids fetched.',
@@ -143,6 +145,8 @@ return [
         'refund_manual_confirmation_not_allowed' => 'Manual refund confirmation is not allowed for this refund.',
         'refund_manual_confirmation_unauthorized' => 'Manual refund confirmation requires a dedicated permission.',
         'refund_manual_confirmation_reason_required' => 'Manual refund confirmation requires a reference and documented reason.',
+        'refund_destination_missing' => 'The customer has no saved transfer destination. A destination is required before confirming the refund.',
+        'refund_proof_unavailable' => 'Refund proof is unavailable.',
         'refund_cancellation_not_allowed' => 'Refund cannot be cancelled in its current state.',
         'refund_cancellation_unauthorized' => 'Refund cancellation requires a dedicated permission.',
         'refund_cancellation_reason_required' => 'Refund cancellation requires a documented reason.',
@@ -224,6 +228,7 @@ return [
         'reserve_below_starting' => 'The reserve amount cannot be lower than the starting amount.',
         'ends_at_after_starts_at' => 'The end time must be after the start time.',
         'amount_required_on_currency_change' => 'Resubmit the amount when the currency changes.',
+        'support_contact_phone' => 'Enter a valid number in international format, for example +962790000000.',
     ],
     'notifications' => [
         'status' => [

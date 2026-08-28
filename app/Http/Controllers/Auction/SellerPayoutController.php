@@ -187,7 +187,7 @@ final class SellerPayoutController extends Controller
 
     #[Endpoint(
         title: 'إنشاء رابط مؤقت لإثبات التحويل',
-        description: 'ينشئ رابطًا مؤقتًا صالحًا لعشر دقائق لتحميل ملف إثبات التحويل. يُرجع 404 إذا لم يكن للمستحق إثبات مرفوع أو تعذّر إنشاء الرابط.'
+        description: 'ينشئ رابطًا مؤقتًا لتحميل ملف إثبات التحويل. الإثبات محفوظ في مخزن خاص (S3/Spaces) لا يمكن الوصول إليه مباشرة، فيُصدر النظام رابط pre-signed URL صالحًا لعشر دقائق فقط ويُرجع معه تاريخ انتهاء صلاحيته في expires_at. تُنفَّذ هذه العملية عبر مسارين لهما السلوك نفسه ويختلفان في الجمهور: مسار البائع GET /api/soom/my/payouts/{sellerPayout}/proof-url، ومسار الإدارة GET /api/admin/auctions/payouts/{sellerPayout}/proof-url. يُرجع 404 إذا لم يكن للمستحق إثبات مرفوع أو تعذّر إنشاء الرابط.'
     )]
     #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
     #[Response(200, description: 'الرابط المؤقت وتاريخ انتهاء صلاحيته.')]
