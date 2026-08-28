@@ -46,10 +46,6 @@ final class ContentReviewOverrideGuard
             && $review->mode->isAtLeastAsPermissiveAs(ReviewMode::AiAssisted);
     }
 
-    /**
-     * Deciding against a binding recommendation still demands a written reason. That is
-     * a business rule about the audit trail, not a permission: it holds for every admin.
-     */
     public function assertAllowed(?ContentReview $review, DecisionRelation $relation, string $reason): void
     {
         if ($relation !== DecisionRelation::Overridden || ! $this->isBinding($review)) {

@@ -16,11 +16,6 @@ return [
 
     'provider' => env('CONTENT_REVIEW_PROVIDER', 'fake'),
 
-    /*
-     * The fake provider answers without calling anything, so a production deployment that has
-     * not set CONTENT_REVIEW_PROVIDER would otherwise file fabricated results as if a model had
-     * produced them. It stays available everywhere else, and in production only on request.
-     */
     'allow_fake_provider' => (bool) env('CONTENT_REVIEW_ALLOW_FAKE_PROVIDER', false),
 
     'model' => env('CONTENT_REVIEW_MODEL', 'claude-sonnet-5'),
@@ -76,9 +71,9 @@ return [
         'gemini' => [
             'default_model' => env('GEMINI_CONTENT_REVIEW_MODEL', 'gemini-3.6-flash'),
             'models' => [
-                // Introductory rate through 2026-12-31; the standard rate is 1_500_000 / 7_500_000.
+
                 'gemini-3.6-flash' => ['input' => 750_000, 'output' => 3_750_000, 'vision' => true, 'structured' => 'json_schema'],
-                // Kept for accounts provisioned before the 2.5 line stopped being offered to new ones.
+
                 'gemini-2.5-flash' => ['input' => 300_000, 'output' => 2_500_000, 'vision' => true, 'structured' => 'json_schema'],
                 'gemini-2.5-flash-lite' => ['input' => 100_000, 'output' => 400_000, 'vision' => true, 'structured' => 'json_schema'],
             ],

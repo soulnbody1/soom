@@ -18,11 +18,6 @@ final class ReconcileContentReviewsAction
         private readonly ContentReviewDecisionRepository $decisions,
     ) {}
 
-    /**
-     * Two repairs only, both idempotent and both narrower than a decision: an expired
-     * lease goes back to queued, and a cancelled or superseded row stops claiming to be
-     * the active one. Everything else is counted and reported for an admin to judge.
-     */
     public function execute(bool $apply, int $limit): array
     {
         $now = Carbon::now();

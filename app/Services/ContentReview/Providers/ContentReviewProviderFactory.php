@@ -34,11 +34,6 @@ final class ContentReviewProviderFactory
         return $this->container->make($class);
     }
 
-    /**
-     * Refusing the stub in production is a louder failure than serving it: an unreachable
-     * provider escalates every listing to a human, whereas the stub would file invented
-     * findings under a real model's name.
-     */
     private function isPermitted(string $name): bool
     {
         if ($name !== self::FAKE) {

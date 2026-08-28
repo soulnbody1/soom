@@ -138,7 +138,6 @@ final class ContentReviewPipelineTest extends TestCase
                 throw new \RuntimeException('rolled back');
             });
         } catch (\RuntimeException) {
-            // intentional rollback
         }
 
         $this->assertSame(0, ContentReview::count());
@@ -402,7 +401,6 @@ final class ContentReviewPipelineTest extends TestCase
         try {
             $this->runPipeline();
         } catch (\Throwable) {
-            // retryable failures rethrow so the queue can back off
         }
 
         $review = ContentReview::firstOrFail();
@@ -425,7 +423,6 @@ final class ContentReviewPipelineTest extends TestCase
             try {
                 app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
             } catch (\Throwable) {
-                // retryable failures rethrow until the attempts are exhausted
             }
         }
 
@@ -520,7 +517,6 @@ final class ContentReviewPipelineTest extends TestCase
         $this->assertSame(ProcessContentReviewAction::RESULT_DEFERRED, $result);
         $this->assertSame(0, $this->fakeProvider()->calls());
 
-        // The review waits: still queued, no outcome, no attempt burned, lease handed back.
         $this->assertSame(ContentReviewStatus::Queued, $review->status);
         $this->assertNull($review->outcome);
         $this->assertNull($review->decided_at);
@@ -529,7 +525,6 @@ final class ContentReviewPipelineTest extends TestCase
         $this->assertNull($review->lease_owner);
         $this->assertNull($review->leased_until);
 
-        // ...but it says what it is waiting for.
         $this->assertSame(ContentReviewErrorCode::CircuitOpen, $review->error_code);
         $this->assertSame('circuit_open', $review->reason_code);
         $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
@@ -565,8 +560,6 @@ final class ContentReviewPipelineTest extends TestCase
         $review = ContentReview::firstOrFail();
         app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
 
-        // The queue's retryUntil window is what bounds the wait; when it expires the job dies
-        // and its failure handler has to produce the outcome the deferral postponed.
         (new ProcessContentReviewJob((string) $review->public_id))->failed(null);
 
         $review->refresh();
@@ -733,7 +726,6 @@ final class ContentReviewPipelineTest extends TestCase
             try {
                 $this->runPipeline();
             } catch (\Throwable) {
-                // retryable codes rethrow for the queue to back off
             }
 
             $this->assertNotSame(
@@ -753,6 +745,64 @@ final class ContentReviewPipelineTest extends TestCase
         if ($review !== null) {
             app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
         }
+    }
+
+    public function test_a_retried_review_bills_only_the_attempt_that_reached_the_model(): void
+    {
+        $this->publishPolicy();
+        $this->publishSettings(ReviewMode::AiAssisted);
+        $this->fakeProvider()->failWith(ContentReviewErrorCode::ProviderUnavailable);
+
+        $this->submitForReview();
+        $review = ContentReview::firstOrFail();
+
+        try {
+            app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
+        } catch (\Throwable) {
+        }
+
+        $review->refresh();
+
+        $this->assertNull($review->cost_micros);
+        $this->assertNull($review->input_tokens);
+        $this->assertSame(2, (int) $review->attempt);
+        $this->assertSame(0, $this->budgetGuard()->spentMicros('daily'));
+
+        $this->fakeProvider()->reset()->respondWith($this->cleanPayload(), 4200, 500, 120);
+        app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
+
+        $review->refresh();
+
+        $this->assertSame(4200, (int) $review->cost_micros);
+        $this->assertSame(500, (int) $review->input_tokens);
+        $this->assertSame(4200, $this->budgetGuard()->spentMicros('daily'));
+    }
+
+    public function test_an_unusable_response_is_billed_once_and_never_retried(): void
+    {
+        $this->publishPolicy();
+        $this->publishSettings(ReviewMode::AiAssisted);
+        $this->fakeProvider()->failWith(
+            ContentReviewErrorCode::InvalidStructuredOutput,
+            new ProviderCallMetrics('claude-sonnet-5', 400, 90, 1500, 30)
+        );
+
+        $this->submitForReview();
+        $review = ContentReview::firstOrFail();
+
+        app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
+
+        $review->refresh();
+
+        $this->assertSame(ContentReviewStatus::Failed, $review->status);
+        $this->assertSame(1500, (int) $review->cost_micros);
+        $this->assertSame(1, $this->fakeProvider()->calls());
+        $this->assertSame(1500, $this->budgetGuard()->spentMicros('daily'));
+    }
+
+    private function budgetGuard(): ContentReviewBudgetGuard
+    {
+        return app(ContentReviewBudgetGuard::class);
     }
 
     private function fakeProvider(): FakeContentReviewProvider

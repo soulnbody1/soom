@@ -139,9 +139,6 @@ final class LogRedactionTest extends TestCase
         $this->assertSame([], array_values($unexpected));
     }
 
-    /**
-     * @return array<int, MessageLogged>
-     */
     private function recordsFor(string $message): array
     {
         return array_values(array_filter(

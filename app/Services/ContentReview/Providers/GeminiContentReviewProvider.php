@@ -15,15 +15,10 @@ use Illuminate\Http\Client\Response;
 
 final class GeminiContentReviewProvider extends HttpContentReviewProvider
 {
-    /** Generation from which thinkingLevel replaces the legacy numeric thinkingBudget. */
     private const THINKING_LEVEL_MIN_GENERATION = 3;
 
     private const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'];
 
-    /**
-     * Fragments that mark an INVALID_ARGUMENT as a rejection of the result schema or of the
-     * requested response format, rather than of some unrelated request parameter.
-     */
     private const SCHEMA_ERROR_MARKERS = [
         'response_json_schema',
         'responsejsonschema',
@@ -93,10 +88,6 @@ final class GeminiContentReviewProvider extends HttpContentReviewProvider
         return ['inlineData' => ['mimeType' => $mime, 'data' => base64_encode($bytes)]];
     }
 
-    /**
-     * The reported model is the requested one: Gemini echoes a resolved modelVersion that can be
-     * a dated or preview build the catalog does not price, which would drop the cost silently.
-     */
     protected function metrics(Response $response, ProviderReviewRequest $request, int $latencyMs): ProviderCallMetrics
     {
         $model = $request->model;
@@ -148,10 +139,6 @@ final class GeminiContentReviewProvider extends HttpContentReviewProvider
         throw ContentReviewProviderException::of($this->classify($response));
     }
 
-    /**
-     * Gemini folds unrelated conditions into HTTP 400, so error.status decides first and the HTTP
-     * code is only the fallback. Only a schema or response-format rejection is invalid output.
-     */
     private function classify(Response $response): ContentReviewErrorCode
     {
         $status = strtoupper($this->stringOrNull($response->json('error.status')) ?? '');
@@ -168,9 +155,6 @@ final class GeminiContentReviewProvider extends HttpContentReviewProvider
         };
     }
 
-    /**
-     * Used for classification only. The message itself is never returned, stored or logged.
-     */
     private function mentionsSchema(string $message): bool
     {
         $message = strtolower($message);
@@ -184,9 +168,6 @@ final class GeminiContentReviewProvider extends HttpContentReviewProvider
         return false;
     }
 
-    /**
-     * Thinking tokens are billed as output, so they belong in the output total.
-     */
     private function outputTokens(Response $response): ?int
     {
         $answer = $this->intOrNull($response->json('usageMetadata.candidatesTokenCount'));
@@ -199,13 +180,6 @@ final class GeminiContentReviewProvider extends HttpContentReviewProvider
         return ($answer ?? 0) + ($thoughts ?? 0);
     }
 
-    /**
-     * responseJsonSchema takes JSON Schema as written, unlike the legacy responseSchema field which
-     * is an OpenAPI proto message that rejects unknown keys. It still validates strictly: a schema
-     * that closes itself with additionalProperties:false while leaving properties out of `required`
-     * is refused with INVALID_ARGUMENT, which is what StrictJsonSchemaAdapter already normalises for
-     * the other strict-schema provider.
-     */
     private function generationConfig(ProviderReviewRequest $request, StructuredOutputStrategy $strategy): array
     {
         $config = array_replace(
@@ -225,11 +199,6 @@ final class GeminiContentReviewProvider extends HttpContentReviewProvider
         });
     }
 
-    /**
-     * How thinking is capped differs by model generation, and the two knobs are mutually
-     * exclusive: sending both returns a 400. Generation 3 and later take a thinkingLevel; the
-     * older models keep the numeric thinkingBudget they were verified against.
-     */
     private function thinkingConfig(string $model): array
     {
         if ($this->usesThinkingLevel($model)) {

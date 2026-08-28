@@ -46,9 +46,6 @@ final class ContentReviewAlertMonitor
         private readonly ContentReviewEventPublisher $events,
     ) {}
 
-    /**
-     * @return array<int, string>
-     */
     public static function codes(): array
     {
         return array_keys(self::EVENTS);
@@ -59,10 +56,6 @@ final class ContentReviewAlertMonitor
         return self::EVENTS[$code] ?? null;
     }
 
-    /**
-     * Read only. Never publishes and never mutates the stored state, so a dashboard
-     * request can render the banner without emitting notifications.
-     */
     public function states(ReviewableSubjectType $type): array
     {
         $observations = $this->observe($type);
@@ -85,10 +78,6 @@ final class ContentReviewAlertMonitor
         return $states;
     }
 
-    /**
-     * Edge triggered: an alert is published when a condition turns on, re-published only
-     * after the repeat window, and followed by a single recovery event when it clears.
-     */
     public function sweep(ReviewableSubjectType $type): array
     {
         $observations = $this->observe($type, false);

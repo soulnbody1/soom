@@ -9,7 +9,6 @@ use App\Domain\ContentReview\Enums\ContentReviewDecisionType;
 use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\DecisionRelation;
 use App\Domain\ContentReview\Enums\ReviewMode;
-use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionStatusHistory;
 use App\Models\Auction\OutboxMessage;
 use App\Models\ContentReview\ContentReview;
@@ -124,10 +123,6 @@ final class AiOverrideTest extends TestCase
             ->assertJsonValidationErrors('reason');
     }
 
-    /**
-     * The older route enforces the reason one layer earlier, in validation, so an
-     * override still cannot land without one. Nothing is recorded either way.
-     */
     public function test_the_manual_endpoint_cannot_bypass_the_mandatory_override_reason(): void
     {
         [$review, $auction] = $this->assistedReview();
@@ -276,9 +271,6 @@ final class AiOverrideTest extends TestCase
             ->firstOrFail();
     }
 
-    /**
-     * @return array{0: ContentReview, 1: Auction}
-     */
     private function assistedReview(?array $payload = null, ReviewMode $mode = ReviewMode::AiAssisted): array
     {
         $this->publishPolicy();

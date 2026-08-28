@@ -4,20 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTO\ContentReview;
 
-/**
- * What will be sent to the provider for image analysis, and what already has an answer.
- *
- * `prepared` is every image the loader tried; `cached` are the ones a previous review already
- * screened under the same provider, model and policy version; `pending` is the remainder, and
- * the only images that actually travel over the wire.
- */
 final readonly class ImageAnalysisPlan extends BaseContentReviewDTO
 {
-    /**
-     * @param  array<int, PreparedImage>  $prepared
-     * @param  array<string, ImageCheckResult>  $cached
-     * @param  array<int, PreparedImage>  $pending
-     */
     public function __construct(
         public bool $enabled,
         public array $prepared = [],
@@ -30,9 +18,6 @@ final readonly class ImageAnalysisPlan extends BaseContentReviewDTO
         return new self(false);
     }
 
-    /**
-     * The image payload handed to the provider request.
-     */
     public function attachments(): array
     {
         return array_map(static fn (PreparedImage $image): array => [
@@ -44,10 +29,6 @@ final readonly class ImageAnalysisPlan extends BaseContentReviewDTO
         ], $this->pending);
     }
 
-    /**
-     * What the prompt needs to say about images: which refs are attached, which were screened
-     * before and need no new verdict, and which could not be prepared at all.
-     */
     public function promptContext(): array
     {
         $failed = array_values(array_filter(

@@ -16,23 +16,14 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
-/**
- * The transport half of a content review provider: one call, one response, no persistence.
- *
- * Everything here is the part that has to be identical across vendors — how the listing text
- * is framed for the model, how a failure becomes an error code, how a call is timed. Only the
- * request and response envelopes differ per vendor, and those are the abstract members below.
- */
 abstract class HttpContentReviewProvider implements ContentReviewProvider
 {
     protected const TOOL_NAME = 'record_content_review';
 
     protected const TOOL_DESCRIPTION = 'Record the structured content review result.';
 
-    /** The `services.*` key holding this provider's credentials and base url. */
     abstract protected function configKey(): string;
 
-    /** @return array<string, string> */
     abstract protected function headers(string $apiKey): array;
 
     abstract protected function endpoint(ProviderReviewRequest $request): string;
@@ -43,7 +34,6 @@ abstract class HttpContentReviewProvider implements ContentReviewProvider
 
     abstract protected function extractPayload(ProviderReviewRequest $request, Response $response, ProviderCallMetrics $metrics): array;
 
-    /** The vendor's own name for a response cut short by the output token limit. */
     abstract protected function truncationFinishReason(): string;
 
     abstract protected function textPart(string $text): array;
@@ -102,10 +92,6 @@ abstract class HttpContentReviewProvider implements ContentReviewProvider
         return rtrim((string) config('services.'.$this->configKey().'.base_url', $default), '/');
     }
 
-    /**
-     * A vendor that folds unrelated conditions into one status code overrides this; the default
-     * is the plain HTTP reading, which is all the others need.
-     */
     protected function assertSuccessful(Response $response): void
     {
         if ($response->successful()) {
@@ -129,10 +115,6 @@ abstract class HttpContentReviewProvider implements ContentReviewProvider
         };
     }
 
-    /**
-     * A response that arrived but cannot be used. The metrics travel with it so the tokens the
-     * vendor already billed are still recorded against the review.
-     */
     protected function failUnusableOutput(ProviderCallMetrics $metrics): never
     {
         throw ContentReviewProviderException::afterCall(
@@ -143,10 +125,6 @@ abstract class HttpContentReviewProvider implements ContentReviewProvider
         );
     }
 
-    /**
-     * A model told to answer in JSON without a schema field to enforce it is given the schema
-     * in the prompt instead.
-     */
     protected function systemPrompt(ProviderReviewRequest $request, StructuredOutputStrategy $strategy): string
     {
         if ($strategy !== StructuredOutputStrategy::JsonObject) {
@@ -158,10 +136,6 @@ abstract class HttpContentReviewProvider implements ContentReviewProvider
             .(string) json_encode($request->resultSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    /**
-     * Each image is preceded by a text part carrying its label, so the model can key its
-     * image_checks entries back to refs the pipeline already knows.
-     */
     protected function contentParts(ProviderReviewRequest $request): array
     {
         $parts = [];
@@ -185,11 +159,6 @@ abstract class HttpContentReviewProvider implements ContentReviewProvider
         return $parts;
     }
 
-    /**
-     * How seller-supplied text is framed for the model. Shared deliberately: the delimiters are
-     * what the prompt's untrusted-data notice refers to, and results stop being comparable
-     * between providers the moment two of them frame the same listing differently.
-     */
     protected function contentText(ProviderReviewRequest $request): string
     {
         $parts = [];

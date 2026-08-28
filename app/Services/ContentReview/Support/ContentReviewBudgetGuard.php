@@ -159,12 +159,6 @@ final class ContentReviewBudgetGuard
         return $settings->budgetMicros($period);
     }
 
-    /**
-     * The one reading of a budget period, so the health and metrics endpoints can never
-     * disagree about the same number. An unset budget means unlimited, not exhausted.
-     *
-     * @return array<string, int|bool|null>
-     */
     public function periodSnapshot(ReviewSettings $settings, string $period, int $unpricedReviews): array
     {
         $budget = $this->budgetFor($settings, $period);

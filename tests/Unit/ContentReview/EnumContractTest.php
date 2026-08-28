@@ -150,8 +150,6 @@ test('non retryable error codes are terminal', function () {
 });
 
 test('an unknown error is a defect in our own code, so it is never retried', function () {
-    // Every transient condition around a provider call already has its own code, so retrying an
-    // unknown one would only spend the same money again to reach the same escalation.
     expect(ContentReviewErrorCode::UnknownError->isRetryable())->toBeFalse();
 });
 

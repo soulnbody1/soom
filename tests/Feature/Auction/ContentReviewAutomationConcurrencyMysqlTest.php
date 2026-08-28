@@ -168,9 +168,6 @@ final class ContentReviewAutomationConcurrencyMysqlTest extends TestCase
         );
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function race(array $first, array $second, Auction $auction): array
     {
         $workDir = storage_path('framework/testing/content-review-automation-'.Str::ulid());
@@ -315,9 +312,6 @@ try {
 PHP;
     }
 
-    /**
-     * @return array{0: ContentReview, 1: Auction}
-     */
     private function automaticFixture(): array
     {
         $auction = $this->reviewedAuction(ReviewMode::AiAutomatic);

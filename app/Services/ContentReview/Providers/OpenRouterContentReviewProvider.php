@@ -116,10 +116,6 @@ final class OpenRouterContentReviewProvider extends HttpContentReviewProvider
             ?? $this->stringOrNull($response->json('id'));
     }
 
-    /**
-     * OpenRouter is the one provider that reports what the call actually cost, which already
-     * accounts for the upstream model it routed to. The catalog is only the fallback.
-     */
     private function costMicros(Response $response, string $model, ?int $inputTokens, ?int $outputTokens): ?int
     {
         $reported = $response->json('usage.cost');

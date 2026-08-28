@@ -17,14 +17,6 @@ use App\Models\ContentReview\ContentReview;
 use App\Repositories\ContentReview\ContentReviewRepository;
 use Illuminate\Support\Carbon;
 
-/**
- * Every transition a review row can make during processing, in one place.
- *
- * It writes and nothing else — no events, no logging, no decisions — so the order in which
- * those happen stays readable in the action that drives the pipeline. Its reason for existing
- * is that releasing the lease and stamping the terminal timestamps have to accompany each of
- * these transitions, and that was previously restated at every call site.
- */
 final class ContentReviewStateWriter
 {
     public function __construct(private readonly ContentReviewRepository $reviews) {}
@@ -68,9 +60,6 @@ final class ContentReviewStateWriter
         ]));
     }
 
-    /**
-     * The tokens a call already burned, recorded even when its output turned out unusable.
-     */
     public function recordProviderMetrics(ContentReview $review, ProviderCallMetrics $metrics, string $provider): ContentReview
     {
         return $this->reviews->update($review, [
@@ -92,9 +81,6 @@ final class ContentReviewStateWriter
         ]);
     }
 
-    /**
-     * A retryable failure with attempts left: back to the queue, carrying the reason forward.
-     */
     public function requeue(
         ContentReview $review,
         DeterministicCheckResult $checks,
@@ -137,9 +123,6 @@ final class ContentReviewStateWriter
         return $this->reviews->update($review, $attributes);
     }
 
-    /**
-     * The review can never run: failed and handed to a human, with no further attempt.
-     */
     public function terminate(ContentReview $review, ContentReviewErrorCode $code, string $reasonCode): ContentReview
     {
         return $this->reviews->update($review, $this->released([
@@ -167,10 +150,6 @@ final class ContentReviewStateWriter
         ]));
     }
 
-    /**
-     * The content moved on while the review was in flight, so its answer is about something
-     * that no longer exists.
-     */
     public function markStale(ContentReview $review): ContentReview
     {
         return $this->reviews->update($review, $this->released([
@@ -186,10 +165,6 @@ final class ContentReviewStateWriter
         ]));
     }
 
-    /**
-     * No concurrency slot was free. Nothing happened, so nothing is recorded beyond handing
-     * the row back to the queue.
-     */
     public function releaseToQueue(ContentReview $review): ContentReview
     {
         return $this->reviews->update($review, $this->released([
@@ -197,11 +172,6 @@ final class ContentReviewStateWriter
         ]));
     }
 
-    /**
-     * A self-clearing condition stopped the call before it happened. The review goes back to
-     * the queue carrying the reason, so the admin list can say what it is waiting for, and no
-     * attempt is consumed — nothing about the review failed.
-     */
     public function defer(ContentReview $review, ContentReviewErrorCode $code, string $reasonCode): ContentReview
     {
         return $this->reviews->update($review, $this->released([
@@ -211,10 +181,6 @@ final class ContentReviewStateWriter
         ]));
     }
 
-    /**
-     * No transition out of processing may leave the lease behind, or the sweeper will keep
-     * reclaiming a row that is already finished.
-     */
     private function released(array $attributes): array
     {
         return array_replace($attributes, [

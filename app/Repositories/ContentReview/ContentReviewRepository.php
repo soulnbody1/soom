@@ -37,11 +37,6 @@ final class ContentReviewRepository
             ->withQueryString();
     }
 
-    /**
-     * A unique index covers (subject_type, subject_id, content_hash, attempt), so a
-     * re-run of unchanged content has to continue the attempt sequence rather than
-     * restart it.
-     */
     public function nextAttemptForContent(ReviewableSubjectType $type, int $subjectId, string $contentHash): int
     {
         $highest = ContentReview::forSubject($type, $subjectId)
@@ -195,12 +190,6 @@ final class ContentReviewRepository
             ->count();
     }
 
-    /**
-     * Spend is billed to the period the call was made in, which is when the review finished —
-     * not when it was queued. A review queued before midnight and run after it belongs to the
-     * new day's budget, and a retry that lands days later belongs to the day it actually spent.
-     * Calls still in flight are covered by the reservation ledger rather than by this sum.
-     */
     public function costMicrosCompletedSince(Carbon $since): int
     {
         return (int) ContentReview::whereNotNull('completed_at')
@@ -208,10 +197,6 @@ final class ContentReviewRepository
             ->sum('cost_micros');
     }
 
-    /**
-     * @param  array<int, int>  $subjectIds
-     * @return array<int, int>
-     */
     public function subjectIdsWithAnyReview(ReviewableSubjectType $type, array $subjectIds): array
     {
         if ($subjectIds === []) {

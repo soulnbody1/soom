@@ -24,10 +24,6 @@ function geminiDescriptor(StructuredOutputStrategy $strategy, bool $vision = tru
     return new ProviderModelDescriptor('gemini-3.6-flash', 750_000, 3_750_000, $vision, $strategy);
 }
 
-/**
- * Mirrors the shape of ReviewPromptRenderer::resultSchema(): the keywords that matter here are
- * additionalProperties and maxLength, which must survive the trip to the provider untouched.
- */
 function geminiSchema(): array
 {
     return [
@@ -184,7 +180,7 @@ test('the result schema is normalised for strict validation before it is sent', 
         return $config['responseMimeType'] === 'application/json'
             && $schema === (new StrictJsonSchemaAdapter)->apply(geminiSchema())
             && $schema['additionalProperties'] === false
-            // Gemini refuses a closed schema that leaves properties out of `required`.
+
             && $schema['required'] === ['recommendation', 'confidence', 'summary_ar', 'findings']
             && ! array_key_exists('maxLength', $schema['properties']['summary_ar'])
             && ! array_key_exists('responseSchema', $config);

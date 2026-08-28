@@ -74,10 +74,6 @@ final class ContentReviewMetricsRepository
         ];
     }
 
-    /**
-     * Exact percentiles without loading the sample into memory: one COUNT plus one
-     * indexed OFFSET read per percentile, bounded by the requested range.
-     */
     public function percentiles(MetricsRange $range, string $column): array
     {
         if (! in_array($column, self::PERCENTILE_COLUMNS, true)) {
@@ -182,7 +178,8 @@ final class ContentReviewMetricsRepository
     public function unpricedSince(Carbon $since): int
     {
         return ContentReview::query()
-            ->where('created_at', '>=', $since)
+            ->whereNotNull('completed_at')
+            ->where('completed_at', '>=', $since)
             ->where('status', ContentReviewStatus::Completed->value)
             ->whereNull('cost_micros')
             ->count();
@@ -196,9 +193,6 @@ final class ContentReviewMetricsRepository
             ->count();
     }
 
-    /**
-     * @return array<int, string>
-     */
     public function providerErrorCodes(): array
     {
         return [

@@ -9,7 +9,6 @@ use App\Domain\ContentReview\Enums\ContentReviewDecisionType;
 use App\Domain\ContentReview\Enums\DecisionActorType;
 use App\Domain\ContentReview\Enums\DecisionRelation;
 use App\Domain\ContentReview\Enums\ReviewMode;
-use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionConfigurationSnapshot;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionStatusHistory;
@@ -246,9 +245,6 @@ final class AiAssistedFlowTest extends TestCase
             ->firstOrFail();
     }
 
-    /**
-     * @return array{0: ContentReview, 1: Auction}
-     */
     private function assistedReview(?array $payload = null, ReviewMode $mode = ReviewMode::AiAssisted): array
     {
         $this->publishPolicy();

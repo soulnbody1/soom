@@ -296,9 +296,6 @@ final class ContentReviewMetricsApiTest extends TestCase
         return $this->actingAs($user, 'sanctum')->getJson($path)->assertOk()->json('data');
     }
 
-    /**
-     * @return array<int, ContentReview>
-     */
     private function seedReviews(array $rows): array
     {
         $reviews = app(ContentReviewRepository::class);
@@ -329,8 +326,14 @@ final class ContentReviewMetricsApiTest extends TestCase
                 $row
             )));
 
-            if ($createdAt !== null) {
-                $reviews->update($review, ['created_at' => $createdAt]);
+            $attributes = $createdAt === null ? [] : ['created_at' => $createdAt];
+
+            if ($review->status->isTerminal() && $review->completed_at === null) {
+                $attributes['completed_at'] = $createdAt ?? $review->created_at;
+            }
+
+            if ($attributes !== []) {
+                $reviews->update($review, $attributes);
             }
 
             $created[] = $review;

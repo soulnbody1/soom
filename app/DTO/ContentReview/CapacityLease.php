@@ -6,10 +6,6 @@ namespace App\DTO\ContentReview;
 
 use App\Domain\ContentReview\Enums\ContentReviewErrorCode;
 
-/**
- * Permission to make one provider call: a concurrency slot and a budget reservation, held
- * together so they are always released together.
- */
 final readonly class CapacityLease extends BaseContentReviewDTO
 {
     private function __construct(
@@ -24,9 +20,6 @@ final readonly class CapacityLease extends BaseContentReviewDTO
         return new self($slot, $reservation, null, false);
     }
 
-    /**
-     * Every worker is busy. Nothing is wrong with the review, so it waits its turn.
-     */
     public static function noSlot(): self
     {
         return new self(null, null, null, true);

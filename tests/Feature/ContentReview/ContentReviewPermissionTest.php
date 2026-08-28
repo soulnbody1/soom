@@ -17,13 +17,6 @@ use Illuminate\Support\Facades\Queue;
 use Tests\Feature\ContentReview\Concerns\BuildsContentReviewFixtures;
 use Tests\TestCase;
 
-/**
- * There is one kind of admin. Authentication is the whole access rule for the
- * content review surface: any authenticated admin may read and run everything,
- * a seller may reach nothing, and a guest is rejected. What an admin is *offered*
- * still depends on the state of the review, and the redaction boundary is
- * unaffected by any of it.
- */
 final class ContentReviewPermissionTest extends TestCase
 {
     use BuildsContentReviewFixtures;
@@ -252,9 +245,6 @@ final class ContentReviewPermissionTest extends TestCase
         $this->assertStringNotContainsString('"disk"', $content);
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function availableActions(User $user, ContentReview $review): array
     {
         return (array) $this->actingAs($user, 'sanctum')

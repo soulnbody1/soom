@@ -18,15 +18,6 @@ final class ContentReviewNotificationCatalog
 
     public const SCOPE_ALERT = 'alert';
 
-    /**
-     * admin: delivered to every admin.
-     * scope: the rate limiting key — per (event, subject), per event globally, or per
-     * (event, alert code) for the shared recovery event.
-     *
-     * A failed attempt is recorded but not alerted: in a decision-applying mode it is
-     * always followed by content_review.escalated, and alerting on both would notify
-     * twice for one piece of news.
-     */
     private const EVENTS = [
         'content_review.queued' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
         'content_review.completed' => ['admin' => false, 'scope' => self::SCOPE_SUBJECT, 'screen' => self::SCREEN_REVIEW_QUEUE],
@@ -70,9 +61,6 @@ final class ContentReviewNotificationCatalog
         return self::EVENTS[$eventType]['screen'] ?? self::SCREEN_REVIEW_QUEUE;
     }
 
-    /**
-     * @return array<int, string>
-     */
     public static function eventTypes(): array
     {
         return array_keys(self::EVENTS);

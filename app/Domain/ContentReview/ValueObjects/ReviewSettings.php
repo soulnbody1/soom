@@ -6,24 +6,12 @@ namespace App\Domain\ContentReview\ValueObjects;
 
 use JsonSerializable;
 
-/**
- * The effective knobs for one subject type: published settings laid over the config defaults.
- *
- * It wraps the merged array rather than declaring typed properties for two reasons. The admin
- * settings endpoint serialises this straight into its response, so the array has to survive
- * intact; and a published settings row may legitimately carry keys this class has no accessor
- * for yet. What the accessors add is the clamping — every bound lives here once, instead of
- * being re-derived by each consumer.
- */
 final readonly class ReviewSettings implements JsonSerializable
 {
     private const DEFAULT_BACKOFF_SECONDS = [60, 300, 900];
 
     public function __construct(public array $settings) {}
 
-    /**
-     * Published values win, but only where they were actually set; a null means "inherit".
-     */
     public static function merge(array $defaults, array $published = []): self
     {
         return new self(array_replace($defaults, array_filter(
@@ -71,9 +59,6 @@ final readonly class ReviewSettings implements JsonSerializable
         return ($this->settings['analyze_images'] ?? true) === true;
     }
 
-    /**
-     * @return array<int, int>
-     */
     public function backoffSeconds(): array
     {
         $backoff = $this->settings['backoff_seconds'] ?? null;
@@ -90,9 +75,6 @@ final readonly class ReviewSettings implements JsonSerializable
         return max(0, $this->int($period === 'daily' ? 'daily_budget_micros' : 'monthly_budget_micros', 0));
     }
 
-    /**
-     * @return array{failure_threshold: int, window_seconds: int, open_seconds: int}
-     */
     public function circuitBreaker(): array
     {
         $configured = $this->settings['circuit_breaker'] ?? [];

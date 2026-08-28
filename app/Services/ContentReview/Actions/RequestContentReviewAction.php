@@ -31,10 +31,6 @@ final class RequestContentReviewAction
         private readonly ContentReviewEventPublisher $events,
     ) {}
 
-    /**
-     * $modeCeiling never widens the published mode; it only caps it, so a backfill can
-     * force historical content into shadow while a manual platform still creates nothing.
-     */
     public function execute(
         ReviewableSubjectType $type,
         int $subjectId,

@@ -22,9 +22,6 @@ final readonly class MetricsRange extends BaseContentReviewDTO
         public Carbon $to,
     ) {}
 
-    /**
-     * @return array<int, string>
-     */
     public static function presets(): array
     {
         return [self::TODAY, self::LAST_7_DAYS, self::LAST_30_DAYS];

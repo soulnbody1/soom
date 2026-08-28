@@ -66,13 +66,6 @@ final class ContentReviewActionResolver
             && ! $this->hasHumanDecision($review);
     }
 
-    /**
-     * Domain state only. Every admin endpoint behind `role:admin` may run every action,
-     * so what is offered depends on whether the review is in a state that accepts it,
-     * never on who is asking.
-     *
-     * @return array<int, string>
-     */
     public function for(?ContentReview $review, ?ReviewMode $mode = null): array
     {
         $actions = [];

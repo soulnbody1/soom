@@ -88,9 +88,6 @@ final class ContentReviewLogContext
         return $context;
     }
 
-    /**
-     * @return array<int, string>
-     */
     public static function allowedKeys(): array
     {
         return array_merge(self::REVIEW_KEYS, self::EXTRA_KEYS);

@@ -65,10 +65,6 @@ final class ContentReviewHealthReporter
         return $report;
     }
 
-    /**
-     * A failure rate is only meaningful against a sample, so the sample size ships with
-     * it and the rate is null when nothing ran in the window.
-     */
     private function recentProviderRates(): array
     {
         $hours = max(1, (int) config('content_review.alerts.invalid_output_window_hours', 24));

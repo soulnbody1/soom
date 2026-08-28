@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\ContentReview\Enums;
 
-/**
- * Whether the thing a review was created for is still there, still reviewable, and still says
- * what it said when the review was made.
- */
 enum SubjectVerdict: string
 {
     case Ready = 'ready';
@@ -21,9 +17,6 @@ enum SubjectVerdict: string
         return $this === self::Ready;
     }
 
-    /**
-     * The error code that records this verdict on a review row.
-     */
     public function errorCode(): ?ContentReviewErrorCode
     {
         return match ($this) {

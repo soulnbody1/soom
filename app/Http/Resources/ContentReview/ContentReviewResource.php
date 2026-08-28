@@ -7,16 +7,12 @@ namespace App\Http\Resources\ContentReview;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\DTO\ContentReview\ImageReviewSummary;
-use App\Models\ContentReview\ContentReview;
 use App\Services\ContentReview\Support\AutomationEligibilityResolver;
 use App\Services\ContentReview\Support\ContentReviewActionResolver;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/**
- * @mixin ContentReview
- */
 final class ContentReviewResource extends JsonResource
 {
     private bool $includeAutomation = false;
@@ -28,10 +24,6 @@ final class ContentReviewResource extends JsonResource
         return $this;
     }
 
-    /**
-     * Resolve the effective mode once per request so a paginated list does not
-     * re-query the settings table for every row.
-     */
     public static function resolvedMode(Request $request, ReviewableSubjectType $type): ReviewMode
     {
         $key = 'content_review.resolved_mode.'.$type->value;

@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\ContentReview;
 
-use App\Models\ContentReview\ContentReviewSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/**
- * @mixin ContentReviewSetting
- */
 final class ContentReviewSettingsResource extends JsonResource
 {
     private const EXPOSED_KEYS = [

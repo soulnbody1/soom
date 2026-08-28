@@ -130,12 +130,6 @@ final class ContentReview extends Model
         return $query->where('subject_type', $type->value)->where('subject_id', $subjectId);
     }
 
-    /**
-     * The review no longer speaks for its subject: it was replaced, cancelled, or lost its
-     * active marker. The single reading of that question — a decision, an automation check and
-     * the admin UI all have to agree on it, or one of them acts on an answer the others
-     * consider dead.
-     */
     public function isSuperseded(): bool
     {
         return $this->current_marker === null

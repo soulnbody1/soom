@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\ContentReview;
 
-use App\Models\ContentReview\ContentReviewPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/**
- * @mixin ContentReviewPolicy
- */
 final class ContentReviewPolicyResource extends JsonResource
 {
     public function toArray(Request $request): array

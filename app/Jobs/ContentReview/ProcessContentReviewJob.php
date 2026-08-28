@@ -63,10 +63,6 @@ final class ProcessContentReviewJob implements ShouldBeUnique, ShouldQueue
         return Carbon::now()->addMinutes(30);
     }
 
-    /**
-     * Both release paths hand the job back without consuming a review attempt: no slot was free,
-     * or the provider is briefly unreachable. `retryUntil` bounds how long that can go on.
-     */
     public function handle(
         ProcessContentReviewAction $action,
         ContentReviewConcurrencyLimiter $limiter,

@@ -130,9 +130,6 @@ final class PublishContentReviewSettingsRequest extends FormRequest
         return $allowed;
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function allowedScopes(): array
     {
         return array_merge(['global'], array_column(ReviewableSubjectType::cases(), 'value'));

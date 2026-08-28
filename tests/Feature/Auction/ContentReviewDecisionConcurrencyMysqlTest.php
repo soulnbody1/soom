@@ -171,9 +171,6 @@ final class ContentReviewDecisionConcurrencyMysqlTest extends TestCase
         );
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function race(array $first, array $second, ContentReview $review, Auction $auction): array
     {
         $workDir = storage_path('framework/testing/content-review-decision-'.Str::ulid());
@@ -299,9 +296,6 @@ try {
 PHP;
     }
 
-    /**
-     * @return array{0: ContentReview, 1: Auction}
-     */
     private function assistedFixture(ReviewMode $mode = ReviewMode::AiAssisted): array
     {
         $this->publishPolicy();

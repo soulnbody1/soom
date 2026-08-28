@@ -6,10 +6,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Budget periods are summed over `completed_at`, because that is when a call was actually
- * billed. The existing `created_at` index does not serve that scan.
- */
 return new class extends Migration
 {
     public function up(): void

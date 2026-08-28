@@ -20,10 +20,6 @@ final class BackfillContentReviewsAction
         private readonly RequestContentReviewAction $requests,
     ) {}
 
-    /**
-     * Never widens automation: created attempts are capped at shadow, so a historical
-     * subject can be analyzed for observability but can never be auto decided.
-     */
     public function execute(ReviewableSubjectType $type, int $limit, int $chunk, bool $execute): array
     {
         $result = [

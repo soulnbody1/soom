@@ -14,11 +14,6 @@ final class AdminAlertRecipientResolver
 
     private const COOLDOWN_PREFIX = 'content_review:alert:';
 
-    /**
-     * Every admin is a recipient. Sellers and ordinary users never are.
-     *
-     * @return Collection<int, User>
-     */
     public function recipients(): Collection
     {
         $recipients = collect();

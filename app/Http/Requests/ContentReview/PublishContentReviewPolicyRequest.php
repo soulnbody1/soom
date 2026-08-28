@@ -150,9 +150,6 @@ final class PublishContentReviewPolicyRequest extends FormRequest
         return (int) ($this->validated('result_schema_version') ?? 1);
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function stringList(mixed $value): array
     {
         if (! is_array($value)) {

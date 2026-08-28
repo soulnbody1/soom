@@ -423,3 +423,23 @@ test('provider readiness is answered by the driver, never by a name comparison',
         ->and($factory->isConfigured('openrouter'))->toBeTrue()
         ->and($factory->isConfigured('gemini'))->toBeTrue();
 });
+
+test('a failure that carries billed usage can never be retried', function (): void {
+    expect(ContentReviewErrorCode::InvalidStructuredOutput->isRetryable())->toBeFalse()
+        ->and(ContentReviewErrorCode::OutputTruncated->isRetryable())->toBeFalse();
+});
+
+test('attaching billed usage to a failure stays confined to one path', function (): void {
+    $violations = [];
+
+    foreach (glob(app_path('Services/ContentReview/Providers/*.php')) as $file) {
+        $allowed = str_ends_with($file, 'HttpContentReviewProvider.php')
+            || str_ends_with($file, 'FakeContentReviewProvider.php');
+
+        if (! $allowed && str_contains((string) file_get_contents($file), 'afterCall(')) {
+            $violations[] = basename($file);
+        }
+    }
+
+    expect($violations)->toBe([]);
+});

@@ -96,7 +96,6 @@ final class AutomationEligibilityResolver
         $subject = $this->subjects->verify($review);
 
         if (! $subject->isReady()) {
-            // `review_stale` is this caller's name for content that no longer matches.
             return [$subject->verdict === SubjectVerdict::ContentChanged ? 'review_stale' : $subject->verdict->value];
         }
 

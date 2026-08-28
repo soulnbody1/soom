@@ -8,15 +8,6 @@ use App\Domain\ContentReview\Enums\ContentReviewErrorCode;
 use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\DTO\ContentReview\CapacityLease;
 
-/**
- * Whether we may spend on a call right now, and the paired cleanup afterwards.
- *
- * The budget check comes before the slot so a call we were never going to make does not first
- * occupy a worker; the reservation comes last because it is the only one taken under a lock.
- * Acquiring all of it behind one call is what makes the release symmetrical — a partially
- * acquired lease used to have to be unwound by hand at the call site, which is exactly the
- * shape that leaks a slot the next time a branch is added.
- */
 final class ProviderCallCapacity
 {
     public function __construct(

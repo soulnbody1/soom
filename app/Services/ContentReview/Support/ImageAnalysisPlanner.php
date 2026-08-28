@@ -11,12 +11,6 @@ use App\DTO\ContentReview\ImageReviewSummary;
 use App\DTO\ContentReview\ProviderModelDescriptor;
 use App\DTO\ContentReview\ReviewContentDTO;
 
-/**
- * Decides which of a subject's images need a fresh verdict, and files the verdicts that come
- * back. The screening cache key — provider, model, policy version, schema version — is spelled
- * out once here rather than at each call site, because a lookup and its matching write have to
- * agree on it or the cache silently stops hitting.
- */
 final class ImageAnalysisPlanner
 {
     public function __construct(
@@ -49,9 +43,6 @@ final class ImageAnalysisPlanner
         );
     }
 
-    /**
-     * @return array<string, \App\DTO\ContentReview\ImageCheckResult>
-     */
     public function record(ImageAnalysisPlan $plan, array $reported, ReviewPolicy $policy, string $provider, string $model): array
     {
         return $this->screener->record(

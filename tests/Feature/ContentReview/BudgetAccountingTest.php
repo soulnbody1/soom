@@ -7,7 +7,9 @@ namespace Tests\Feature\ContentReview;
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
+use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Models\ContentReview\ContentReview;
+use App\Repositories\ContentReview\ContentReviewMetricsRepository;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
 use App\Services\ContentReview\Support\ContentReviewBudgetGuard;
 use Illuminate\Support\Carbon;
@@ -23,11 +25,6 @@ final class BudgetAccountingTest extends TestCase
         Artisan::call('migrate', ['--force' => true]);
     }
 
-    /**
-     * A review queued before midnight but run after it spends today's money, so it has to be
-     * billed to today. Charging it to the day the row was created lets the new day's budget
-     * silently overspend by however much crossed the boundary.
-     */
     public function test_spend_is_billed_to_the_period_the_call_was_made_in(): void
     {
         $this->review(createdAt: Carbon::now()->subDay()->setTime(23, 55), completedAt: Carbon::now()->setTime(0, 5), cost: 700);
@@ -46,10 +43,6 @@ final class BudgetAccountingTest extends TestCase
         $this->assertSame(0, $this->guard()->spentMicros('daily'));
     }
 
-    /**
-     * A call still in flight has recorded metrics but no completion, and is covered by the
-     * reservation ledger instead. Counting it here as well would double charge it.
-     */
     public function test_an_unfinished_call_is_not_counted_as_spend(): void
     {
         $this->review(createdAt: Carbon::now(), completedAt: null, cost: 500, status: ContentReviewStatus::Queued);
@@ -68,11 +61,28 @@ final class BudgetAccountingTest extends TestCase
         $this->assertSame(1200, $this->guard()->spentMicros('monthly'));
     }
 
+    public function test_unpriced_calls_are_counted_over_the_same_window_as_the_spend(): void
+    {
+        $this->review(
+            createdAt: Carbon::now()->subDay()->setTime(23, 50),
+            completedAt: Carbon::now()->setTime(0, 10),
+            cost: null,
+        );
+
+        $snapshot = $this->guard()->periodSnapshot(
+            new ReviewSettings(['daily_budget_micros' => 1_000_000]),
+            'daily',
+            app(ContentReviewMetricsRepository::class)->unpricedSince(Carbon::now()->startOfDay()),
+        );
+
+        $this->assertSame(1, $snapshot['unpriced_reviews']);
+        $this->assertFalse($snapshot['totals_complete']);
+    }
+
     public function test_the_stub_provider_is_refused_in_production_unless_asked_for(): void
     {
         $factory = app(ContentReviewProviderFactory::class);
 
-        // It stays available in every other environment, which is where tests run.
         $this->assertTrue($factory->isConfigured('fake'));
 
         app()->detectEnvironment(static fn (): string => 'production');
@@ -102,7 +112,7 @@ final class BudgetAccountingTest extends TestCase
     private function review(
         Carbon $createdAt,
         ?Carbon $completedAt,
-        int $cost,
+        ?int $cost,
         ContentReviewStatus $status = ContentReviewStatus::Completed,
     ): ContentReview {
         $review = ContentReview::create([

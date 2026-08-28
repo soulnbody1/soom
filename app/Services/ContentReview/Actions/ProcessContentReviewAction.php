@@ -37,14 +37,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
-/**
- * One review, start to finish: claim it, check it is still worth running, call the provider,
- * validate what comes back, and hand the result to the decision step.
- *
- * The order of the guards below is the design. Each one is cheaper than the next, and each
- * failure has its own terminal state, so the sequence is kept flat and visible here rather
- * than hidden behind a chain of collaborators.
- */
 final class ProcessContentReviewAction
 {
     public const RESULT_PROCESSED = 'processed';
@@ -53,7 +45,6 @@ final class ProcessContentReviewAction
 
     public const RESULT_NO_SLOT = 'no_slot';
 
-    /** A self-clearing condition blocked the call; the review waits rather than failing. */
     public const RESULT_DEFERRED = 'deferred';
 
     public function __construct(
@@ -215,10 +206,6 @@ final class ProcessContentReviewAction
         ));
     }
 
-    /**
-     * A retryable code with attempts left goes back to the queue and the exception is rethrown
-     * so the worker applies its backoff. Anything else is terminal and needs a human.
-     */
     private function handleProviderFailure(
         ContentReview $review,
         DeterministicCheckResult $checks,
@@ -240,11 +227,6 @@ final class ProcessContentReviewAction
         $this->decide->executeWithoutResult($review->refresh(), $checks, $code);
     }
 
-    /**
-     * The subject can no longer be reviewed as recorded. Each verdict settles differently: a
-     * subject that has left review is cancelled rather than failed, and content that moved on
-     * is superseded so the next submission gets its own review.
-     */
     private function settleUnusableSubject(ContentReview $review, SubjectVerdict $verdict): void
     {
         match ($verdict) {
@@ -262,12 +244,6 @@ final class ProcessContentReviewAction
         return $stale;
     }
 
-    /**
-     * The provider is temporarily unreachable, which says nothing about this review. Failing it
-     * here would hand a human every listing queued during a short outage, so it goes back to the
-     * queue instead, keeping its attempts. The worker's own retryUntil window bounds the wait:
-     * if the condition outlasts it, the job's failure handler escalates as before.
-     */
     private function defer(ContentReview $review, ContentReviewErrorCode $code, string $reasonCode): string
     {
         $this->state->defer($review, $code, $reasonCode);
@@ -286,10 +262,6 @@ final class ProcessContentReviewAction
         return self::RESULT_DEFERRED;
     }
 
-    /**
-     * A guard refused to spend anything, so the review never reached the provider. It still
-     * needs an outcome, and the operational event is what tells an admin why.
-     */
     private function guardFailure(
         ContentReview $review,
         DeterministicCheckResult $checks,
@@ -327,10 +299,6 @@ final class ProcessContentReviewAction
         ]));
     }
 
-    /**
-     * The lease has to outlive the worker, which in turn outlives the HTTP call, or a job still
-     * running gets its row reclaimed underneath it.
-     */
     private function leaseSeconds(ReviewSettings $settings): int
     {
         return max(

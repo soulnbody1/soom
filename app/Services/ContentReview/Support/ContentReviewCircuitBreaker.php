@@ -27,10 +27,6 @@ final class ContentReviewCircuitBreaker
         return is_numeric($value) ? (int) $value : null;
     }
 
-    /**
-     * How long the circuit still refuses calls. Zero once it has closed, so a caller that has
-     * lost the race simply retries immediately rather than waiting on a stale deadline.
-     */
     public function secondsUntilClosed(): int
     {
         $openUntil = $this->openUntil();
