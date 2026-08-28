@@ -35,4 +35,9 @@ final class AuctionActivityLog extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function auction(): BelongsTo
+    {
+        return $this->belongsTo(Auction::class);
+    }
 }

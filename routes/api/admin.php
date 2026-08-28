@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Ad\AdController;
+use App\Http\Controllers\Admin\AdminUserAuctionsController;
+use App\Http\Controllers\Admin\AdminUserConversationController;
+use App\Http\Controllers\Admin\AdminUserFinanceController;
+use App\Http\Controllers\Admin\AdminUserProfileController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Attribute\AttributeController;
 use App\Http\Controllers\Attribute\AttributeOptionController;
@@ -35,6 +39,30 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
         Route::get('/search', [ProfileController::class, 'search']);
         Route::delete('/force-delete/{id}', [ProfileController::class, 'destroybyadmin']);
         Route::put('/toggle-block/{id}', [ProfileController::class, 'toggleBlock']);
+
+        Route::prefix('{user}')->group(function () {
+            $routes = [
+                '/' => [AdminUserProfileController::class, 'show'],
+                '/ads' => [AdminUserProfileController::class, 'ads'],
+                '/favorites' => [AdminUserProfileController::class, 'favorites'],
+                '/saved' => [AdminUserProfileController::class, 'saved'],
+                '/activity' => [AdminUserProfileController::class, 'activity'],
+                '/auctions' => [AdminUserAuctionsController::class, 'index'],
+                '/financial/summary' => [AdminUserFinanceController::class, 'summary'],
+                '/financial/refunds' => [AdminUserFinanceController::class, 'refunds'],
+                '/financial/payouts' => [AdminUserFinanceController::class, 'payouts'],
+                '/financial/deposits' => [AdminUserFinanceController::class, 'deposits'],
+                '/financial/payment-submissions' => [AdminUserFinanceController::class, 'submissions'],
+                '/financial/payment-transactions' => [AdminUserFinanceController::class, 'transactions'],
+                '/payout-destinations' => [AdminUserFinanceController::class, 'destinations'],
+                '/conversations' => [AdminUserConversationController::class, 'index'],
+                '/conversations/{partner}/messages' => [AdminUserConversationController::class, 'messages'],
+            ];
+
+            foreach ($routes as $uri => $action) {
+                Route::get($uri, $action)->withTrashed()->whereNumber(['user', 'partner']);
+            }
+        });
     });
 
     Route::prefix('banners')->group(function () {
