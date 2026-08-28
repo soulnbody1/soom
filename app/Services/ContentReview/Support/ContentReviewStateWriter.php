@@ -198,6 +198,20 @@ final class ContentReviewStateWriter
     }
 
     /**
+     * A self-clearing condition stopped the call before it happened. The review goes back to
+     * the queue carrying the reason, so the admin list can say what it is waiting for, and no
+     * attempt is consumed — nothing about the review failed.
+     */
+    public function defer(ContentReview $review, ContentReviewErrorCode $code, string $reasonCode): ContentReview
+    {
+        return $this->reviews->update($review, $this->released([
+            'status' => ContentReviewStatus::Queued->value,
+            'error_code' => $code->value,
+            'reason_code' => $reasonCode,
+        ]));
+    }
+
+    /**
      * No transition out of processing may leave the lease behind, or the sweeper will keep
      * reclaiming a row that is already finished.
      */

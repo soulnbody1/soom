@@ -5,36 +5,33 @@ declare(strict_types=1);
 namespace App\Services\ContentReview\Actions;
 
 use App\Domain\ContentReview\Enums\ContentReviewErrorCode;
+use App\Domain\ContentReview\Enums\SubjectVerdict;
 use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Domain\ContentReview\Exceptions\ContentReviewProviderException;
 use App\Domain\ContentReview\ValueObjects\ReviewPolicy;
 use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\DTO\ContentReview\DeterministicCheckResult;
 use App\DTO\ContentReview\ImageAnalysisPlan;
-use App\DTO\ContentReview\ProviderModelDescriptor;
 use App\DTO\ContentReview\ProviderReviewRequest;
 use App\DTO\ContentReview\ProviderReviewResponse;
+use App\DTO\ContentReview\ResolvedProvider;
 use App\DTO\ContentReview\ReviewContentDTO;
 use App\Models\ContentReview\ContentReview;
 use App\Repositories\ContentReview\ContentReviewRepository;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
-use App\Services\ContentReview\Contracts\ContentReviewProvider;
-use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
-use App\Services\ContentReview\Support\ContentHasher;
-use App\Services\ContentReview\Support\ContentReviewBudgetGuard;
-use App\Services\ContentReview\Support\ContentReviewConcurrencyLimiter;
 use App\Services\ContentReview\Support\ContentReviewLogContext;
 use App\Services\ContentReview\Support\ContentReviewStateWriter;
 use App\Services\ContentReview\Support\DeterministicContentChecks;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
 use App\Services\ContentReview\Support\ImageAnalysisPlanner;
+use App\Services\ContentReview\Support\ProviderCallCapacity;
 use App\Services\ContentReview\Support\ProviderCallGuard;
 use App\Services\ContentReview\Support\ProviderOutcomeRecorder;
-use App\Services\ContentReview\Support\ProviderSelectionResolver;
+use App\Services\ContentReview\Support\ProviderResolver;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use App\Services\ContentReview\Support\ReviewPolicyResolver;
 use App\Services\ContentReview\Support\ReviewPromptRenderer;
-use App\Services\ContentReview\Support\ReviewSubjectRegistry;
+use App\Services\ContentReview\Support\ReviewSubjectVerifier;
 use App\Services\ContentReview\Support\StructuredReviewResultValidator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -56,21 +53,21 @@ final class ProcessContentReviewAction
 
     public const RESULT_NO_SLOT = 'no_slot';
 
+    /** A self-clearing condition blocked the call; the review waits rather than failing. */
+    public const RESULT_DEFERRED = 'deferred';
+
     public function __construct(
         private readonly ContentReviewRepository $reviews,
         private readonly ContentReviewStateWriter $state,
         private readonly ReviewModeResolver $modes,
         private readonly ReviewPolicyResolver $policies,
-        private readonly ReviewSubjectRegistry $registry,
-        private readonly ContentHasher $hasher,
+        private readonly ReviewSubjectVerifier $subjects,
         private readonly DeterministicContentChecks $deterministic,
         private readonly ReviewPromptRenderer $renderer,
         private readonly ImageAnalysisPlanner $imagePlanner,
         private readonly StructuredReviewResultValidator $validator,
-        private readonly ContentReviewProviderFactory $providers,
-        private readonly ProviderSelectionResolver $selection,
-        private readonly ContentReviewBudgetGuard $budget,
-        private readonly ContentReviewConcurrencyLimiter $limiter,
+        private readonly ProviderResolver $providerResolver,
+        private readonly ProviderCallCapacity $capacity,
         private readonly ProviderCallGuard $callGuard,
         private readonly ProviderOutcomeRecorder $providerOutcome,
         private readonly ErrorMessageRedactor $redactor,
@@ -95,35 +92,15 @@ final class ProcessContentReviewAction
 
         $review->refresh();
 
-        if (! $this->registry->supports($review->subject_type)) {
-            $this->state->terminate($review, ContentReviewErrorCode::SubjectNotReviewable, 'subject_type_not_supported');
+        $subject = $this->subjects->verify($review);
+
+        if (! $subject->isReady()) {
+            $this->settleUnusableSubject($review, $subject->verdict);
 
             return self::RESULT_PROCESSED;
         }
 
-        $adapter = $this->registry->for($review->subject_type);
-        $subjectId = (int) $review->subject_id;
-
-        if (! $adapter->isReviewable($subjectId)) {
-            $this->state->cancel($review, ContentReviewErrorCode::SubjectNotReviewable);
-
-            return self::RESULT_PROCESSED;
-        }
-
-        $content = $adapter->buildContent($subjectId);
-
-        if ($content === null) {
-            $this->state->terminate($review, ContentReviewErrorCode::ContentUnavailable, 'content_unavailable');
-
-            return self::RESULT_PROCESSED;
-        }
-
-        if ($this->hasher->hashContent($content) !== $review->content_hash) {
-            $this->state->markStale($review);
-            $this->events->publish($review->refresh(), 'content_review.stale');
-
-            return self::RESULT_PROCESSED;
-        }
+        $content = $subject->content;
 
         try {
             $policy = $this->policies->activeFor($review->subject_type);
@@ -136,44 +113,30 @@ final class ProcessContentReviewAction
         $checks = $this->deterministic->run($content, $policy);
 
         if ($this->providerOutcome->isUnavailable()) {
-            $this->guardFailure($review, $checks, ContentReviewErrorCode::CircuitOpen, 'circuit_open');
-
-            return self::RESULT_PROCESSED;
+            return $this->defer($review, ContentReviewErrorCode::CircuitOpen, 'circuit_open');
         }
 
-        $provider = $this->providers->make($this->selection->provider($settings));
-        $model = $this->selection->model($settings);
-        $descriptor = $this->selection->descriptor($settings);
+        $resolved = $this->providerResolver->resolve($settings);
         $maxOutputTokens = $settings->maxOutputTokens();
+        $capacity = $this->capacity->acquire($settings, $resolved->name, $resolved->model, $maxOutputTokens);
 
-        if ($this->budget->exhaustedPeriod($settings, $provider->name(), $model, $maxOutputTokens) !== null) {
-            $this->guardFailure($review, $checks, ContentReviewErrorCode::BudgetExhausted, 'budget_exhausted');
-
-            return self::RESULT_PROCESSED;
-        }
-
-        $slot = $this->limiter->acquire($settings);
-
-        if ($slot === null) {
+        if ($capacity->slotUnavailable) {
             $this->state->releaseToQueue($review);
 
             return self::RESULT_NO_SLOT;
         }
 
-        $reservation = $this->budget->reserve($settings, $provider->name(), $model, $maxOutputTokens);
-
-        if ($reservation === null) {
-            $this->limiter->release($slot);
-            $this->guardFailure($review, $checks, ContentReviewErrorCode::BudgetExhausted, 'budget_exhausted');
+        if (! $capacity->isGranted()) {
+            $this->guardFailure($review, $checks, $capacity->refusal, 'budget_exhausted');
 
             return self::RESULT_PROCESSED;
         }
 
-        $plan = $this->imagePlanner->plan($content, $policy, $settings, $provider->name(), $model, $descriptor);
+        $plan = $this->imagePlanner->plan($content, $policy, $settings, $resolved->name, $resolved->model, $resolved->descriptor);
         $this->state->recordImageSummary($review, $this->imagePlanner->summarize($plan, $content->imageCount(), []));
 
         try {
-            $response = $this->callProvider($provider, $review, $content, $policy, $settings, $model, $descriptor, $maxOutputTokens, $plan);
+            $response = $this->callProvider($resolved, $review, $content, $policy, $settings, $maxOutputTokens, $plan);
         } catch (Throwable $exception) {
             $failure = $exception instanceof ContentReviewProviderException
                 ? $exception
@@ -185,15 +148,14 @@ final class ProcessContentReviewAction
             $this->providerOutcome->recordFailure($settings, $failure->errorCode());
 
             if ($failure->metrics() !== null) {
-                $this->state->recordProviderMetrics($review, $failure->metrics(), $provider->name());
+                $this->state->recordProviderMetrics($review, $failure->metrics(), $resolved->name);
             }
 
             $this->handleProviderFailure($review->refresh(), $checks, $failure);
 
             return self::RESULT_PROCESSED;
         } finally {
-            $this->budget->release($reservation);
-            $this->limiter->release($slot);
+            $this->capacity->release($capacity);
         }
 
         $this->providerOutcome->recordSuccess();
@@ -201,7 +163,7 @@ final class ProcessContentReviewAction
         try {
             $result = $this->validator->validate($response->payload, $policy);
         } catch (ContentReviewException) {
-            $this->state->recordProviderMetrics($review, $response->metrics(), $provider->name());
+            $this->state->recordProviderMetrics($review, $response->metrics(), $resolved->name);
             $this->handleProviderFailure(
                 $review->refresh(),
                 $checks,
@@ -211,9 +173,9 @@ final class ProcessContentReviewAction
             return self::RESULT_PROCESSED;
         }
 
-        $merged = $this->imagePlanner->record($plan, $result->imageChecks, $policy, $provider->name(), $model);
+        $merged = $this->imagePlanner->record($plan, $result->imageChecks, $policy, $resolved->name, $resolved->model);
 
-        $this->state->complete($review, $response, $result, $checks, $policy, $provider->name(), $this->renderer->version($policy));
+        $this->state->complete($review, $response, $result, $checks, $policy, $resolved->name, $this->renderer->version($policy));
         $this->state->recordImageSummary($review, $this->imagePlanner->summarize($plan, $content->imageCount(), $merged));
 
         $this->logCompleted($review->refresh());
@@ -225,13 +187,11 @@ final class ProcessContentReviewAction
     }
 
     private function callProvider(
-        ContentReviewProvider $provider,
+        ResolvedProvider $resolved,
         ContentReview $review,
         ReviewContentDTO $content,
         ReviewPolicy $policy,
         ReviewSettings $settings,
-        string $model,
-        ?ProviderModelDescriptor $descriptor,
         int $maxOutputTokens,
         ImageAnalysisPlan $plan,
     ): ProviderReviewResponse {
@@ -239,19 +199,19 @@ final class ProcessContentReviewAction
 
         $imageContext = $plan->promptContext();
 
-        return $provider->analyze(new ProviderReviewRequest(
+        return $resolved->provider->analyze(new ProviderReviewRequest(
             $review->subject_type,
             $this->renderer->render($policy, $content, $imageContext),
             $this->renderer->resultSchema($policy),
             $content->textBlocks,
             $content->structuredFacts,
             $plan->attachments(),
-            $model,
+            $resolved->model,
             $maxOutputTokens,
             $settings->timeoutSeconds(),
             $policy->locales(),
             $imageContext,
-            $descriptor,
+            $resolved->descriptor,
         ));
     }
 
@@ -278,6 +238,52 @@ final class ProcessContentReviewAction
         $this->logFailure($review->refresh(), 'provider_failure');
         $this->events->publish($review->refresh(), 'content_review.failed');
         $this->decide->executeWithoutResult($review->refresh(), $checks, $code);
+    }
+
+    /**
+     * The subject can no longer be reviewed as recorded. Each verdict settles differently: a
+     * subject that has left review is cancelled rather than failed, and content that moved on
+     * is superseded so the next submission gets its own review.
+     */
+    private function settleUnusableSubject(ContentReview $review, SubjectVerdict $verdict): void
+    {
+        match ($verdict) {
+            SubjectVerdict::NotReviewable => $this->state->cancel($review, ContentReviewErrorCode::SubjectNotReviewable),
+            SubjectVerdict::ContentChanged => $this->markStale($review),
+            default => $this->state->terminate($review, $verdict->errorCode(), $verdict->value),
+        };
+    }
+
+    private function markStale(ContentReview $review): ContentReview
+    {
+        $stale = $this->state->markStale($review);
+        $this->events->publish($review->refresh(), 'content_review.stale');
+
+        return $stale;
+    }
+
+    /**
+     * The provider is temporarily unreachable, which says nothing about this review. Failing it
+     * here would hand a human every listing queued during a short outage, so it goes back to the
+     * queue instead, keeping its attempts. The worker's own retryUntil window bounds the wait:
+     * if the condition outlasts it, the job's failure handler escalates as before.
+     */
+    private function defer(ContentReview $review, ContentReviewErrorCode $code, string $reasonCode): string
+    {
+        $this->state->defer($review, $code, $reasonCode);
+
+        $refreshed = $review->refresh();
+        Log::info('content_review.deferred', $this->logContext->forReview($refreshed, [
+            'stage' => $reasonCode,
+            'retryable' => true,
+        ]));
+
+        $this->events->publishOperational('content_review.'.$reasonCode, [
+            'review_id' => (string) $refreshed->public_id,
+            'error_code' => $code->value,
+        ]);
+
+        return self::RESULT_DEFERRED;
     }
 
     /**

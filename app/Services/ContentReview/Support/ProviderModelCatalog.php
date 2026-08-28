@@ -29,6 +29,56 @@ final class ProviderModelCatalog
         return $this->descriptor($provider, $model) !== null;
     }
 
+    /**
+     * The descriptor to bill a call against, which is not always the one selection would accept.
+     *
+     * A vendor may answer an alias with the concrete build it resolved to — the catalog entry
+     * with a version suffix appended. Pricing that as "unknown model" silently drops the cost of
+     * a call that really happened, so a versioned id falls back to the entry it was built from.
+     * Selection stays strict on purpose: a mistyped configured model must still be rejected
+     * rather than quietly priced as something else.
+     */
+    public function pricingDescriptor(string $provider, string $model): ?ProviderModelDescriptor
+    {
+        $exact = $this->descriptor($provider, $model);
+
+        if ($exact !== null) {
+            return $exact;
+        }
+
+        $base = $this->versionedBase($provider, $model);
+
+        return $base === null ? null : $this->descriptor($provider, $base);
+    }
+
+    /**
+     * The longest catalog id the given model is a versioned variant of. Longest wins so a
+     * `-lite-preview` build bills as `-lite` rather than as the shorter family it also prefixes.
+     */
+    private function versionedBase(string $provider, string $model): ?string
+    {
+        $best = null;
+
+        foreach (array_keys($this->modelEntries($provider)) as $id) {
+            $id = (string) $id;
+
+            if ($id === '' || ! str_starts_with($model, $id)) {
+                continue;
+            }
+
+            // Only a version separator counts, so `...-5` never swallows `...-50`.
+            if (preg_match('/^[-@:_]/', substr($model, strlen($id))) !== 1) {
+                continue;
+            }
+
+            if ($best === null || strlen($id) > strlen($best)) {
+                $best = $id;
+            }
+        }
+
+        return $best;
+    }
+
     public function defaultModel(string $provider): ?string
     {
         $configured = $this->providerConfig($provider)['default_model'] ?? null;

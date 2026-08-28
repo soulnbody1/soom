@@ -7,10 +7,12 @@ namespace App\Services\ContentReview\Providers;
 use App\Domain\ContentReview\Enums\ContentReviewErrorCode;
 use App\Domain\ContentReview\Exceptions\ContentReviewProviderException;
 use App\Services\ContentReview\Contracts\ContentReviewProvider;
-use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Foundation\Application;
 
 final class ContentReviewProviderFactory
 {
+    private const FAKE = 'fake';
+
     private const PROVIDERS = [
         'fake' => FakeContentReviewProvider::class,
         'anthropic' => AnthropicContentReviewProvider::class,
@@ -18,18 +20,33 @@ final class ContentReviewProviderFactory
         'gemini' => GeminiContentReviewProvider::class,
     ];
 
-    public function __construct(private readonly Container $container) {}
+    public function __construct(private readonly Application $container) {}
 
     public function make(?string $name = null): ContentReviewProvider
     {
         $name = $name ?? (string) config('content_review.provider', 'fake');
         $class = self::PROVIDERS[$name] ?? null;
 
-        if ($class === null) {
+        if ($class === null || ! $this->isPermitted($name)) {
             throw ContentReviewProviderException::of(ContentReviewErrorCode::ProviderUnavailable);
         }
 
         return $this->container->make($class);
+    }
+
+    /**
+     * Refusing the stub in production is a louder failure than serving it: an unreachable
+     * provider escalates every listing to a human, whereas the stub would file invented
+     * findings under a real model's name.
+     */
+    private function isPermitted(string $name): bool
+    {
+        if ($name !== self::FAKE) {
+            return true;
+        }
+
+        return ! $this->container->environment('production')
+            || config('content_review.allow_fake_provider') === true;
     }
 
     public function available(): array

@@ -13,6 +13,7 @@ use App\Services\ContentReview\Actions\ProcessContentReviewAction;
 use App\Services\ContentReview\Support\ContentReviewConcurrencyLimiter;
 use App\Services\ContentReview\Support\ContentReviewWorkerHeartbeat;
 use App\Services\ContentReview\Support\ErrorMessageRedactor;
+use App\Services\ContentReview\Support\ProviderOutcomeRecorder;
 use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -62,15 +63,26 @@ final class ProcessContentReviewJob implements ShouldBeUnique, ShouldQueue
         return Carbon::now()->addMinutes(30);
     }
 
+    /**
+     * Both release paths hand the job back without consuming a review attempt: no slot was free,
+     * or the provider is briefly unreachable. `retryUntil` bounds how long that can go on.
+     */
     public function handle(
         ProcessContentReviewAction $action,
         ContentReviewConcurrencyLimiter $limiter,
         ContentReviewWorkerHeartbeat $heartbeat,
+        ProviderOutcomeRecorder $providerOutcome,
     ): void {
         $heartbeat->record();
 
-        if ($action->execute($this->publicId) === ProcessContentReviewAction::RESULT_NO_SLOT) {
-            $this->release($limiter->releaseDelaySeconds());
+        $delay = match ($action->execute($this->publicId)) {
+            ProcessContentReviewAction::RESULT_NO_SLOT => $limiter->releaseDelaySeconds(),
+            ProcessContentReviewAction::RESULT_DEFERRED => $providerOutcome->secondsUntilAvailable(),
+            default => null,
+        };
+
+        if ($delay !== null) {
+            $this->release($delay);
         }
     }
 

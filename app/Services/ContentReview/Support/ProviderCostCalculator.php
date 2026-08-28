@@ -19,7 +19,7 @@ final class ProviderCostCalculator
 
     public function costMicros(string $provider, string $model, ?int $inputTokens, ?int $outputTokens): ?int
     {
-        $descriptor = $this->catalog->descriptor($provider, $model);
+        $descriptor = $this->catalog->pricingDescriptor($provider, $model);
 
         if ($descriptor === null || $inputTokens === null || $outputTokens === null) {
             return null;

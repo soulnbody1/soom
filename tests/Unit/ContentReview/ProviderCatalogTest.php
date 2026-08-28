@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\ContentReview\Enums\StructuredOutputStrategy;
 use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
+use App\Services\ContentReview\Support\ProviderCostCalculator;
 use App\Services\ContentReview\Support\ProviderModelCatalog;
 use App\Services\ContentReview\Support\ProviderSelectionResolver;
 
@@ -137,4 +138,37 @@ test('the exposed catalog carries what an operator needs to choose a model', fun
                 ->and(json_encode($model))->not->toContain('secret');
         }
     }
+});
+
+test('a versioned build the vendor resolved an alias to is still priced', function (): void {
+    config()->set('content_review.providers.acme', [
+        'default_model' => 'acme-1',
+        'models' => [
+            'acme-1' => ['input' => 1_000_000, 'output' => 2_000_000, 'vision' => true, 'structured' => 'tool'],
+            'acme-1-lite' => ['input' => 100_000, 'output' => 200_000, 'vision' => true, 'structured' => 'tool'],
+        ],
+    ]);
+
+    $costs = app(ProviderCostCalculator::class);
+    $exact = $costs->costMicros('acme', 'acme-1', 1_000_000, 1_000_000);
+
+    // A dated build of the alias bills as the entry it was built from, not as nothing.
+    expect($costs->costMicros('acme', 'acme-1-20260101', 1_000_000, 1_000_000))->toBe($exact)
+        // The longest matching entry wins, so a lite build never bills at the family price.
+        ->and($costs->costMicros('acme', 'acme-1-lite-preview', 1_000_000, 1_000_000))
+        ->toBe($costs->costMicros('acme', 'acme-1-lite', 1_000_000, 1_000_000))
+        // A separator is required, so a different model is not swallowed by a shorter id.
+        ->and($costs->costMicros('acme', 'acme-12', 1_000_000, 1_000_000))->toBeNull()
+        // A genuinely unknown model still reports as unpriced rather than guessing.
+        ->and($costs->costMicros('acme', 'something-else', 1_000_000, 1_000_000))->toBeNull();
+});
+
+test('selection stays strict so a mistyped configured model is never silently repriced', function (): void {
+    config()->set('content_review.providers.acme', [
+        'default_model' => 'acme-1',
+        'models' => ['acme-1' => ['input' => 1, 'output' => 1, 'vision' => true, 'structured' => 'tool']],
+    ]);
+
+    expect(catalog()->has('acme', 'acme-1-20260101'))->toBeFalse()
+        ->and(catalog()->pricingDescriptor('acme', 'acme-1-20260101'))->not->toBeNull();
 });

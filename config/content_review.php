@@ -16,6 +16,13 @@ return [
 
     'provider' => env('CONTENT_REVIEW_PROVIDER', 'fake'),
 
+    /*
+     * The fake provider answers without calling anything, so a production deployment that has
+     * not set CONTENT_REVIEW_PROVIDER would otherwise file fabricated results as if a model had
+     * produced them. It stays available everywhere else, and in production only on request.
+     */
+    'allow_fake_provider' => (bool) env('CONTENT_REVIEW_ALLOW_FAKE_PROVIDER', false),
+
     'model' => env('CONTENT_REVIEW_MODEL', 'claude-sonnet-5'),
 
     'queue' => env('CONTENT_REVIEW_QUEUE', 'content-review'),

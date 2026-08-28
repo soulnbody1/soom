@@ -20,11 +20,11 @@ use App\Models\User;
 use App\Repositories\ContentReview\ContentReviewDecisionRepository;
 use App\Repositories\ContentReview\ContentReviewRepository;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
-use App\Services\ContentReview\Support\ContentHasher;
 use App\Services\ContentReview\Support\ContentReviewDecisionRecorder;
 use App\Services\ContentReview\Support\ContentReviewOverrideGuard;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use App\Services\ContentReview\Support\ReviewSubjectRegistry;
+use App\Services\ContentReview\Support\ReviewSubjectVerifier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -39,7 +39,7 @@ final class ApplyContentReviewDecisionAction
         private readonly ContentReviewDecisionRepository $decisions,
         private readonly ReviewSubjectRegistry $registry,
         private readonly ReviewModeResolver $modes,
-        private readonly ContentHasher $hasher,
+        private readonly ReviewSubjectVerifier $subjects,
         private readonly ContentReviewEventPublisher $events,
         private readonly ContentReviewOverrideGuard $overrides,
         private readonly ContentReviewDecisionRecorder $recorder,
@@ -159,13 +159,9 @@ final class ApplyContentReviewDecisionAction
             return 'review_already_decided';
         }
 
-        $content = $this->registry->for($review->subject_type)->buildContent($subjectId);
+        $subject = $this->subjects->verifyAgainst($review->subject_type, $subjectId, (string) $review->content_hash);
 
-        if ($content === null || $this->hasher->hashContent($content) !== $review->content_hash) {
-            return 'review_stale';
-        }
-
-        return null;
+        return $subject->isReady() ? null : 'review_stale';
     }
 
     private function humanReason(?ContentReview $review, string $reason): string
@@ -210,18 +206,10 @@ final class ApplyContentReviewDecisionAction
             $subjectId = (int) $locked->subject_id;
             $adapter = $this->registry->for($type);
 
-            $content = $adapter->buildContent($subjectId);
+            $subject = $this->subjects->verifyAgainst($type, $subjectId, (string) $locked->content_hash);
 
-            if ($content === null) {
-                return $this->supersede($locked, ContentReviewErrorCode::ContentUnavailable, 'content_unavailable');
-            }
-
-            if ($this->hasher->hashContent($content) !== $locked->content_hash) {
-                return $this->supersede($locked, ContentReviewErrorCode::ContentChanged, 'content_changed');
-            }
-
-            if (! $adapter->isReviewable($subjectId)) {
-                return $this->supersede($locked, ContentReviewErrorCode::SubjectNotReviewable, 'subject_not_reviewable');
+            if (! $subject->isReady()) {
+                return $this->supersede($locked, $subject->errorCode(), $subject->verdict->value);
             }
 
             $frozenMode = $locked->mode;

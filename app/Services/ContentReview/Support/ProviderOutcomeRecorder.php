@@ -29,6 +29,15 @@ final class ProviderOutcomeRecorder
         return $this->breaker->isOpen();
     }
 
+    /**
+     * How long to wait before a blocked review is worth attempting again. Floored so a review
+     * can never be released back with no delay and spin against a still-open circuit.
+     */
+    public function secondsUntilAvailable(): int
+    {
+        return max(5, $this->breaker->secondsUntilClosed());
+    }
+
     public function recordSuccess(): void
     {
         $this->breaker->recordSuccess();

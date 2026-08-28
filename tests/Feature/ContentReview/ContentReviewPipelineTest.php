@@ -505,9 +505,81 @@ final class ContentReviewPipelineTest extends TestCase
         $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
     }
 
-    public function test_an_open_circuit_skips_the_provider_and_escalates(): void
+    public function test_an_open_circuit_defers_the_review_instead_of_failing_it(): void
     {
         $auction = $this->eligibleAutomaticAuction();
+        $this->openCircuit();
+
+        $review = ContentReview::firstOrFail();
+        $attemptBefore = (int) $review->attempt;
+
+        $result = app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
+
+        $review->refresh();
+
+        $this->assertSame(ProcessContentReviewAction::RESULT_DEFERRED, $result);
+        $this->assertSame(0, $this->fakeProvider()->calls());
+
+        // The review waits: still queued, no outcome, no attempt burned, lease handed back.
+        $this->assertSame(ContentReviewStatus::Queued, $review->status);
+        $this->assertNull($review->outcome);
+        $this->assertNull($review->decided_at);
+        $this->assertNull($review->completed_at);
+        $this->assertSame($attemptBefore, (int) $review->attempt);
+        $this->assertNull($review->lease_owner);
+        $this->assertNull($review->leased_until);
+
+        // ...but it says what it is waiting for.
+        $this->assertSame(ContentReviewErrorCode::CircuitOpen, $review->error_code);
+        $this->assertSame('circuit_open', $review->reason_code);
+        $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
+    }
+
+    public function test_deferring_is_idempotent_and_never_consumes_attempts(): void
+    {
+        $this->eligibleAutomaticAuction();
+        $this->openCircuit();
+
+        $review = ContentReview::firstOrFail();
+        $attemptBefore = (int) $review->attempt;
+
+        for ($run = 0; $run < 3; $run++) {
+            $this->assertSame(
+                ProcessContentReviewAction::RESULT_DEFERRED,
+                app(ProcessContentReviewAction::class)->execute((string) $review->public_id)
+            );
+        }
+
+        $review->refresh();
+
+        $this->assertSame(0, $this->fakeProvider()->calls());
+        $this->assertSame($attemptBefore, (int) $review->attempt);
+        $this->assertSame(ContentReviewStatus::Queued, $review->status);
+    }
+
+    public function test_a_deferred_review_still_escalates_once_the_worker_gives_up(): void
+    {
+        $auction = $this->eligibleAutomaticAuction();
+        $this->openCircuit();
+
+        $review = ContentReview::firstOrFail();
+        app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
+
+        // The queue's retryUntil window is what bounds the wait; when it expires the job dies
+        // and its failure handler has to produce the outcome the deferral postponed.
+        (new ProcessContentReviewJob((string) $review->public_id))->failed(null);
+
+        $review->refresh();
+
+        $this->assertSame(ContentReviewStatus::Failed, $review->status);
+        $this->assertSame(ContentReviewErrorCode::CircuitOpen, $review->error_code);
+        $this->assertSame(ContentReviewOutcome::EscalatedToHuman, $review->outcome);
+        $this->assertTrue((bool) $review->requires_human_review);
+        $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
+    }
+
+    private function openCircuit(): void
+    {
         $breaker = app(ContentReviewCircuitBreaker::class);
 
         for ($failure = 0; $failure < 5; $failure++) {
@@ -515,15 +587,6 @@ final class ContentReviewPipelineTest extends TestCase
         }
 
         $this->assertTrue($breaker->isOpen());
-
-        $this->runPipeline();
-
-        $review = ContentReview::firstOrFail();
-
-        $this->assertSame(0, $this->fakeProvider()->calls());
-        $this->assertSame(ContentReviewErrorCode::CircuitOpen, $review->error_code);
-        $this->assertSame(ContentReviewOutcome::EscalatedToHuman, $review->outcome);
-        $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
     }
 
     public function test_an_exhausted_budget_skips_the_provider_and_escalates(): void

@@ -39,7 +39,7 @@ final class ContentReviewBudgetGuard
 
     public function spentMicros(string $period): int
     {
-        return $this->reviews->totalCostMicrosSince($this->periodStart($period));
+        return $this->reviews->costMicrosCompletedSince($this->periodStart($period));
     }
 
     public function reservedMicros(string $period): int

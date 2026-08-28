@@ -148,3 +148,19 @@ test('non retryable error codes are terminal', function () {
         ->and(ContentReviewErrorCode::ContentChanged->isRetryable())->toBeFalse()
         ->and(ContentReviewErrorCode::ProviderTimeout->isRetryable())->toBeTrue();
 });
+
+test('an unknown error is a defect in our own code, so it is never retried', function () {
+    // Every transient condition around a provider call already has its own code, so retrying an
+    // unknown one would only spend the same money again to reach the same escalation.
+    expect(ContentReviewErrorCode::UnknownError->isRetryable())->toBeFalse();
+});
+
+test('only a self-clearing block defers a review rather than failing it', function () {
+    $deferring = array_values(array_filter(
+        ContentReviewErrorCode::cases(),
+        static fn (ContentReviewErrorCode $code): bool => $code->isTransientBlock()
+    ));
+
+    expect($deferring)->toBe([ContentReviewErrorCode::CircuitOpen])
+        ->and(ContentReviewErrorCode::CircuitOpen->isRetryable())->toBeFalse();
+});

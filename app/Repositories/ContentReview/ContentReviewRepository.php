@@ -195,9 +195,17 @@ final class ContentReviewRepository
             ->count();
     }
 
-    public function totalCostMicrosSince(Carbon $since): int
+    /**
+     * Spend is billed to the period the call was made in, which is when the review finished —
+     * not when it was queued. A review queued before midnight and run after it belongs to the
+     * new day's budget, and a retry that lands days later belongs to the day it actually spent.
+     * Calls still in flight are covered by the reservation ledger rather than by this sum.
+     */
+    public function costMicrosCompletedSince(Carbon $since): int
     {
-        return (int) ContentReview::where('created_at', '>=', $since)->sum('cost_micros');
+        return (int) ContentReview::whereNotNull('completed_at')
+            ->where('completed_at', '>=', $since)
+            ->sum('cost_micros');
     }
 
     /**

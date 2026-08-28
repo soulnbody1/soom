@@ -6,6 +6,7 @@ namespace App\Services\ContentReview\Support;
 
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\ReviewMode;
+use App\Domain\ContentReview\Enums\SubjectVerdict;
 use App\DTO\ContentReview\AutomationContext;
 use App\DTO\ContentReview\ImageReviewSummary;
 use App\Models\ContentReview\ContentReview;
@@ -15,7 +16,7 @@ final class AutomationEligibilityResolver
     public function __construct(
         private readonly ReviewModeResolver $modes,
         private readonly ReviewSubjectRegistry $registry,
-        private readonly ContentHasher $hasher,
+        private readonly ReviewSubjectVerifier $subjects,
         private readonly ContentReviewCircuitBreaker $breaker,
         private readonly ContentReviewBudgetGuard $budget,
         private readonly ProviderSelectionResolver $selection,
@@ -92,24 +93,14 @@ final class AutomationEligibilityResolver
             return [];
         }
 
-        $adapter = $this->registry->for($review->subject_type);
-        $subjectId = (int) $review->subject_id;
+        $subject = $this->subjects->verify($review);
 
-        if (! $adapter->isReviewable($subjectId)) {
-            return ['subject_not_reviewable'];
+        if (! $subject->isReady()) {
+            // `review_stale` is this caller's name for content that no longer matches.
+            return [$subject->verdict === SubjectVerdict::ContentChanged ? 'review_stale' : $subject->verdict->value];
         }
 
-        $content = $adapter->buildContent($subjectId);
-
-        if ($content === null) {
-            return ['content_unavailable'];
-        }
-
-        if ($this->hasher->hashContent($content) !== $review->content_hash) {
-            return ['review_stale'];
-        }
-
-        return $adapter->automationContext($subjectId)->reasons;
+        return $this->registry->for($review->subject_type)->automationContext((int) $review->subject_id)->reasons;
     }
 
     private function imageReasons(ContentReview $review): array
