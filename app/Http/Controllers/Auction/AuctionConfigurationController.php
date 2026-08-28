@@ -11,14 +11,24 @@ use App\Models\Auction\AuctionConfigurationVersion;
 use App\Repositories\Auction\AuctionConfigurationRepository;
 use App\Services\Auction\Actions\CreateConfigurationVersionAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
+#[Group(name: 'إعدادات المزادات', description: 'إصدارات إعدادات المزادات المالية والزمنية والإعدادات التشغيلية المشتقة من بيئة التشغيل.', weight: 14)]
 final class AuctionConfigurationController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض إصدارات إعدادات المزادات',
+        description: 'يعرض ملخّص إصدارات إعدادات المزادات مع بيان الإصدار الساري، دون محتوى الإعدادات التفصيلي.'
+    )]
+    #[Response(200, description: 'قائمة ملخّصة بإصدارات الإعدادات.')]
     public function index(AuctionConfigurationRepository $configurations): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
@@ -31,6 +41,12 @@ final class AuctionConfigurationController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'عرض إصدار إعدادات محدد',
+        description: 'يعرض ملخّص إصدار الإعدادات مع محتوى الإعدادات كاملًا كما ثُبّت وقت نشره.'
+    )]
+    #[PathParameter('configurationVersion', description: 'المعرّف العام لإصدار الإعدادات (ULID).')]
+    #[Response(200, description: 'تفاصيل إصدار الإعدادات ومحتواه.')]
     public function show(AuctionConfigurationVersion $configurationVersion): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
@@ -45,6 +61,11 @@ final class AuctionConfigurationController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'إنشاء إصدار إعدادات جديد',
+        description: 'ينشئ إصدارًا جديدًا من إعدادات المزادات برقم إصدار متسلسل ويجعله الإصدار الساري عند نشره. لا يؤثر ذلك على المزادات القائمة لأن كل مزاد يحتفظ بنسخة الإعدادات المثبّتة عليه.'
+    )]
+    #[Response(201, description: 'تفاصيل الإصدار بعد إنشائه.')]
     public function store(
         CreateConfigurationVersionRequest $request,
         CreateConfigurationVersionAction $action

@@ -52,20 +52,38 @@ use App\Services\Auction\Support\AuctionMetricsRecorder;
 use App\Services\Auction\Support\ParticipationStateResolver;
 use App\Services\ContentReview\Actions\ApplyContentReviewDecisionAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+#[Group(name: 'المزادات', description: 'إنشاء المزادات وعرضها وإدارة دورة حياتها من طرف البائع والمزايد.', weight: 1)]
 final class AuctionController extends Controller
 {
     use ApiResponseTrait;
+
+    private const ADMIN_GROUP = 'إدارة المزادات';
+
+    private const ADMIN_GROUP_DESCRIPTION = 'عمليات المشرف على المزادات: المراجعة والاعتماد وحسم النزاعات وإدارة المشاركين.';
+
+    private const ADMIN_GROUP_WEIGHT = 11;
 
     public function __construct(
         private readonly ParticipationStateResolver $participation,
     ) {}
 
+    #[Endpoint(
+        title: 'عرض قائمة المزادات',
+        description: 'يعرض المزادات المتاحة للعامة مع دعم البحث والتصفية والترتيب والتقسيم إلى صفحات. عند إرسال رمز مصادقة صالح تُضاف حالة مشاركة المستخدم الحالي إلى كل مزاد في القائمة.'
+    )]
+    #[Response(200, description: 'قائمة المزادات مقسّمة إلى صفحات.')]
     public function index(AuctionIndexRequest $request, ListPublicAuctionsAction $action): JsonResponse
     {
         $paginator = $action->execute($request->filters(), $request->user()?->id, $request->perPage());
@@ -77,6 +95,12 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'عرض قائمة المزادات للمشرف',
+        description: 'يعرض جميع المزادات في المنصة بغض النظر عن حالتها، مع تصفية إدارية موسّعة تشمل البائع والفترة الزمنية والتأخر في السداد أو التسليم ووجود نزاع أو انتظار تأمين البائع.'
+    )]
+    #[Response(200, description: 'قائمة المزادات بصيغتها الإدارية مقسّمة إلى صفحات.')]
     public function all(AdminAuctionIndexRequest $request, ListAdminAuctionsAction $action): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
@@ -91,6 +115,15 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'عرض المشاركين في المزاد',
+        description: 'يعرض المشاركين المسجّلين في المزاد وحالة كل مشارك، مع إمكانية التصفية بحالة المشاركة.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[QueryParameter('status', description: 'تصفية النتائج بحالة المشاركة في المزاد.')]
+    #[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+    #[Response(200, description: 'قائمة المشاركين مقسّمة إلى صفحات.')]
     public function participants(
         Request $request,
         Auction $auction,
@@ -113,6 +146,12 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'عرض تفاصيل المزاد',
+        description: 'يعرض التفاصيل الكاملة للمزاد كما تظهر للمستخدم ويسجّل مشاهدة له. يُرجع 404 إذا لم يكن المزاد متاحًا للعرض لصاحب الطلب.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'تفاصيل المزاد وحالة مشاركة صاحب الطلب فيه.')]
     public function show(
         Request $request,
         Auction $auction,
@@ -131,6 +170,13 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'عرض تفاصيل المزاد للمشرف',
+        description: 'يعرض التفاصيل الكاملة للمزاد مع بياناته الإدارية: التسوية والتأمينات وإثباتات الدفع والنزاعات ومراجعة المحتوى، بحسب صلاحيات المشرف الحالي.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'تفاصيل المزاد بصيغتها الإدارية.')]
     public function showForAdmin(Request $request, Auction $auction, LoadAuctionDetailsAction $action): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
@@ -141,6 +187,11 @@ final class AuctionController extends Controller
         return $this->sendResponse(new AdminAuctionResource($loaded), __('auction.messages.auction_fetched'));
     }
 
+    #[Endpoint(
+        title: 'إنشاء مزاد جديد',
+        description: 'ينشئ مزادًا جديدًا بحالة مسودة باسم البائع الحالي ويرفع صور المزاد إن وُجدت. لا يُنشر المزاد إلا بعد إرساله للمراجعة واعتماده. يُرسل الطلب بصيغة multipart/form-data.'
+    )]
+    #[Response(201, description: 'المزاد بعد إنشائه كمسودة.')]
     public function store(StoreAuctionRequest $request, CreateAuctionAction $action, LoadAuctionDetailsAction $details): JsonResponse
     {
         Gate::authorize('create', Auction::class);
@@ -155,6 +206,12 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'تعديل بيانات المزاد',
+        description: 'يعدّل بيانات المزاد قبل نشره، وتُرسل الحقول المطلوب تعديلها فقط. تغيير العملة يستلزم إعادة إرسال المبالغ المرتبطة بها.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد التعديل.')]
     public function update(UpdateDraftAuctionRequest $request, Auction $auction, UpdateDraftAuctionAction $action): JsonResponse
     {
         Gate::authorize('update', $auction);
@@ -164,6 +221,12 @@ final class AuctionController extends Controller
         return $this->auctionResponse($action->execute($auction, $input, Auth::id()), __('auction.messages.auction_updated'));
     }
 
+    #[Endpoint(
+        title: 'إعادة فتح مزاد مرفوض',
+        description: 'يعيد المزاد المرفوض إلى حالة المسودة ليتمكن البائع من تعديله وإرساله للمراجعة من جديد.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد إعادته إلى حالة المسودة.')]
     public function reopen(Auction $auction, ReopenRejectedAuctionAction $action): JsonResponse
     {
         Gate::authorize('reopen', $auction);
@@ -171,6 +234,12 @@ final class AuctionController extends Controller
         return $this->auctionResponse($action->execute($auction, Auth::id()), __('auction.messages.auction_reopened'));
     }
 
+    #[Endpoint(
+        title: 'إرسال المزاد للمراجعة',
+        description: 'ينقل المزاد من حالة المسودة إلى قائمة انتظار المراجعة وينشئ طلب مراجعة محتوى للمزاد.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد إرساله للمراجعة.')]
     public function submitForReview(Auction $auction, SubmitAuctionForReviewAction $action): JsonResponse
     {
         Gate::authorize('submitForReview', $auction);
@@ -178,6 +247,13 @@ final class AuctionController extends Controller
         return $this->auctionResponse($action->execute($auction, Auth::id()), __('auction.messages.auction_submitted'));
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'اعتماد المزاد أو رفضه',
+        description: 'يسجّل قرار المشرف على مراجعة محتوى المزاد. الاعتماد ينقل المزاد إلى المرحلة التالية من دورة حياته، والرفض يعيده إلى البائع مرفقًا بسبب الرفض.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد تطبيق قرار المراجعة.')]
     public function review(
         ReviewAuctionRequest $request,
         Auction $auction,
@@ -199,6 +275,12 @@ final class AuctionController extends Controller
         return $this->auctionResponse($auction->refresh(), __('auction.messages.auction_reviewed'));
     }
 
+    #[Endpoint(
+        title: 'إلغاء المزاد',
+        description: 'يلغي المزاد ولا يحذفه، ويُلزم دائمًا بإرسال سبب الإلغاء. وعند تنفيذ العملية من مشرف يجب أيضًا تحديد تصنيف السبب والجهة المسؤولة لأنهما يحدّدان مصير التأمينات.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد إلغائه.')]
     public function cancel(CancelAuctionRequest $request, Auction $auction, CancelAuctionAction $action): JsonResponse
     {
         $actor = $request->user();
@@ -216,6 +298,12 @@ final class AuctionController extends Controller
         return $this->auctionResponse($cancelled, __('auction.messages.auction_cancelled'));
     }
 
+    #[Endpoint(
+        title: 'التسجيل في المزاد',
+        description: 'يسجّل المستخدم الحالي مشاركًا في المزاد تمهيدًا لقبول الشروط ودفع تأمين المزايد.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(201, description: 'بيانات مشاركة المستخدم في المزاد.')]
     public function register(Auction $auction, RegisterParticipantAction $action): JsonResponse
     {
         Gate::authorize('register', $auction);
@@ -227,6 +315,12 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'قبول شروط المزاد',
+        description: 'يوثّق قبول المستخدم لنسخة الشروط المرتبطة بالمزاد مع تسجيل عنوان الـIP ومعرّف المتصفح وقت القبول.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(201, description: 'المعرّف العام لسجل قبول الشروط.')]
     public function acceptTerms(Request $request, Auction $auction, AcceptAuctionTermsAction $action): JsonResponse
     {
         $acceptance = $action->execute($auction, Auth::id(), $request->ip(), $request->userAgent());
@@ -234,6 +328,12 @@ final class AuctionController extends Controller
         return $this->sendResponse(['id' => $acceptance->public_id], __('auction.messages.terms_accepted'), 201);
     }
 
+    #[Endpoint(
+        title: 'رفع إثبات دفع تأمين البائع',
+        description: 'يرفع البائع إيصال تحويل تأمين البائع ليخضع لمراجعة المشرف. يُرسل الطلب بصيغة multipart/form-data، ويمنع مفتاح منع التكرار إنشاء إثبات مكرر عند إعادة الإرسال.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(201, description: 'إثبات الدفع بعد تسجيله بانتظار المراجعة.')]
     public function submitSellerDeposit(
         PaymentSubmissionRequest $request,
         Auction $auction,
@@ -242,6 +342,12 @@ final class AuctionController extends Controller
         return $this->submitPayment($request, $auction, $action, PaymentPurpose::SellerDeposit);
     }
 
+    #[Endpoint(
+        title: 'رفع إثبات دفع تأمين المزايد',
+        description: 'يرفع المزايد إيصال تحويل تأمين المزايد ليخضع لمراجعة المشرف، وهو شرط للسماح له بتقديم المزايدات. يُرسل الطلب بصيغة multipart/form-data.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(201, description: 'إثبات الدفع بعد تسجيله بانتظار المراجعة.')]
     public function submitBidderDeposit(
         PaymentSubmissionRequest $request,
         Auction $auction,
@@ -250,6 +356,12 @@ final class AuctionController extends Controller
         return $this->submitPayment($request, $auction, $action, PaymentPurpose::BidderDeposit);
     }
 
+    #[Endpoint(
+        title: 'رفع إثبات سداد مستحقات الفائز',
+        description: 'يرفع الفائز إيصال سداد قيمة المزاد المستحقة عليه ضمن مهلة السداد ليخضع لمراجعة المشرف. يُرسل الطلب بصيغة multipart/form-data.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(201, description: 'إثبات الدفع بعد تسجيله بانتظار المراجعة.')]
     public function submitWinnerPayment(
         PaymentSubmissionRequest $request,
         Auction $auction,
@@ -258,6 +370,12 @@ final class AuctionController extends Controller
         return $this->submitPayment($request, $auction, $action, PaymentPurpose::WinnerSettlement);
     }
 
+    #[Endpoint(
+        title: 'تأكيد التسليم من البائع',
+        description: 'يسجّل تأكيد البائع بأنه سلّم المنتج إلى الفائز، وهي خطوة لازمة لاستكمال تسوية المزاد.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد تسجيل تأكيد التسليم.')]
     public function confirmSellerHandover(Auction $auction, ConfirmAuctionHandoverBySellerAction $action): JsonResponse
     {
         Gate::authorize('confirmSellerHandover', $auction);
@@ -268,6 +386,12 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'تأكيد الاستلام من الفائز',
+        description: 'يسجّل تأكيد الفائز باستلام المنتج، ما ينقل المزاد إلى مرحلة التسوية النهائية وصرف مستحقات البائع.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد تسجيل تأكيد الاستلام.')]
     public function confirmWinnerReceipt(Auction $auction, ConfirmAuctionReceiptByWinnerAction $action): JsonResponse
     {
         Gate::authorize('confirmWinnerReceipt', $auction);
@@ -278,6 +402,12 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'فتح نزاع على المزاد',
+        description: 'يفتح نزاعًا على مرحلة التسليم بين البائع والفائز، ما يوقف مسار الإنهاء التلقائي حتى يبتّ المشرف في النزاع.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(201, description: 'المعرّف العام للنزاع وحالته.')]
     public function openDispute(OpenAuctionDisputeRequest $request, Auction $auction, OpenAuctionDisputeAction $action): JsonResponse
     {
         Gate::authorize('openDispute', $auction);
@@ -290,6 +420,14 @@ final class AuctionController extends Controller
         ], __('auction.messages.dispute_opened'), 201);
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'حسم نزاع المزاد',
+        description: 'يسجّل قرار المشرف في النزاع: إكمال التسوية أو استئناف التسليم أو إلغاء المزاد، مع تحديد مصير تأمين البائع والمبلغ المُصادَر منه عند المصادرة الجزئية.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[PathParameter('auctionDispute', description: 'المعرّف العام للنزاع (ULID).')]
+    #[Response(200, description: 'المزاد بعد حسم النزاع.')]
     public function resolveDispute(
         ResolveAuctionDisputeRequest $request,
         Auction $auction,
@@ -311,6 +449,13 @@ final class AuctionController extends Controller
         return $this->auctionResponse($resolved, __('auction.messages.dispute_resolved'));
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'تسجيل تخلّف الفائز',
+        description: 'يسجّل تخلّف الفائز عن السداد ضمن المهلة المحددة، مع إمكانية ترحيل الفوز إلى المزايد التالي وتجاوز المهلة بمبرر مكتوب.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد معالجة تخلّف الفائز.')]
     public function markWinnerDefaulted(
         MarkWinnerDefaultedRequest $request,
         Auction $auction,
@@ -330,6 +475,15 @@ final class AuctionController extends Controller
         return $this->auctionResponse($updated, __('auction.messages.winner_default_processed'));
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'حظر مشارك في المزاد',
+        description: 'يمنع المشارك من متابعة المزايدة في هذا المزاد مع تسجيل سبب الحظر في سجل النشاط.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[PathParameter('participant', description: 'المعرّف العام لمشاركة المستخدم في المزاد (ULID).')]
+    #[BodyParameter('reason', description: 'سبب حظر المشارك.')]
+    #[Response(200, description: 'بيانات المشاركة بعد الحظر.')]
     public function blockParticipant(
         Request $request,
         Auction $auction,
@@ -348,6 +502,15 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
+    #[Endpoint(
+        title: 'رفع الحظر عن مشارك',
+        description: 'يعيد إلى المشارك المحظور القدرة على المزايدة في هذا المزاد.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[PathParameter('participant', description: 'المعرّف العام لمشاركة المستخدم في المزاد (ULID).')]
+    #[BodyParameter('reason', description: 'سبب رفع الحظر عن المشارك.')]
+    #[Response(200, description: 'بيانات المشاركة بعد رفع الحظر.')]
     public function unblockParticipant(
         Request $request,
         Auction $auction,
@@ -366,6 +529,11 @@ final class AuctionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'عرض مزاداتي كبائع',
+        description: 'يعرض المزادات التي أنشأها المستخدم الحالي بجميع حالاتها، بما فيها المسودات والمزادات المرفوضة.'
+    )]
+    #[Response(200, description: 'قائمة مزادات البائع مقسّمة إلى صفحات.')]
     public function mine(AuctionIndexRequest $request, ListSellerAuctionsAction $action): JsonResponse
     {
         $paginator = $action->execute(Auth::id(), $request->filters(), $request->perPage());

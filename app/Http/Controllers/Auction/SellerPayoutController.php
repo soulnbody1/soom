@@ -18,17 +18,29 @@ use App\Services\Auction\Actions\HoldSellerPayoutAction;
 use App\Services\Auction\Actions\MarkSellerPayoutPaidAction;
 use App\Services\Auction\Actions\StartSellerPayoutProcessingAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
+#[Group(name: 'مستحقات البائع', description: 'مستحقات البائعين بعد اكتمال التسوية ومسار صرفها ومتابعتها.', weight: 7)]
 final class SellerPayoutController extends Controller
 {
     use ApiResponseTrait;
 
     private const ADMIN_RELATIONS = ['auction:id,public_id,title', 'seller:id,name,phone', 'settlement', 'processor:id,name', 'payer:id,name'];
 
+    #[Endpoint(
+        title: 'عرض مستحقات البائعين',
+        description: 'يعرض مستحقات جميع البائعين مع بيانات المزاد والبائع والمبلغ وحالة الصرف، مع إمكانية التصفية بالحالة أو بالمزاد أو بالبائع أو بفترة زمنية.'
+    )]
+    #[Response(200, description: 'قائمة المستحقات مقسّمة إلى صفحات.')]
     public function index(AdminSellerPayoutIndexRequest $request, AuctionSellerPayoutRepository $payouts): JsonResponse
     {
         Gate::authorize('viewAny', AuctionSellerPayout::class);
@@ -40,6 +52,11 @@ final class SellerPayoutController extends Controller
         return $this->sendResponse($paginator, __('auction.messages.payouts_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض ملخّص المستحقات',
+        description: 'يعرض عدد المستحقات وإجمالي مبالغها مجمّعةً حسب حالة الصرف.'
+    )]
+    #[Response(200, description: 'ملخّص المستحقات مصنّفًا بحسب الحالة.')]
     public function summary(AuctionSellerPayoutRepository $payouts): JsonResponse
     {
         Gate::authorize('viewAny', AuctionSellerPayout::class);
@@ -55,6 +72,12 @@ final class SellerPayoutController extends Controller
         return $this->sendResponse($summary, __('auction.messages.payouts_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض تفاصيل مستحق البائع',
+        description: 'يعرض تفاصيل المستحق مع بيانات المزاد والبائع والتسوية ومن نفّذ الصرف، إضافةً إلى حالة استرداد تأمين البائع المرتبط به.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'تفاصيل المستحق وحالة استرداد تأمين البائع.')]
     public function show(AuctionSellerPayout $sellerPayout, AuctionSellerPayoutRepository $payouts): JsonResponse
     {
         Gate::authorize('view', $sellerPayout);
@@ -66,6 +89,12 @@ final class SellerPayoutController extends Controller
         return $this->sendResponse($payload, __('auction.messages.payout_fetched'));
     }
 
+    #[Endpoint(
+        title: 'بدء معالجة الصرف',
+        description: 'ينقل المستحق إلى حالة قيد المعالجة ويحجزه باسم المشرف الحالي تمهيدًا لتنفيذ التحويل.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'المستحق بعد بدء معالجته.')]
     public function startProcessing(Request $request, AuctionSellerPayout $sellerPayout, StartSellerPayoutProcessingAction $action): JsonResponse
     {
         Gate::authorize('process', $sellerPayout);
@@ -76,6 +105,12 @@ final class SellerPayoutController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'تسجيل صرف المستحق',
+        description: 'يسجّل تنفيذ تحويل المستحق إلى البائع مع رفع إثبات التحويل، ويسمح بتجاوز وجهة التحويل المحفوظة ببيانات مستفيد بديلة. يُرسل الطلب بصيغة multipart/form-data.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'المستحق بعد تسجيله مصروفًا.')]
     public function markPaid(MarkSellerPayoutPaidRequest $request, AuctionSellerPayout $sellerPayout, MarkSellerPayoutPaidAction $action): JsonResponse
     {
         Gate::authorize('process', $sellerPayout);
@@ -94,6 +129,12 @@ final class SellerPayoutController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'تسجيل فشل الصرف',
+        description: 'يسجّل تعذّر تنفيذ التحويل، إما بوضع المستحق في حالة الفشل أو بإحالته إلى المراجعة اليدوية، مع توثيق السبب.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'المستحق بعد تسجيل الفشل أو الإحالة.')]
     public function markFailed(FailSellerPayoutRequest $request, AuctionSellerPayout $sellerPayout, FailSellerPayoutAction $action): JsonResponse
     {
         Gate::authorize('process', $sellerPayout);
@@ -109,6 +150,13 @@ final class SellerPayoutController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'تعليق صرف المستحق',
+        description: 'يوقف صرف المستحق مؤقتًا ويمنع معالجته حتى رفع التعليق، مع توثيق السبب.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[BodyParameter('reason', description: 'سبب تعليق صرف المستحق.')]
+    #[Response(200, description: 'المستحق بعد تعليقه.')]
     public function hold(Request $request, AuctionSellerPayout $sellerPayout, HoldSellerPayoutAction $action): JsonResponse
     {
         Gate::authorize('process', $sellerPayout);
@@ -121,6 +169,12 @@ final class SellerPayoutController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'رفع تعليق المستحق',
+        description: 'يرفع التعليق عن المستحق ويعيده إلى مسار الصرف المعتاد.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'المستحق بعد رفع التعليق عنه.')]
     public function release(Request $request, AuctionSellerPayout $sellerPayout, HoldSellerPayoutAction $action): JsonResponse
     {
         Gate::authorize('process', $sellerPayout);
@@ -131,6 +185,12 @@ final class SellerPayoutController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'إنشاء رابط مؤقت لإثبات التحويل',
+        description: 'ينشئ رابطًا مؤقتًا صالحًا لعشر دقائق لتحميل ملف إثبات التحويل. يُرجع 404 إذا لم يكن للمستحق إثبات مرفوع أو تعذّر إنشاء الرابط.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'الرابط المؤقت وتاريخ انتهاء صلاحيته.')]
     public function proofUrl(AuctionSellerPayout $sellerPayout): JsonResponse
     {
         Gate::authorize('view', $sellerPayout);
@@ -152,6 +212,13 @@ final class SellerPayoutController extends Controller
         ], __('auction.messages.payout_proof_url_created'));
     }
 
+    #[Endpoint(
+        title: 'عرض مستحقاتي كبائع',
+        description: 'يعرض مستحقات المستخدم الحالي بصيغة مختصرة تناسب البائع، مع إمكانية التصفية بحالة الصرف.'
+    )]
+    #[QueryParameter('status', description: 'تصفية المستحقات بحالة الصرف.')]
+    #[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+    #[Response(200, description: 'قائمة مستحقات البائع مقسّمة إلى صفحات.')]
     public function mine(Request $request, AuctionSellerPayoutRepository $payouts): JsonResponse
     {
         $filters = $request->validate([
@@ -166,6 +233,12 @@ final class SellerPayoutController extends Controller
         return $this->sendResponse($paginator, __('auction.messages.payouts_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض تفاصيل مستحقي كبائع',
+        description: 'يعرض تفاصيل مستحق واحد يخص المستخدم الحالي. يُرجع 404 إذا كان المستحق يخص بائعًا آخر.'
+    )]
+    #[PathParameter('sellerPayout', description: 'المعرّف العام لمستحق البائع (ULID).')]
+    #[Response(200, description: 'تفاصيل المستحق بصيغته المخصصة للبائع.')]
     public function showMine(Request $request, AuctionSellerPayout $sellerPayout): JsonResponse
     {
         if ($request->user()->id !== (int) $sellerPayout->seller_id) {

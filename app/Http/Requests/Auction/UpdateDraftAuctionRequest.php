@@ -7,11 +7,26 @@ namespace App\Http\Requests\Auction;
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
 use App\Domain\Auction\ValueObjects\Money;
 use App\Models\Auction\Auction;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
+#[BodyParameter('category_id', description: 'معرّف تصنيف المزاد.')]
+#[BodyParameter('country_id', description: 'معرّف الدولة التي يوجد فيها المنتج.')]
+#[BodyParameter('state_id', description: 'معرّف المحافظة أو المنطقة.')]
+#[BodyParameter('city_id', description: 'معرّف المدينة.')]
+#[BodyParameter('title', description: 'عنوان المزاد كما يظهر للمستخدمين.')]
+#[BodyParameter('description', description: 'الوصف التفصيلي للمنتج المعروض في المزاد.')]
+#[BodyParameter('currency_code', description: 'رمز عملة المزاد. تغييره يستلزم إعادة إرسال سعر البدء وسعر الحد الأدنى إن كان محددًا.')]
+#[BodyParameter('starting_amount', description: 'سعر بدء المزايدة كنص عشري مطابق لعدد خانات العملة المعتمدة.')]
+#[BodyParameter('reserve_amount', description: 'السعر الأدنى الذي يقبل البائع البيع عنده، ولا يجوز أن يقل عن سعر البدء.')]
+#[BodyParameter('starts_at', description: 'تاريخ ووقت بدء المزاد، ويجب أن يكون في المستقبل.')]
+#[BodyParameter('ends_at', description: 'تاريخ ووقت انتهاء المزاد، ويجب أن يكون بعد تاريخ البدء.')]
+#[BodyParameter('latitude', description: 'خط عرض موقع المنتج.')]
+#[BodyParameter('longitude', description: 'خط طول موقع المنتج.')]
+#[BodyParameter('media', description: 'صور المزاد الجديدة، بحد أقصى اثنتا عشرة صورة. إرسال هذا الحقل يستبدل جميع الصور الحالية للمزاد.')]
 final class UpdateDraftAuctionRequest extends FormRequest
 {
     public function authorize(): bool

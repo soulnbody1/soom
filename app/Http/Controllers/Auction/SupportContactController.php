@@ -6,12 +6,21 @@ namespace App\Http\Controllers\Auction;
 
 use App\Http\Controllers\Controller;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 
+#[Group(name: 'التواصل مع الدعم', description: 'قنوات التواصل مع دعم المزادات المعروضة للمستخدمين.', weight: 16)]
 final class SupportContactController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض بيانات التواصل مع الدعم',
+        description: 'يعرض قنوات التواصل مع فريق الدعم وأوقات العمل. تُرجع القيمة null لأي قناة غير مهيّأة في بيئة التشغيل.'
+    )]
+    #[Response(200, description: 'قنوات التواصل مع الدعم وأوقات العمل.')]
     public function show(): JsonResponse
     {
         $contact = (array) config('support.contact', []);

@@ -12,15 +12,25 @@ use App\Models\Auction\PaymentSubmission;
 use App\Services\Auction\Actions\ListPaymentSubmissionsAction;
 use App\Services\Auction\Actions\ReviewPaymentSubmissionAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
+#[Group(name: 'إثباتات الدفع', description: 'إثباتات التحويل التي يرفعها المستخدمون ومراجعتها من المشرف.', weight: 6)]
 final class PaymentSubmissionController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض إثباتات الدفع',
+        description: 'يعرض إثباتات الدفع المرفوعة في جميع المزادات مع إمكانية التصفية بالحالة أو بغرض الدفعة أو بالمزاد.'
+    )]
+    #[Response(200, description: 'قائمة إثباتات الدفع مقسّمة إلى صفحات.')]
     public function index(AdminPaymentSubmissionIndexRequest $request, ListPaymentSubmissionsAction $action): JsonResponse
     {
         Gate::authorize('viewAny', PaymentSubmission::class);
@@ -31,6 +41,12 @@ final class PaymentSubmissionController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'مراجعة إثبات الدفع',
+        description: 'يسجّل قرار المشرف على إثبات الدفع. الاعتماد يرصد الدفعة ويكمل المرحلة المرتبطة بها في المزاد، والرفض يطالب صاحبها بإعادة الإرسال. اعتماد دفعة بعد انقضاء مهلتها يتطلب صلاحية تجاوز المهلة ومبررًا مكتوبًا.'
+    )]
+    #[PathParameter('paymentSubmission', description: 'المعرّف العام لإثبات الدفع (ULID).')]
+    #[Response(200, description: 'إثبات الدفع بعد تطبيق قرار المراجعة.')]
     public function review(
         ReviewPaymentSubmissionRequest $request,
         PaymentSubmission $paymentSubmission,
@@ -56,6 +72,12 @@ final class PaymentSubmissionController extends Controller
         return $this->sendResponse(new PaymentSubmissionResource($submission), __('auction.messages.payment_submission_reviewed'));
     }
 
+    #[Endpoint(
+        title: 'إنشاء رابط مؤقت لإيصال الدفع',
+        description: 'ينشئ رابطًا مؤقتًا صالحًا لعشر دقائق لتحميل ملف الإيصال المرفوع. يُرجع 404 إذا تعذّر إنشاء الرابط من مخزن الملفات.'
+    )]
+    #[PathParameter('paymentSubmission', description: 'المعرّف العام لإثبات الدفع (ULID).')]
+    #[Response(200, description: 'الرابط المؤقت وتاريخ انتهاء صلاحيته.')]
     public function receiptUrl(PaymentSubmission $paymentSubmission): JsonResponse
     {
         Gate::authorize('viewReceipt', $paymentSubmission);

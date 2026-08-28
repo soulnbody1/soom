@@ -6,8 +6,11 @@ namespace App\Http\Requests\ContentReview;
 
 use App\Domain\ContentReview\Enums\ContentReviewDecisionType;
 use App\Services\ContentReview\Support\ContentReviewOverrideGuard;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Foundation\Http\FormRequest;
 
+#[BodyParameter('decision', description: 'قرار المشرف: approve لاعتماد المزاد أو reject لرفضه.')]
+#[BodyParameter('reason', description: 'مبرر القرار، وهو مطلوب عند مخالفة توصية المراجعة الآلية.')]
 final class DecideContentReviewRequest extends FormRequest
 {
     public function authorize(): bool

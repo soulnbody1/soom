@@ -5,9 +5,17 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Enums\SellerPayoutStatus;
+use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+#[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+#[QueryParameter('status', description: 'تصفية المستحقات بحالة الصرف.')]
+#[QueryParameter('auction_id', description: 'تصفية المستحقات بالمعرّف العام للمزاد.')]
+#[QueryParameter('seller_id', description: 'تصفية المستحقات بمعرّف البائع.')]
+#[QueryParameter('search', description: 'نص البحث في بيانات البائع والمزاد.')]
+#[QueryParameter('date_from', description: 'بداية فترة إنشاء المستحقات بصيغة Y-m-d.')]
+#[QueryParameter('date_to', description: 'نهاية فترة إنشاء المستحقات بصيغة Y-m-d.')]
 final class AdminSellerPayoutIndexRequest extends FormRequest
 {
     public function authorize(): bool

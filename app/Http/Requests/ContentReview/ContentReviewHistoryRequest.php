@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\ContentReview;
 
+use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 
+#[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 15.')]
 final class ContentReviewHistoryRequest extends FormRequest
 {
     public function authorize(): bool

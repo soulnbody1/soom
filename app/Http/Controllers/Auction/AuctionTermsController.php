@@ -13,15 +13,25 @@ use App\Models\Auction\AuctionTermsVersion;
 use App\Services\Auction\Actions\CreateAuctionTermsVersionAction;
 use App\Services\Auction\Actions\ListAuctionTermsAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
+#[Group(name: 'شروط المزاد', description: 'نسخ شروط المزادات المنشورة وحالة قبول المستخدم لها.', weight: 4)]
 final class AuctionTermsController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض نسخ شروط المزادات',
+        description: 'يعرض ملخّص جميع نسخ شروط المزادات مرتبةً من الأحدث إلى الأقدم مع بيان النسخة السارية، دون نص الشروط الكامل.'
+    )]
+    #[Response(200, description: 'قائمة ملخّصة بنسخ الشروط.')]
     public function index(ListAuctionTermsAction $action): JsonResponse
     {
         return $this->sendResponse(
@@ -30,6 +40,12 @@ final class AuctionTermsController extends Controller
         );
     }
 
+    #[Endpoint(
+        title: 'عرض شروط المزاد',
+        description: 'يعرض نص نسخة الشروط المثبّتة على المزاد وقت نشره مع بيان ما إذا كان المستخدم الحالي قد قبلها وتاريخ القبول. يُرجع 404 إذا لم يكن المزاد متاحًا للعرض أو لم تُثبّت له نسخة شروط.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'نص نسخة الشروط المرتبطة بالمزاد وحالة قبولها.')]
     public function showForAuction(Request $request, Auction $auction): JsonResponse
     {
         if (! Gate::allows('view', $auction)) {
@@ -67,6 +83,12 @@ final class AuctionTermsController extends Controller
         ], __('auction.messages.terms_version_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض نسخة شروط محددة',
+        description: 'يعرض النص الكامل لنسخة شروط بعينها مع بيان ما إذا كانت هي النسخة السارية.'
+    )]
+    #[PathParameter('terms', description: 'المعرّف العام لنسخة الشروط (ULID).')]
+    #[Response(200, description: 'تفاصيل نسخة الشروط.')]
     public function show(AuctionTermsVersion $terms): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
@@ -81,6 +103,11 @@ final class AuctionTermsController extends Controller
         ], __('auction.messages.terms_version_fetched'));
     }
 
+    #[Endpoint(
+        title: 'إنشاء نسخة شروط جديدة',
+        description: 'ينشئ نسخة جديدة من شروط المزادات برقم إصدار متسلسل، ويجعلها النسخة السارية عند نشرها. لا يؤثر ذلك على المزادات القائمة لأن كل مزاد يحتفظ بالنسخة المثبّتة عليه.'
+    )]
+    #[Response(201, description: 'ملخّص نسخة الشروط بعد إنشائها.')]
     public function store(CreateTermsVersionRequest $request, CreateAuctionTermsVersionAction $action): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);

@@ -5,9 +5,17 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Models\Auction\PaymentMethod;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+#[BodyParameter('payout_method', description: 'وسيلة التحويل التي نُفّذ بها الصرف.')]
+#[BodyParameter('transfer_reference', description: 'الرقم المرجعي لعملية التحويل.')]
+#[BodyParameter('note', description: 'ملاحظة إدارية على عملية الصرف.')]
+#[BodyParameter('proof', description: 'ملف إثبات التحويل بصيغة صورة أو PDF بحد أقصى خمسة ميغابايت.')]
+#[BodyParameter('recipient_name', description: 'اسم مستفيد بديل يُستخدم لتجاوز وجهة التحويل المحفوظة للبائع.')]
+#[BodyParameter('identifier_type', description: 'نوع معرّف التحويل البديل، وهو مطلوب عند إرسال identifier_value.')]
+#[BodyParameter('identifier_value', description: 'قيمة معرّف التحويل البديل.')]
 final class MarkSellerPayoutPaidRequest extends FormRequest
 {
     public function authorize(): bool

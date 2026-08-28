@@ -5,9 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+#[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+#[QueryParameter('page', description: 'رقم الصفحة المطلوبة.')]
+#[QueryParameter('search', description: 'نص البحث في عنوان المزاد ووصفه.')]
+#[QueryParameter('status', description: 'تصفية المزادات بحالة المزاد.')]
+#[QueryParameter('phase', description: 'تصفية المزادات بمرحلتها الزمنية: live للمزادات الجارية، وupcoming للمزادات القادمة، وfinished للمزادات المنتهية.')]
+#[QueryParameter('category_id', description: 'تصفية المزادات بمعرّف التصنيف.')]
+#[QueryParameter('currency', description: 'تصفية المزادات برمز العملة المكوّن من ثلاثة أحرف.')]
+#[QueryParameter('sort', description: 'ترتيب النتائج: latest للأحدث، وstarting_soon للأقرب بدءًا، وending_soon للأقرب انتهاءً، وprice_asc وprice_desc حسب السعر الحالي.')]
 final class AuctionIndexRequest extends FormRequest
 {
     public function rules(): array

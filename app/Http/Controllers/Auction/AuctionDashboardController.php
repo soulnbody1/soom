@@ -12,14 +12,23 @@ use App\Repositories\Auction\Dashboard\DashboardAuctionQuery;
 use App\Repositories\Auction\Dashboard\DashboardFinancialQuery;
 use App\Repositories\Auction\Dashboard\DashboardSeriesQuery;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
+#[Group(name: 'لوحة تحكم المزادات', description: 'مؤشرات المزادات المالية والتشغيلية خلال فترة زمنية محددة.', weight: 13)]
 final class AuctionDashboardController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض لوحة تحكم المزادات',
+        description: 'يجمّع مؤشرات المزادات خلال الفترة المطلوبة في أربعة أقسام: المؤشرات المالية، ومؤشرات المزادات ودورة حياتها، والسلاسل الزمنية، والمهام التشغيلية التي تحتاج متابعة المشرف.'
+    )]
+    #[Response(200, description: 'مؤشرات لوحة التحكم للفترة المطلوبة.')]
     public function index(
         AdminDashboardRequest $request,
         DashboardFinancialQuery $financial,

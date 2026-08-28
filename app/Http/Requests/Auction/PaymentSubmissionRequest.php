@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auction;
 
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Foundation\Http\FormRequest;
 
+#[BodyParameter('payment_method_id', description: 'المعرّف العام لطريقة الدفع المستخدمة في التحويل (ULID).')]
+#[BodyParameter('receipt', description: 'ملف إيصال التحويل بصيغة صورة أو PDF بحد أقصى خمسة ميغابايت.')]
+#[BodyParameter('idempotency_key', description: 'مفتاح منع التكرار الذي يولّده العميل. إعادة الإرسال بالمفتاح نفسه تُرجع الإثبات الأصلي دون إنشاء إثبات جديد.')]
+#[BodyParameter('provider_reference', description: 'الرقم المرجعي للتحويل لدى جهة الدفع.')]
 final class PaymentSubmissionRequest extends FormRequest
 {
     public function authorize(): bool

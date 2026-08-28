@@ -7,10 +7,31 @@ namespace App\Http\Requests\Auction;
 use App\Domain\Auction\Enums\NonWinnerDepositHoldPolicy;
 use App\Domain\Auction\Enums\SellerDepositDisposition;
 use App\Domain\Auction\Enums\WinnerDefaultDepositDisposition;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
+#[BodyParameter('configuration', description: 'محتوى إصدار إعدادات المزادات كاملًا.')]
+#[BodyParameter('configuration.seller_deposit_minor', description: 'قيمة تأمين البائع بالوحدة الصغرى للعملة.')]
+#[BodyParameter('configuration.bidder_deposit_minor', description: 'قيمة تأمين المزايد بالوحدة الصغرى للعملة.')]
+#[BodyParameter('configuration.platform_fee_type', description: 'طريقة احتساب عمولة المنصة: نسبة مئوية أو مبلغ ثابت.')]
+#[BodyParameter('configuration.platform_fee_basis_points', description: 'نسبة عمولة المنصة بنقاط الأساس، حيث 10000 تساوي مئة بالمئة.')]
+#[BodyParameter('configuration.platform_fee_fixed_minor', description: 'قيمة عمولة المنصة الثابتة بالوحدة الصغرى للعملة.')]
+#[BodyParameter('configuration.minimum_bid_increment_minor', description: 'الحد الأدنى للزيادة بين مزايدة وأخرى بالوحدة الصغرى للعملة.')]
+#[BodyParameter('configuration.extension_window_seconds', description: 'المدة قبل انتهاء المزاد التي تؤدي فيها أي مزايدة إلى تمديده.')]
+#[BodyParameter('configuration.extension_duration_seconds', description: 'مدة التمديد الواحد بالثواني.')]
+#[BodyParameter('configuration.maximum_extension_count', description: 'أقصى عدد مرات يمكن فيها تمديد المزاد.')]
+#[BodyParameter('configuration.winner_payment_deadline_hours', description: 'مهلة سداد الفائز بالساعات بعد انتهاء المزاد.')]
+#[BodyParameter('configuration.handover_deadline_hours', description: 'مهلة تسليم المنتج بالساعات بعد اكتمال السداد.')]
+#[BodyParameter('configuration.non_winner_deposit_policy', description: 'سياسة الإفراج عن تأمينات المزايدين غير الفائزين.')]
+#[BodyParameter('configuration.non_winner_deposit_hold_count', description: 'عدد المزايدين الأعلى الذين تبقى تأميناتهم محجوزة، ويُستخدم فقط مع سياسة hold_top_n.')]
+#[BodyParameter('configuration.alternative_winner_enabled', description: 'السماح بترحيل الفوز إلى المزايد التالي عند تخلّف الفائز.')]
+#[BodyParameter('configuration.winner_default_deposit_policy', description: 'سياسة التعامل مع تأمين الفائز المتخلّف عن السداد.')]
+#[BodyParameter('configuration.winner_default_deposit_policy.disposition', description: 'مصير تأمين الفائز المتخلّف.')]
+#[BodyParameter('configuration.winner_default_deposit_policy.forfeit_amount_minor', description: 'المبلغ المُصادَر من تأمين الفائز المتخلّف بالوحدة الصغرى للعملة.')]
+#[BodyParameter('configuration.seller_deposit_policy', description: 'خريطة تحدّد مصير تأمين البائع لكل حالة من حالات إنهاء المزاد، ويجب أن تغطي جميع الحالات المعرّفة في النظام.')]
+#[BodyParameter('publish', description: 'نشر الإصدار فور إنشائه واعتماده الإصدار الساري، والقيمة الافتراضية true.')]
 final class CreateConfigurationVersionRequest extends FormRequest
 {
     /**

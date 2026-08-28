@@ -6,9 +6,14 @@ namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\PaymentSubmissionStatus;
+use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+#[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+#[QueryParameter('status', description: 'تصفية إثباتات الدفع بحالة المراجعة.')]
+#[QueryParameter('purpose', description: 'تصفية إثباتات الدفع بغرض الدفعة: تأمين البائع أو تأمين المزايد أو سداد مستحقات الفائز.')]
+#[QueryParameter('auction_id', description: 'تصفية إثباتات الدفع بالمعرّف العام للمزاد.')]
 final class AdminPaymentSubmissionIndexRequest extends FormRequest
 {
     public function rules(): array

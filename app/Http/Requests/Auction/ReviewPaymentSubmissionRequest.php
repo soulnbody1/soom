@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auction;
 
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Foundation\Http\FormRequest;
 
+#[BodyParameter('action', description: 'قرار المراجعة: approve لاعتماد إثبات الدفع أو reject لرفضه.')]
+#[BodyParameter('note', description: 'ملاحظة المراجعة، وهي مطلوبة عند الرفض.')]
+#[BodyParameter('provider_transaction_id', description: 'رقم العملية لدى جهة الدفع، وهو مطلوب عند الاعتماد.')]
+#[BodyParameter('override_deadline', description: 'اعتماد الدفعة رغم انقضاء مهلتها، ويتطلب صلاحية إضافية.')]
+#[BodyParameter('override_reason', description: 'مبرر تجاوز المهلة، وهو مطلوب عند تفعيل override_deadline.')]
 final class ReviewPaymentSubmissionRequest extends FormRequest
 {
     public function authorize(): bool

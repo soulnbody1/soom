@@ -12,15 +12,31 @@ use App\Repositories\Auction\AuctionRefundRepository;
 use App\Services\Auction\Actions\CancelAuctionRefundAction;
 use App\Services\Auction\Actions\ConfirmAuctionRefundManuallyAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+#[Group(name: 'عمليات الاسترداد', description: 'متابعة عمليات استرداد التأمينات والمبالغ ومعالجتها يدويًا من المشرف.', weight: 9)]
 final class RefundController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض عمليات الاسترداد',
+        description: 'يعرض عمليات الاسترداد في جميع المزادات مع المبلغ والحالة وعدد المحاولات وآخر خطأ، مع إمكانية التصفية بالحالة أو بالمزاد أو بالمستخدم.'
+    )]
+    #[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+    #[QueryParameter('status', description: 'تصفية عمليات الاسترداد بحالتها.')]
+    #[QueryParameter('auction_id', description: 'تصفية عمليات الاسترداد بالمعرّف العام للمزاد.')]
+    #[QueryParameter('user_id', description: 'تصفية عمليات الاسترداد بمعرّف المستخدم صاحب المبلغ.')]
+    #[Response(200, description: 'قائمة عمليات الاسترداد مقسّمة إلى صفحات.')]
     public function index(Request $request, AuctionRefundRepository $refunds): JsonResponse
     {
         Gate::authorize('viewAny', RefundTransaction::class);
@@ -39,6 +55,14 @@ final class RefundController extends Controller
         return $this->sendResponse($paginator, __('auction.messages.refunds_fetched'));
     }
 
+    #[Endpoint(
+        title: 'تأكيد استرداد يدويًا',
+        description: 'يسجّل أن المشرف نفّذ الاسترداد خارج المنصة وينقل العملية إلى حالة الاسترداد المكتمل، مع توثيق الرقم المرجعي للتحويل.'
+    )]
+    #[PathParameter('refund', description: 'المعرّف العام لعملية الاسترداد (ULID).')]
+    #[BodyParameter('confirmation_reference', description: 'الرقم المرجعي للتحويل المنفَّذ خارج المنصة.')]
+    #[BodyParameter('reason', description: 'مبرر التأكيد اليدوي.')]
+    #[Response(200, description: 'عملية الاسترداد بعد تأكيدها.')]
     public function confirm(
         Request $request,
         RefundTransaction $refund,
@@ -61,6 +85,13 @@ final class RefundController extends Controller
         return $this->sendResponse($this->refundPayload($confirmed), __('auction.messages.refund_confirmed'));
     }
 
+    #[Endpoint(
+        title: 'إلغاء عملية استرداد',
+        description: 'يوقف عملية الاسترداد ويمنع إعادة محاولتها تلقائيًا، مع توثيق سبب الإلغاء.'
+    )]
+    #[PathParameter('refund', description: 'المعرّف العام لعملية الاسترداد (ULID).')]
+    #[BodyParameter('reason', description: 'سبب إلغاء عملية الاسترداد.')]
+    #[Response(200, description: 'عملية الاسترداد بعد إلغائها.')]
     public function cancel(
         Request $request,
         RefundTransaction $refund,

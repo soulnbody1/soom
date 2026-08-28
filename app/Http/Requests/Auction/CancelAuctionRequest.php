@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auction;
 
+use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
+#[QueryParameter('reason', description: 'سبب الإلغاء، ويُستخدم بديلًا عن reason_text للتوافق مع الإصدارات السابقة.')]
+#[QueryParameter('reason_text', description: 'نص سبب الإلغاء، ويجب إرسال أحد الحقلين reason_text أو reason.')]
+#[QueryParameter('reason_code', description: 'تصنيف سبب الإلغاء، وهو مطلوب عند تنفيذ الإلغاء من مشرف لأنه يحدّد مصير التأمينات.')]
+#[QueryParameter('liability', description: 'الجهة التي تتحمل مسؤولية الإلغاء، وهي مطلوبة عند تنفيذ الإلغاء من مشرف.')]
 final class CancelAuctionRequest extends FormRequest
 {
     public function rules(): array

@@ -10,14 +10,27 @@ use App\Models\Auction\AuctionActivityLog;
 use App\Models\Auction\AuctionStatusHistory;
 use App\Repositories\Auction\AuctionAuditRepository;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
+#[Group(name: 'سجل المزاد', description: 'سجلات النشاط وتحولات الحالة الخاصة بمزاد واحد.', weight: 15)]
 final class AuctionAuditController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض سجل نشاط المزاد',
+        description: 'يعرض أحداث المزاد مرتبةً من الأحدث إلى الأقدم مع نوع الحدث والجهة المنفّذة والبيانات المرافقة لكل حدث.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+    #[Response(200, description: 'أحداث المزاد مقسّمة إلى صفحات.')]
     public function activity(Request $request, Auction $auction, AuctionAuditRepository $audit): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
@@ -43,6 +56,12 @@ final class AuctionAuditController extends Controller
         return $this->sendResponse($paginator, __('auction.messages.activity_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض سجل تحوّلات حالة المزاد',
+        description: 'يعرض تسلسل تحوّلات حالة المزاد منذ إنشائه مع الحالة السابقة والحالة الجديدة والجهة التي نفّذت التحوّل وسببه.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'قائمة تحوّلات الحالة مرتبةً زمنيًا.')]
     public function statusHistory(Auction $auction, AuctionAuditRepository $audit): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);

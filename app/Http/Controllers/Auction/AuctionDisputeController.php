@@ -10,15 +10,27 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDispute;
 use App\Repositories\Auction\AuctionDisputeRepository;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+#[Group(name: 'نزاعات المزادات', description: 'فتح نزاعات التسليم ومتابعتها من أطراف المزاد ومن المشرف.', weight: 10)]
 final class AuctionDisputeController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض نزاعات المزاد',
+        description: 'يعرض نزاعات المزاد مرتبةً من الأحدث إلى الأقدم. الوصول مقصور على المشرف وعلى بائع المزاد وفائزه.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'قائمة نزاعات المزاد.')]
     public function forAuction(Request $request, Auction $auction): JsonResponse
     {
         $this->assertCanReadDisputes($request, $auction);
@@ -32,6 +44,13 @@ final class AuctionDisputeController extends Controller
         return $this->sendResponse($rows, __('auction.messages.disputes_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض تفاصيل نزاع',
+        description: 'يعرض تفاصيل نزاع واحد من نزاعات المزاد. يُرجع 404 إذا لم يكن النزاع تابعًا للمزاد المحدد.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[PathParameter('dispute', description: 'المعرّف العام للنزاع (ULID).')]
+    #[Response(200, description: 'تفاصيل النزاع.')]
     public function showForAuction(Request $request, Auction $auction, AuctionDispute $dispute): JsonResponse
     {
         $this->assertCanReadDisputes($request, $auction);
@@ -43,6 +62,14 @@ final class AuctionDisputeController extends Controller
         return $this->sendResponse($this->userPayload($dispute), __('auction.messages.disputes_fetched'));
     }
 
+    #[Endpoint(
+        title: 'عرض النزاعات للمشرف',
+        description: 'يعرض نزاعات جميع المزادات مع بيانات المزاد وفاتح النزاع وحاسمه، مع إمكانية التصفية بالحالة أو بالمزاد.'
+    )]
+    #[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
+    #[QueryParameter('status', description: 'تصفية النزاعات بحالتها: open للنزاعات المفتوحة أو resolved للنزاعات المحسومة.')]
+    #[QueryParameter('auction_id', description: 'تصفية النزاعات بالمعرّف العام للمزاد.')]
+    #[Response(200, description: 'قائمة النزاعات مقسّمة إلى صفحات.')]
     public function index(Request $request, AuctionDisputeRepository $disputes): JsonResponse
     {
         Gate::authorize('viewAny', AuctionDispute::class);

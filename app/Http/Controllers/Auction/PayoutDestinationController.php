@@ -11,13 +11,23 @@ use App\Repositories\Auction\PayoutDestinationRepository;
 use App\Services\Auction\Actions\ArchivePayoutDestinationAction;
 use App\Services\Auction\Actions\SavePayoutDestinationAction;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+#[Group(name: 'وجهات التحويل', description: 'حسابات التحويل التي يسجّلها البائع لاستلام مستحقاته.', weight: 8)]
 final class PayoutDestinationController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(
+        title: 'عرض وجهات التحويل الخاصة بي',
+        description: 'يعرض وجهات التحويل النشطة المسجّلة للمستخدم الحالي مع بيان الوجهة الافتراضية.'
+    )]
+    #[Response(200, description: 'قائمة وجهات التحويل.')]
     public function index(Request $request, PayoutDestinationRepository $destinations): JsonResponse
     {
         $items = $destinations->listFor((int) $request->user()->id)
@@ -27,6 +37,11 @@ final class PayoutDestinationController extends Controller
         return $this->sendResponse($items, __('auction.messages.payout_destinations_fetched'));
     }
 
+    #[Endpoint(
+        title: 'إضافة وجهة تحويل',
+        description: 'يسجّل وجهة تحويل جديدة للمستخدم الحالي، وتصبح الوجهة الافتراضية عند طلب ذلك.'
+    )]
+    #[Response(201, description: 'وجهة التحويل بعد حفظها.')]
     public function store(PayoutDestinationRequest $request, SavePayoutDestinationAction $action): JsonResponse
     {
         $destination = $action->execute((int) $request->user()->id, $request->validated());
@@ -34,6 +49,12 @@ final class PayoutDestinationController extends Controller
         return $this->sendResponse($this->payload($destination), __('auction.messages.payout_destination_saved'), 201);
     }
 
+    #[Endpoint(
+        title: 'تعديل وجهة تحويل',
+        description: 'يعدّل بيانات وجهة تحويل يملكها المستخدم الحالي. يُرجع 404 إذا كانت الوجهة تخص مستخدمًا آخر.'
+    )]
+    #[PathParameter('payoutDestination', description: 'المعرّف العام لوجهة التحويل (ULID).')]
+    #[Response(200, description: 'وجهة التحويل بعد التعديل.')]
     public function update(PayoutDestinationRequest $request, PayoutDestination $payoutDestination, SavePayoutDestinationAction $action): JsonResponse
     {
         if ((int) $payoutDestination->user_id !== (int) $request->user()->id) {
@@ -45,6 +66,12 @@ final class PayoutDestinationController extends Controller
         return $this->sendResponse($this->payload($destination), __('auction.messages.payout_destination_saved'));
     }
 
+    #[Endpoint(
+        title: 'أرشفة وجهة تحويل',
+        description: 'يؤرشف وجهة التحويل فلا تظهر في القائمة ولا تُستخدم في عمليات الصرف اللاحقة، مع الإبقاء عليها في سجلات الصرف السابقة. يُرجع 404 إذا كانت الوجهة تخص مستخدمًا آخر.'
+    )]
+    #[PathParameter('payoutDestination', description: 'المعرّف العام لوجهة التحويل (ULID).')]
+    #[Response(200, description: 'استجابة بلا محتوى تؤكد الأرشفة.')]
     public function destroy(
         Request $request,
         PayoutDestination $payoutDestination,
