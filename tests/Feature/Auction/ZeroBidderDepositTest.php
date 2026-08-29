@@ -62,7 +62,7 @@ final class ZeroBidderDepositTest extends TestCase
         $this->assertNotNull($participant->qualified_at);
     }
 
-    public function test_repeated_terms_acceptance_is_idempotent(): void
+    public function test_repeated_terms_acceptance_is_rejected_and_leaves_state_untouched(): void
     {
         $auction = $this->zeroDepositAuction();
         $bidder = $this->user();
@@ -73,7 +73,10 @@ final class ZeroBidderDepositTest extends TestCase
         $first = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
         $qualifiedAt = $first->qualified_at;
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'terms_already_accepted');
 
         $second = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
 

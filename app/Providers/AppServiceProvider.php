@@ -89,6 +89,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configurePaymentRateLimiting();
         $this->configureBidRateLimiting();
+        $this->configureParticipationRateLimiting();
         $this->configureContentReviewRateLimiting();
     }
 
@@ -124,6 +125,27 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute((int) config('auction.payments.webhook_rate_limit_per_minute', 600))
                     ->by("payment-webhooks:{$provider}"),
             ];
+        });
+    }
+
+    private function configureParticipationRateLimiting(): void
+    {
+        RateLimiter::for('auction-participation', function (Request $request): array {
+            $auctionKey = (string) ($request->route('auction')?->public_id ?? $request->route('auction') ?? 'unknown');
+            $userId = (int) ($request->user()?->id ?? 0);
+
+            $limits = [
+                Limit::perMinute((int) config('auction.participation.rate_limit_per_minute', 20))
+                    ->by("auction-participation:user:{$userId}:auction:{$auctionKey}"),
+            ];
+
+            $perIp = (int) config('auction.participation.rate_limit_per_minute_per_ip', 0);
+
+            if ($perIp > 0) {
+                $limits[] = Limit::perMinute($perIp)->by("auction-participation:ip:{$request->ip()}");
+            }
+
+            return $limits;
         });
     }
 

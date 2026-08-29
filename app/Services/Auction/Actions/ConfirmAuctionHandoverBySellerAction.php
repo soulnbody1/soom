@@ -39,6 +39,10 @@ final class ConfirmAuctionHandoverBySellerAction
                 throw AuctionException::domain('settlement_must_be_paid');
             }
 
+            if ($settlement->seller_handover_confirmed_at !== null) {
+                throw AuctionException::domain('handover_already_confirmed', [], 409);
+            }
+
             if ($this->disputes->hasOpenDispute($auction->id)) {
                 throw AuctionException::domain('handover_blocked_by_dispute');
             }
@@ -46,7 +50,7 @@ final class ConfirmAuctionHandoverBySellerAction
             $now = Carbon::now();
             $settlement->forceFill([
                 'status' => SettlementStatus::HandoverPending,
-                'seller_handover_confirmed_at' => $settlement->seller_handover_confirmed_at ?? $now,
+                'seller_handover_confirmed_at' => $now,
             ]);
             $this->settlements->save($settlement);
 

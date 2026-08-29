@@ -117,4 +117,9 @@ return [
         'rate_limit_per_minute' => (int) env('AUCTION_BID_RATE_LIMIT_PER_MINUTE', 30),
         'rate_limit_per_minute_per_ip' => (int) env('AUCTION_BID_RATE_LIMIT_PER_MINUTE_PER_IP', 120),
     ],
+
+    'participation' => [
+        'rate_limit_per_minute' => (int) env('AUCTION_PARTICIPATION_RATE_LIMIT_PER_MINUTE', 20),
+        'rate_limit_per_minute_per_ip' => (int) env('AUCTION_PARTICIPATION_RATE_LIMIT_PER_MINUTE_PER_IP', 60),
+    ],
 ];

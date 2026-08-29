@@ -45,6 +45,16 @@ final class RegisterParticipantAction
                 throw AuctionException::domain('registration_closed');
             }
 
+            $existing = $this->participants->lockParticipant($auction->id, $userId);
+
+            if ($existing) {
+                if ($existing->status === AuctionParticipantStatus::Blocked) {
+                    throw AuctionException::domain('blocked_participant', [], 403);
+                }
+
+                throw AuctionException::domain('already_registered', [], 409);
+            }
+
             $participant = $this->participants->firstOrCreateParticipant(
                 $auction->id,
                 $userId,
@@ -65,13 +75,11 @@ final class RegisterParticipantAction
                 'participant_public_id' => $participant->public_id,
             ]);
 
-            if ($participant->wasRecentlyCreated) {
-                $this->audit->outbox('auction.participant_registered', $auction, [
-                    'auction_public_id' => $auction->public_id,
-                    'participant_public_id' => $participant->public_id,
-                    'user_id' => $userId,
-                ]);
-            }
+            $this->audit->outbox('auction.participant_registered', $auction, [
+                'auction_public_id' => $auction->public_id,
+                'participant_public_id' => $participant->public_id,
+                'user_id' => $userId,
+            ]);
 
             return $participant->refresh();
         });

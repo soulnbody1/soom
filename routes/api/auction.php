@@ -61,14 +61,14 @@ Route::middleware(['auth:sanctum', 'role:admin,user', AttachServerTime::class])-
         Route::post('/{auction}/reopen', [AuctionController::class, 'reopen']);
         Route::post('/{auction}/submit-review', [AuctionController::class, 'submitForReview']);
         Route::post('/{auction}/seller-deposit', [AuctionController::class, 'submitSellerDeposit']);
-        Route::post('/{auction}/register', [AuctionController::class, 'register']);
-        Route::post('/{auction}/accept-terms', [AuctionController::class, 'acceptTerms']);
+        Route::post('/{auction}/register', [AuctionController::class, 'register'])->middleware('throttle:auction-participation');
+        Route::post('/{auction}/accept-terms', [AuctionController::class, 'acceptTerms'])->middleware('throttle:auction-participation');
         Route::post('/{auction}/bidder-deposit', [AuctionController::class, 'submitBidderDeposit']);
         Route::post('/{auction}/bids', [BidController::class, 'store'])->middleware('throttle:auction-bids');
         Route::post('/{auction}/winner-payment', [AuctionController::class, 'submitWinnerPayment']);
-        Route::post('/{auction}/confirm-handover', [AuctionController::class, 'confirmSellerHandover']);
+        Route::post('/{auction}/confirm-handover', [AuctionController::class, 'confirmSellerHandover'])->middleware('throttle:auction-participation');
         Route::post('/{auction}/confirm-receipt', [AuctionController::class, 'confirmWinnerReceipt']);
-        Route::post('/{auction}/disputes', [AuctionController::class, 'openDispute']);
+        Route::post('/{auction}/disputes', [AuctionController::class, 'openDispute'])->middleware('throttle:auction-participation');
         Route::get('/{auction}/disputes', [AuctionDisputeController::class, 'forAuction']);
         Route::get('/{auction}/disputes/{dispute}', [AuctionDisputeController::class, 'showForAuction']);
         Route::get('/{auction}/payment-methods', [PaymentMethodController::class, 'forAuction']);

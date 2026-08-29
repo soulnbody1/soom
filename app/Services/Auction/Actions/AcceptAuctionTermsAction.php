@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Actions;
 
+use App\Domain\Auction\Enums\AuctionParticipantStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionTermsAcceptance;
@@ -38,10 +39,18 @@ final class AcceptAuctionTermsAction
                 throw AuctionException::domain('terms_registration_required');
             }
 
+            if ($participant->status === AuctionParticipantStatus::Blocked) {
+                throw AuctionException::domain('blocked_participant', [], 403);
+            }
+
             $snapshot = $this->snapshotReader->forAuction($auction);
 
             if (! $snapshot->terms_version_id) {
                 throw AuctionException::domain('terms_missing');
+            }
+
+            if ($this->terms->hasAcceptedTerms($auction->id, $userId, (int) $snapshot->terms_version_id)) {
+                throw AuctionException::domain('terms_already_accepted', [], 409);
             }
 
             $acceptance = $this->terms->firstOrCreateAcceptance(

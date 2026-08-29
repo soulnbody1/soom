@@ -16,6 +16,7 @@ use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\AuctionTermsVersion;
+use App\Models\Auction\OutboxMessage;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
@@ -51,16 +52,46 @@ final class DisputeIndependentStateTest extends TestCase
         $this->assertSame(SettlementStatus::Paid, $settlement->refresh()->status);
     }
 
-    public function test_opening_a_dispute_twice_is_idempotent(): void
+    public function test_opening_a_dispute_twice_is_rejected_and_notifies_once(): void
     {
         [$auction, , $winner, $bid] = $this->handoverAuction();
         $this->settlement($auction, $bid, SettlementStatus::Paid, sellerHandover: true);
 
         app(OpenAuctionDisputeAction::class)->execute($auction, $winner->id, 'first');
-        app(OpenAuctionDisputeAction::class)->execute($auction->refresh(), $winner->id, 'second');
+
+        try {
+            app(OpenAuctionDisputeAction::class)->execute($auction->refresh(), $winner->id, 'second');
+            $this->fail('A second dispute on the same auction should have been rejected.');
+        } catch (AuctionException $exception) {
+            $this->assertSame('dispute_already_open', $exception->getErrorCode());
+            $this->assertSame(409, $exception->getStatusCode());
+        }
 
         $this->assertSame(1, AuctionDispute::where('auction_id', $auction->id)->count());
         $this->assertSame(AuctionStatus::HandoverPending, $auction->refresh()->status);
+        $this->assertSame(1, OutboxMessage::where('aggregate_id', $auction->id)
+            ->where('event_type', 'auction.dispute_opened')
+            ->count());
+    }
+
+    public function test_seller_cannot_confirm_handover_twice(): void
+    {
+        [$auction, $seller, , $bid] = $this->handoverAuction();
+        $this->settlement($auction, $bid, SettlementStatus::Paid);
+
+        app(ConfirmAuctionHandoverBySellerAction::class)->execute($auction->refresh(), $seller->id);
+
+        try {
+            app(ConfirmAuctionHandoverBySellerAction::class)->execute($auction->refresh(), $seller->id);
+            $this->fail('A second handover confirmation should have been rejected.');
+        } catch (AuctionException $exception) {
+            $this->assertSame('handover_already_confirmed', $exception->getErrorCode());
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertSame(1, OutboxMessage::where('aggregate_id', $auction->id)
+            ->where('event_type', 'auction.seller_handover_confirmed')
+            ->count());
     }
 
     public function test_seller_cannot_confirm_handover_while_a_dispute_is_open(): void

@@ -39,6 +39,10 @@ final class OpenAuctionDisputeAction
                 throw AuctionException::domain('dispute_not_available');
             }
 
+            if ($this->disputes->hasOpenDispute($auction->id)) {
+                throw AuctionException::domain('dispute_already_open', [], 409);
+            }
+
             $dispute = $this->disputes->firstOrCreateOpenDispute(
                 [
                     'auction_id' => $auction->id,

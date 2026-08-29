@@ -304,6 +304,7 @@ final class AuctionController extends Controller
     )]
     #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
     #[Response(201, description: 'بيانات مشاركة المستخدم في المزاد.')]
+    #[Response(409, description: 'المستخدم مسجل بالفعل في هذا المزاد (already_registered).')]
     public function register(Auction $auction, RegisterParticipantAction $action): JsonResponse
     {
         Gate::authorize('register', $auction);
@@ -321,6 +322,7 @@ final class AuctionController extends Controller
     )]
     #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
     #[Response(201, description: 'المعرّف العام لسجل قبول الشروط.')]
+    #[Response(409, description: 'سبق للمستخدم قبول نسخة الشروط المرتبطة بالمزاد (terms_already_accepted).')]
     public function acceptTerms(Request $request, Auction $auction, AcceptAuctionTermsAction $action): JsonResponse
     {
         $acceptance = $action->execute($auction, Auth::id(), $request->ip(), $request->userAgent());
@@ -376,6 +378,7 @@ final class AuctionController extends Controller
     )]
     #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
     #[Response(200, description: 'المزاد بعد تسجيل تأكيد التسليم.')]
+    #[Response(409, description: 'سبق تأكيد التسليم لهذا المزاد (handover_already_confirmed).')]
     public function confirmSellerHandover(Auction $auction, ConfirmAuctionHandoverBySellerAction $action): JsonResponse
     {
         Gate::authorize('confirmSellerHandover', $auction);
@@ -408,6 +411,7 @@ final class AuctionController extends Controller
     )]
     #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
     #[Response(201, description: 'المعرّف العام للنزاع وحالته.')]
+    #[Response(409, description: 'يوجد نزاع مفتوح بالفعل على هذا المزاد (dispute_already_open).')]
     public function openDispute(OpenAuctionDisputeRequest $request, Auction $auction, OpenAuctionDisputeAction $action): JsonResponse
     {
         Gate::authorize('openDispute', $auction);
