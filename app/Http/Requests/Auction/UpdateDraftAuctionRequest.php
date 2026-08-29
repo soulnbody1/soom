@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
+use App\Domain\Auction\Rules\SupportedCurrencyRule;
 use App\Domain\Auction\ValueObjects\Money;
 use App\Models\Auction\Auction;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -52,7 +53,7 @@ final class UpdateDraftAuctionRequest extends FormRequest
             'city_id' => ['sometimes', 'nullable', 'integer', 'exists:cities,id'],
             'title' => ['sometimes', 'string', 'max:180'],
             'description' => ['sometimes', 'string', 'max:10000'],
-            'currency_code' => ['sometimes', 'string', 'size:3', 'in:JOD,EGP,USD'],
+            'currency_code' => ['sometimes', 'string', 'size:3', new SupportedCurrencyRule],
             'starting_amount' => ['sometimes', new CurrencyDecimalRule('effective_currency_code')],
             'reserve_amount' => ['sometimes', 'nullable', new CurrencyDecimalRule('effective_currency_code')],
             'starts_at' => ['sometimes', 'date', 'after:now'],

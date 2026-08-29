@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
+use App\Domain\Auction\Rules\SupportedCurrencyRule;
 use App\Domain\Auction\ValueObjects\Money;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Contracts\Validation\Validator;
@@ -40,7 +41,7 @@ final class StoreAuctionRequest extends FormRequest
             'city_id' => ['nullable', 'integer', 'exists:cities,id'],
             'title' => ['required', 'string', 'max:180'],
             'description' => ['required', 'string', 'max:10000'],
-            'currency_code' => ['required', 'string', 'size:3', 'in:JOD,EGP,USD'],
+            'currency_code' => ['required', 'string', 'size:3', new SupportedCurrencyRule],
             'starting_amount' => ['required', new CurrencyDecimalRule('currency_code')],
             'reserve_amount' => ['nullable', new CurrencyDecimalRule('currency_code')],
             'starts_at' => ['required', 'date', 'after:now'],

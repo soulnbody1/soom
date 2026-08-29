@@ -98,3 +98,27 @@ test('no auction action transitions an auction into the legacy disputed status',
 
     expect($violations)->toBe([]);
 });
+
+test('currency whitelists are not hardcoded outside the currency value object', function () {
+    $violations = [];
+
+    foreach ([app_path(), base_path('routes')] as $path) {
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path)) as $file) {
+            if (! $file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $pathname = $file->getPathname();
+            if ($pathname === app_path('Domain/Auction/ValueObjects/Currency.php')) {
+                continue;
+            }
+
+            // An "in:" validation rule listing currency codes duplicates Currency::supportedCodes().
+            if (preg_match('/in:[A-Z]{3}(,[A-Z]{3})+/', (string) file_get_contents($pathname))) {
+                $violations[] = $pathname;
+            }
+        }
+    }
+
+    expect($violations)->toBe([]);
+});

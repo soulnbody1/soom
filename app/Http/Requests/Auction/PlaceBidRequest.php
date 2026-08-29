@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
+use App\Domain\Auction\Rules\SupportedCurrencyRule;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -23,7 +24,7 @@ final class PlaceBidRequest extends FormRequest
     {
         return [
             'amount' => ['required', new CurrencyDecimalRule('currency_code')],
-            'currency_code' => ['required', 'string', 'size:3', 'in:JOD,EGP,USD'],
+            'currency_code' => ['required', 'string', 'size:3', new SupportedCurrencyRule],
             'idempotency_key' => ['required', 'string', 'max:120'],
             'client_request_id' => ['nullable', 'string', 'max:120'],
         ];
