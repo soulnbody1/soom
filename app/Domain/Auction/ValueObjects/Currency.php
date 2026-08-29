@@ -12,6 +12,7 @@ final readonly class Currency
         'JOD' => 3,
         'EGP' => 2,
         'USD' => 2,
+        'AED' => 2,
     ];
 
     public function __construct(public string $code)
@@ -19,6 +20,16 @@ final readonly class Currency
         if (! array_key_exists($code, self::EXPONENTS)) {
             throw new InvalidArgumentException('Unsupported auction currency.');
         }
+    }
+
+    public static function supportedCodes(): array
+    {
+        return array_keys(self::EXPONENTS);
+    }
+
+    public static function isSupported(string $code): bool
+    {
+        return array_key_exists(strtoupper($code), self::EXPONENTS);
     }
 
     public static function fromCode(string $code): self

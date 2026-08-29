@@ -114,7 +114,11 @@ final class CreatePaymentIntentAction
                 currencyCode: (string) $transaction->currency_code,
                 purpose: $transaction->purpose->value,
                 returnUrl: $this->returnUrl($transaction),
-                metadata: ['auction_public_id' => (string) $transaction->auction?->public_id],
+                metadata: [
+                    'auction_public_id' => (string) $transaction->auction?->public_id,
+                    'payer_email' => (string) $transaction->user?->email,
+                    'payer_name' => (string) $transaction->user?->name,
+                ],
             ));
         } catch (Throwable $exception) {
             $this->markCheckoutFailed($transaction, $exception);

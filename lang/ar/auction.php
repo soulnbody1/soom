@@ -2,6 +2,7 @@
 
 return [
     'messages' => [
+        'payment_method_options_fetched' => 'تم جلب خيارات إعداد طرق الدفع.',
         'online_payment_intent_created' => 'تم بدء عملية الدفع الإلكتروني.',
         'online_payment_status_fetched' => 'تم جلب حالة الدفع الإلكتروني.',
         'payment_webhook_received' => 'تم استلام إشعار مزوّد الدفع.',
@@ -69,6 +70,7 @@ return [
         'dashboard_fetched' => 'تم جلب مؤشرات لوحة المزادات.',
     ],
     'errors' => [
+        'payment_provider_environment_mismatch' => 'بيئة طريقة الدفع لا تطابق البيئة المهيّأة لمزوّد :code.',
         'payment_checkout_in_progress' => 'يجري فتح صفحة دفع لهذه العملية الآن. يُرجى المحاولة بعد لحظات.',
         'payment_transaction_not_found' => 'عملية الدفع غير موجودة.',
         'payment_provider_unknown' => 'مزوّد الدفع :code غير معروف.',

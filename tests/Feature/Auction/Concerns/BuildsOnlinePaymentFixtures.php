@@ -85,7 +85,7 @@ trait BuildsOnlinePaymentFixtures
         ]);
     }
 
-    protected function paymentAuction(AuctionStatus $status, array $overrides = []): array
+    protected function paymentAuction(AuctionStatus $status, array $overrides = [], array $configurationOverrides = []): array
     {
         $seller = $this->paymentUser();
         $terms = AuctionTermsVersion::create([
@@ -97,7 +97,7 @@ trait BuildsOnlinePaymentFixtures
         ]);
         $category = Category::create(['name' => 'cat-'.Str::ulid(), 'display_order' => 0]);
         $country = Country::create(['name' => 'country-'.Str::ulid(), 'code' => 'JO'.substr((string) Str::ulid(), 0, 4)]);
-        $configuration = $this->auctionConfigurationVersion();
+        $configuration = $this->auctionConfigurationVersion($configurationOverrides);
 
         $auction = Auction::create(array_replace([
             'seller_id' => $seller->id,

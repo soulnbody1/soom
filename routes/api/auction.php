@@ -91,6 +91,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::get('/disputes', [AuctionDisputeController::class, 'index']);
     Route::get('/payment-methods', [PaymentMethodController::class, 'all']);
     Route::get('/payment-providers', [PaymentProviderController::class, 'index']);
+    Route::get('/payment-method-options', [PaymentProviderController::class, 'options']);
     Route::post('/payment-providers/{provider}/test', [PaymentProviderController::class, 'test'])->where('provider', '[A-Za-z0-9_-]+');
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);

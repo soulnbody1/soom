@@ -33,6 +33,7 @@ final class OnlinePaymentMethodRule
             throw AuctionException::domain('payment_provider_not_available', ['code' => $providerCode]);
         }
 
+        $this->assertEnvironment($method, $providerCode);
         $this->assertPurpose($method, $purpose);
         $this->assertCountry($method, $auction);
         $this->assertCurrency($method, $obligation->currencyCode);
@@ -70,6 +71,19 @@ final class OnlinePaymentMethodRule
         }
 
         return true;
+    }
+
+    private function assertEnvironment(PaymentMethod $method, string $providerCode): void
+    {
+        $providerSandbox = config("auction.payments.providers.{$providerCode}.sandbox");
+
+        if ($providerSandbox === null) {
+            return;
+        }
+
+        if ((bool) $providerSandbox !== (bool) $method->is_sandbox) {
+            throw AuctionException::domain('payment_provider_environment_mismatch', ['code' => $providerCode]);
+        }
     }
 
     private function assertPurpose(PaymentMethod $method, PaymentPurpose $purpose): void

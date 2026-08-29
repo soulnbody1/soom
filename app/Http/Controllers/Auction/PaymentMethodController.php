@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auction;
 
 use App\Domain\Auction\Enums\PaymentChannel;
+use App\Domain\Auction\Enums\PaymentCountry;
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\PaymentRail;
+use App\Domain\Auction\ValueObjects\Currency;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Auction\PaymentMethodResource;
 use App\Models\Auction\Auction;
@@ -131,9 +133,9 @@ final class PaymentMethodController extends Controller
             'allowed_purposes' => ['nullable', 'array'],
             'allowed_purposes.*' => ['string', Rule::in(array_column(PaymentPurpose::cases(), 'value'))],
             'country_codes' => ['nullable', 'array'],
-            'country_codes.*' => ['string', 'max:6'],
+            'country_codes.*' => ['string', Rule::in(PaymentCountry::codes())],
             'currency_codes' => ['nullable', 'array'],
-            'currency_codes.*' => ['string', 'size:3'],
+            'currency_codes.*' => ['string', Rule::in(Currency::supportedCodes())],
             'min_amount_minor' => ['nullable', 'integer', 'min:0'],
             'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
             'recipient_name' => ['nullable', 'string', 'max:120'],
@@ -189,9 +191,9 @@ final class PaymentMethodController extends Controller
             'allowed_purposes' => ['nullable', 'array'],
             'allowed_purposes.*' => ['string', Rule::in(array_column(PaymentPurpose::cases(), 'value'))],
             'country_codes' => ['nullable', 'array'],
-            'country_codes.*' => ['string', 'max:6'],
+            'country_codes.*' => ['string', Rule::in(PaymentCountry::codes())],
             'currency_codes' => ['nullable', 'array'],
-            'currency_codes.*' => ['string', 'size:3'],
+            'currency_codes.*' => ['string', Rule::in(Currency::supportedCodes())],
             'min_amount_minor' => ['nullable', 'integer', 'min:0'],
             'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
             'recipient_name' => ['nullable', 'string', 'max:120'],

@@ -2,6 +2,7 @@
 
 return [
     'messages' => [
+        'payment_method_options_fetched' => 'Payment method options fetched.',
         'online_payment_intent_created' => 'Online payment started.',
         'online_payment_status_fetched' => 'Online payment status fetched.',
         'payment_webhook_received' => 'Payment provider event received.',
@@ -69,6 +70,7 @@ return [
         'dashboard_fetched' => 'Auction dashboard metrics fetched.',
     ],
     'errors' => [
+        'payment_provider_environment_mismatch' => 'The payment method environment does not match the configured environment for provider :code.',
         'payment_checkout_in_progress' => 'A checkout is already being opened for this payment. Please try again in a moment.',
         'payment_transaction_not_found' => 'Payment transaction not found.',
         'payment_provider_unknown' => 'Unknown payment provider :code.',

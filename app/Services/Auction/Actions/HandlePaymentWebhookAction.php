@@ -42,10 +42,6 @@ final class HandlePaymentWebhookAction
         $provider = $this->providers->make($providerCode);
         $event = $provider->parseEvent($request);
 
-        if ($event->eventId === '' || $event->providerTransactionId === '') {
-            throw AuctionException::domain('payment_webhook_invalid', [], 400);
-        }
-
         if (! $event->signatureVerified) {
             $rejected = $this->recordEvent(
                 $providerCode,
@@ -58,6 +54,10 @@ final class HandlePaymentWebhookAction
             $this->markProcessed($rejected, 'signature_invalid');
 
             throw AuctionException::domain('payment_webhook_signature_invalid', [], 401);
+        }
+
+        if ($event->eventId === '' || $event->providerTransactionId === '') {
+            throw AuctionException::domain('payment_webhook_invalid', [], 400);
         }
 
         $record = $this->recordEvent(

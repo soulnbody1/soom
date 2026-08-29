@@ -75,4 +75,11 @@ return [
         'webhook_secret' => env('AUCTION_PAYMENTS_FAKE_WEBHOOK_SECRET'),
     ],
 
+    'ngenius' => [
+        'api_key' => env('NGENIUS_API_KEY'),
+        'outlet_reference' => env('NGENIUS_OUTLET_REFERENCE'),
+        'base_url' => env('NGENIUS_BASE_URL', 'https://api-gateway.sandbox.ngenius-payments.com'),
+        'webhook_secret' => env('NGENIUS_WEBHOOK_SECRET'),
+    ],
+
 ];

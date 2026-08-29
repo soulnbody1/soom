@@ -4,9 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Enums\PaymentChannel;
+use App\Domain\Auction\Enums\PaymentCountry;
+use App\Domain\Auction\Enums\PaymentPurpose;
+use App\Domain\Auction\Enums\PaymentRail;
+use App\Domain\Auction\ValueObjects\Currency;
 use App\Http\Controllers\Controller;
 use App\Models\Auction\Auction;
 use App\Services\Auction\Actions\DescribePaymentProvidersAction;
+use App\Services\Auction\Payments\Contracts\VerifiesProviderConnection;
 use App\Services\Auction\Payments\PaymentProviderFactory;
 use App\Traits\ApiResponseTrait;
 use Dedoc\Scramble\Attributes\Endpoint;
@@ -38,6 +44,31 @@ final class PaymentProviderController extends Controller
     }
 
     #[Endpoint(
+        title: 'عرض خيارات إعداد طرق الدفع',
+        description: 'يعرض القوائم المعتمدة لإعداد طرق الدفع: القنوات والمسارات والأغراض والدول والعملات المدعومة. تُستخدم لبناء قوائم الاختيار في لوحة التحكم بدل الإدخال النصي الحر.'
+    )]
+    #[Response(200, description: 'خيارات إعداد طرق الدفع.')]
+    public function options(): JsonResponse
+    {
+        Gate::authorize('viewAny', Auction::class);
+
+        return $this->sendResponse([
+            'channels' => array_column(PaymentChannel::cases(), 'value'),
+            'rails' => array_column(PaymentRail::cases(), 'value'),
+            'purposes' => array_column(PaymentPurpose::cases(), 'value'),
+            'countries' => array_map(
+                static fn (PaymentCountry $country): array => [
+                    'code' => $country->value,
+                    'label' => $country->label(),
+                    'default_currency' => $country->defaultCurrency(),
+                ],
+                PaymentCountry::cases()
+            ),
+            'currencies' => Currency::supportedCodes(),
+        ], __('auction.messages.payment_method_options_fetched'));
+    }
+
+    #[Endpoint(
         title: 'اختبار الاتصال بمزوّد الدفع',
         description: 'يتحقق من إمكانية تحميل مزوّد الدفع وقراءة قدراته ومن اكتمال بيانات اعتماده، ويعيد زمن الاستجابة. لا يُنشئ أي عملية دفع.'
     )]
@@ -54,7 +85,12 @@ final class PaymentProviderController extends Controller
         $startedAt = microtime(true);
 
         try {
-            $providers->make($provider)->capabilities();
+            $resolved = $providers->make($provider);
+            $resolved->capabilities();
+
+            if ($resolved instanceof VerifiesProviderConnection) {
+                $resolved->verifyConnection();
+            }
         } catch (Throwable $exception) {
             return $this->sendResponse([
                 'ok' => false,

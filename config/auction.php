@@ -43,6 +43,19 @@ return [
                 'required_credentials' => ['webhook_secret'],
                 'checkout_url' => env('AUCTION_PAYMENTS_FAKE_CHECKOUT_URL', 'https://fake-checkout.test'),
             ],
+
+            'ngenius' => [
+                'class' => App\Services\Auction\Payments\Providers\NGeniusPaymentProvider::class,
+                'required_credentials' => ['api_key', 'outlet_reference', 'base_url', 'webhook_secret'],
+                'sandbox' => (bool) env('AUCTION_PAYMENTS_NGENIUS_SANDBOX', true),
+                'currencies' => array_values(array_filter(array_map(
+                    'trim',
+                    explode(',', (string) env('AUCTION_PAYMENTS_NGENIUS_CURRENCIES', 'JOD'))
+                ))),
+                'timeout_seconds' => (int) env('AUCTION_PAYMENTS_NGENIUS_TIMEOUT_SECONDS', 20),
+                'checkout_ttl_seconds' => (int) env('AUCTION_PAYMENTS_NGENIUS_CHECKOUT_TTL_SECONDS', 1800),
+                'fallback_email' => env('AUCTION_PAYMENTS_NGENIUS_FALLBACK_EMAIL', 'payments@soom.jo'),
+            ],
         ],
     ],
 
