@@ -10,7 +10,7 @@ use App\Domain\Auction\Exceptions\AuctionException;
 use App\DTO\Auction\RefundProcessingResult;
 use App\Models\Auction\RefundTransaction;
 use App\Repositories\Auction\AuctionRefundRepository;
-use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
+use App\Services\Auction\Refunds\RefundProcessorFactory;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionRefundCompletion;
 use App\Services\Auction\Support\AuctionTransaction;
@@ -24,7 +24,7 @@ final class ProcessAuctionRefundAction
         private readonly AuctionTransaction $transaction,
         private readonly AuctionAudit $audit,
         private readonly AuctionRefundRepository $refunds,
-        private readonly AuctionRefundProcessorInterface $processor,
+        private readonly RefundProcessorFactory $processors,
         private readonly AuctionRefundCompletion $completion,
     ) {}
 
@@ -34,7 +34,7 @@ final class ProcessAuctionRefundAction
 
         $claimedRefund = RefundTransaction::findOrFail($refundId);
         try {
-            $result = $this->processor->process($claimedRefund);
+            $result = $this->processors->forRefund($claimedRefund)->process($claimedRefund);
         } catch (Throwable $exception) {
             $result = RefundProcessingResult::retryableFailure(
                 'processor_exception',

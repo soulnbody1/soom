@@ -9,8 +9,11 @@ use App\Http\Controllers\Auction\AuctionOperationalSettingsController;
 use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
 use App\Http\Controllers\Auction\MyParticipationController;
+use App\Http\Controllers\Auction\OnlinePaymentController;
 use App\Http\Controllers\Auction\PaymentMethodController;
+use App\Http\Controllers\Auction\PaymentProviderController;
 use App\Http\Controllers\Auction\PaymentSubmissionController;
+use App\Http\Controllers\Auction\PaymentWebhookController;
 use App\Http\Controllers\Auction\PayoutDestinationController;
 use App\Http\Controllers\Auction\RefundController;
 use App\Http\Controllers\Auction\SellerPayoutController;
@@ -25,6 +28,10 @@ Route::prefix('auctions')->middleware([OptionalSanctumAuthentication::class, Att
     Route::get('/{auction}/bids', [BidController::class, 'index']);
     Route::get('/{auction}/terms', [AuctionTermsController::class, 'showForAuction']);
 });
+
+Route::post('webhooks/payments/{provider}', [PaymentWebhookController::class, 'handle'])
+    ->middleware('throttle:payment-webhooks')
+    ->where('provider', '[A-Za-z0-9_-]+');
 
 Route::prefix('soom')->group(function () {
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
@@ -46,6 +53,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user', AttachServerTime::class])-
     Route::put('/my/payout-destinations/{payoutDestination}', [PayoutDestinationController::class, 'update']);
     Route::delete('/my/payout-destinations/{payoutDestination}', [PayoutDestinationController::class, 'destroy']);
     Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
+    Route::get('/payments/{paymentTransaction}', [OnlinePaymentController::class, 'show']);
 
     Route::prefix('auctions')->group(function () {
         Route::post('/', [AuctionController::class, 'store']);
@@ -64,6 +72,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user', AttachServerTime::class])-
         Route::get('/{auction}/disputes', [AuctionDisputeController::class, 'forAuction']);
         Route::get('/{auction}/disputes/{dispute}', [AuctionDisputeController::class, 'showForAuction']);
         Route::get('/{auction}/payment-methods', [PaymentMethodController::class, 'forAuction']);
+        Route::post('/{auction}/payments', [OnlinePaymentController::class, 'store'])->middleware('throttle:payment-intents');
         Route::delete('/{auction}', [AuctionController::class, 'cancel']);
     });
 });
@@ -80,6 +89,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::get('/configuration-versions/{configurationVersion}', [AuctionConfigurationController::class, 'show']);
     Route::post('/configuration-versions', [AuctionConfigurationController::class, 'store']);
     Route::get('/disputes', [AuctionDisputeController::class, 'index']);
+    Route::get('/payment-methods', [PaymentMethodController::class, 'all']);
+    Route::get('/payment-providers', [PaymentProviderController::class, 'index']);
+    Route::post('/payment-providers/{provider}/test', [PaymentProviderController::class, 'test'])->where('provider', '[A-Za-z0-9_-]+');
     Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
     Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
     Route::get('/refunds', [RefundController::class, 'index']);

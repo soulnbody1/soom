@@ -11,15 +11,11 @@ use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\Auction;
 use App\Models\Auction\PaymentSubmission;
 use App\Repositories\Auction\AuctionDepositRepository;
-use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRepository;
-use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
-use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionTransaction;
-use App\Services\Auction\Support\FinancialObligationKey;
-use App\Services\Auction\Support\PaymentEligibilityRule;
+use App\Services\Auction\Support\PaymentObligationResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -32,10 +28,7 @@ final class SubmitPaymentSubmissionAction
         private readonly AuctionRepository $auctions,
         private readonly AuctionPaymentRepository $payments,
         private readonly AuctionDepositRepository $deposits,
-        private readonly AuctionParticipantRepository $participants,
-        private readonly AuctionSettlementRepository $settlements,
-        private readonly PaymentEligibilityRule $eligibility,
-        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+        private readonly PaymentObligationResolver $obligations,
     ) {}
 
     public function execute(
@@ -62,7 +55,7 @@ final class SubmitPaymentSubmissionAction
 
         $this->transaction->run(function () use ($auction, $userId, $purpose): void {
             $auction = $this->auctions->lockAuctionForPayment($auction->id);
-            $this->target($auction, $userId, $purpose);
+            $this->obligations->resolve($auction, $userId, $purpose);
         });
 
         $path = $receipt->store("auction-payments/{$auction->public_id}", 'spaces_private');
@@ -70,17 +63,15 @@ final class SubmitPaymentSubmissionAction
         try {
             return $this->transaction->run(function () use ($auction, $userId, $purpose, $method, $receipt, $idempotencyKey, $providerReference, $path): PaymentSubmission {
                 $auction = $this->auctions->lockAuctionForPayment($auction->id);
-                [$deposit, $settlement, $amount] = $this->target($auction, $userId, $purpose);
+                $obligation = $this->obligations->resolve($auction, $userId, $purpose);
+                $deposit = $obligation->deposit;
+                $settlement = $obligation->settlement;
 
-                if ($amount <= 0) {
+                if ($obligation->amountMinor <= 0) {
                     throw AuctionException::domain('zero_payment_not_allowed');
                 }
 
-                $obligationKey = $deposit
-                    ? FinancialObligationKey::forDeposit($deposit)
-                    : FinancialObligationKey::forSettlement($settlement);
-
-                $this->ensurePaymentSubmissionCanBeCreated($deposit, $settlement, $obligationKey);
+                $this->ensurePaymentSubmissionCanBeCreated($deposit, $settlement, $obligation->key());
 
                 $submission = $this->payments->firstOrCreateSubmission(
                     [
@@ -94,8 +85,8 @@ final class SubmitPaymentSubmissionAction
                         'settlement_id' => $settlement?->id,
                         'payment_method_id' => $method->id,
                         'status' => PaymentSubmissionStatus::PendingReview,
-                        'amount_minor' => $amount,
-                        'currency_code' => $this->snapshotReader->forAuction($auction)->currency_code,
+                        'amount_minor' => $obligation->amountMinor,
+                        'currency_code' => $obligation->currencyCode,
                         'receipt_disk' => 'spaces_private',
                         'receipt_path' => $path,
                         'receipt_mime_type' => (string) $receipt->getMimeType(),
@@ -138,81 +129,6 @@ final class SubmitPaymentSubmissionAction
 
             throw $exception;
         }
-    }
-
-    private function target(Auction $auction, int $userId, PaymentPurpose $purpose): array
-    {
-        // The auction state is checked before the snapshot is read: a seller deposit can
-        // only be submitted once the auction is approved, and an auction that was never
-        // approved has no configuration snapshot to read.
-        if ($purpose === PaymentPurpose::SellerDeposit) {
-            $this->eligibility->assertCanSubmitSellerDeposit($auction, $userId);
-        }
-
-        $snapshot = $this->snapshotReader->forAuction($auction);
-
-        if ($purpose === PaymentPurpose::SellerDeposit) {
-            $deposit = $this->deposits->firstOrCreateDeposit(
-                ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'seller'],
-                [
-                    'status' => AuctionDepositStatus::PendingSubmission,
-                    'required_amount_minor' => (int) $snapshot->seller_deposit_required_minor,
-                    'currency_code' => $snapshot->currency_code,
-                ]
-            );
-
-            $deposit = $this->deposits->lockDepositForPayment($auction->id, $userId, 'seller');
-            $this->eligibility->assertDepositTarget($auction, $deposit, $userId, 'seller');
-            $this->eligibility->assertPaymentDetails(
-                (int) $snapshot->seller_deposit_required_minor,
-                $snapshot->currency_code,
-                (int) $deposit->required_amount_minor,
-                (string) $deposit->currency_code
-            );
-
-            return [$deposit, null, (int) $snapshot->seller_deposit_required_minor];
-        }
-
-        if ($purpose === PaymentPurpose::BidderDeposit) {
-            $participant = $this->participants->lockParticipant($auction->id, $userId);
-
-            if (! $participant) {
-                throw AuctionException::domain('registration_required');
-            }
-
-            $this->eligibility->assertCanSubmitBidderDeposit($auction, $participant, $userId);
-
-            $deposit = $this->deposits->firstOrCreateDeposit(
-                ['auction_id' => $auction->id, 'user_id' => $userId, 'type' => 'bidder'],
-                [
-                    'participant_id' => $participant->id,
-                    'status' => AuctionDepositStatus::PendingSubmission,
-                    'required_amount_minor' => (int) $snapshot->bidder_deposit_required_minor,
-                    'currency_code' => $snapshot->currency_code,
-                ]
-            );
-
-            $deposit = $this->deposits->lockDepositForPayment($auction->id, $userId, 'bidder');
-            $this->eligibility->assertDepositTarget($auction, $deposit, $userId, 'bidder', $participant);
-            $this->eligibility->assertPaymentDetails(
-                (int) $snapshot->bidder_deposit_required_minor,
-                $snapshot->currency_code,
-                (int) $deposit->required_amount_minor,
-                (string) $deposit->currency_code
-            );
-
-            return [$deposit, null, (int) $snapshot->bidder_deposit_required_minor];
-        }
-
-        $settlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
-
-        if (! $settlement) {
-            throw AuctionException::domain('settlement_payment_unavailable');
-        }
-
-        $this->eligibility->assertCanSubmitWinnerSettlement($auction, $settlement, $userId);
-
-        return [null, $settlement, max(0, (int) ($settlement->remaining_amount_minor ?? ($settlement->amount_due_minor - $settlement->amount_paid_minor)))];
     }
 
     private function ensurePaymentSubmissionCanBeCreated($deposit, $settlement, string $obligationKey): void

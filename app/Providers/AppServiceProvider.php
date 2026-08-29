@@ -19,6 +19,8 @@ use App\Policies\Auction\PaymentSubmissionPolicy;
 use App\Policies\Auction\SellerPayoutPolicy;
 use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\Auction\Notifications\OutboxNotifier;
+use App\Services\Auction\Payments\PaymentProviderFactory;
+use App\Services\Auction\Payments\Providers\FakePaymentProvider;
 use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
 use App\Services\Auction\Refunds\ManualReviewRefundProcessor;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
@@ -43,9 +45,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(AuctionRefundProcessorInterface::class, ManualReviewRefundProcessor::class);
 
         $this->app->singleton(FakeContentReviewProvider::class);
+
+        $this->app->bind(AuctionRefundProcessorInterface::class, ManualReviewRefundProcessor::class);
+
+        $this->app->singleton(FakePaymentProvider::class);
+        $this->app->singleton(PaymentProviderFactory::class);
 
         $this->app->singleton(ProviderModelCatalog::class);
         $this->app->singleton(ProviderSelectionResolver::class);
@@ -81,6 +87,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuctionSellerPayout::class, SellerPayoutPolicy::class);
         Gate::define('auction.dashboard.view', [AuctionDashboardPolicy::class, 'view']);
 
+        $this->configurePaymentRateLimiting();
         $this->configureBidRateLimiting();
         $this->configureContentReviewRateLimiting();
     }
@@ -95,6 +102,27 @@ class AppServiceProvider extends ServiceProvider
                     ->by("content-review-provider-test:user:{$userId}"),
                 Limit::perHour((int) config('content_review.provider_test.rate_limit_per_hour', 20))
                     ->by('content-review-provider-test:global'),
+            ];
+        });
+    }
+
+    private function configurePaymentRateLimiting(): void
+    {
+        RateLimiter::for('payment-intents', function (Request $request): array {
+            $userId = (int) ($request->user()?->id ?? 0);
+
+            return [
+                Limit::perMinute((int) config('auction.payments.intent_rate_limit_per_minute', 10))
+                    ->by("payment-intents:user:{$userId}"),
+            ];
+        });
+
+        RateLimiter::for('payment-webhooks', function (Request $request): array {
+            $provider = (string) ($request->route('provider') ?? 'unknown');
+
+            return [
+                Limit::perMinute((int) config('auction.payments.webhook_rate_limit_per_minute', 600))
+                    ->by("payment-webhooks:{$provider}"),
             ];
         });
     }

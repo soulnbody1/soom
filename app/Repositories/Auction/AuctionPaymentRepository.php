@@ -9,6 +9,8 @@ use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class AuctionPaymentRepository
@@ -172,6 +174,52 @@ final class AuctionPaymentRepository
         return PaymentTransaction::whereKey($paymentTransactionId)
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    public function lockPendingOnlineTransactionForObligation(string $obligationKey, string $provider): ?PaymentTransaction
+    {
+        return PaymentTransaction::where('provider', $provider)
+            ->where('status', PaymentTransactionStatus::Pending->value)
+            ->where('idempotency_key', 'like', $obligationKey.':%')
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+    }
+
+    public function lockTransactionByProviderReference(string $provider, string $providerTransactionId): ?PaymentTransaction
+    {
+        return PaymentTransaction::where('provider', $provider)
+            ->where('provider_transaction_id', $providerTransactionId)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    public function lockTransaction(int $transactionId): PaymentTransaction
+    {
+        return PaymentTransaction::whereKey($transactionId)->lockForUpdate()->firstOrFail();
+    }
+
+    public function findTransactionForUser(string $publicId, int $userId): ?PaymentTransaction
+    {
+        return PaymentTransaction::where('public_id', $publicId)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    public function onlineAttemptCount(string $obligationKey, string $provider): int
+    {
+        return PaymentTransaction::where('provider', $provider)
+            ->where('idempotency_key', 'like', $obligationKey.':%')
+            ->count();
+    }
+
+    public function pendingOnlineTransactionsQuery(int $olderThanSeconds): Builder
+    {
+        return PaymentTransaction::query()
+            ->where('provider', '!=', 'manual')
+            ->where('status', PaymentTransactionStatus::Pending->value)
+            ->where('created_at', '<=', Carbon::now()->subSeconds($olderThanSeconds))
+            ->orderBy('id');
     }
 
     public function saveTransaction(PaymentTransaction $transaction): void

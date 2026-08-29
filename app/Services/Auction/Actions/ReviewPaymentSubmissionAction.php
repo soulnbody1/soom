@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
-use App\Domain\Auction\Enums\AuctionParticipantStatus;
-use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\PaymentSubmissionStatus;
 use App\Domain\Auction\Enums\PaymentTransactionStatus;
-use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\PaymentSubmission;
 use App\Repositories\Auction\AuctionDepositRepository;
@@ -18,8 +15,6 @@ use App\Repositories\Auction\AuctionParticipantRepository;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionSettlementRepository;
 use App\Services\Auction\Support\AuctionAudit;
-use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
-use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\FinancialObligationKey;
 use App\Services\Auction\Support\PaymentEligibilityRule;
@@ -30,15 +25,13 @@ final class ReviewPaymentSubmissionAction
 {
     public function __construct(
         private readonly AuctionTransaction $transaction,
-        private readonly AuctionStateMachine $stateMachine,
         private readonly AuctionAudit $audit,
         private readonly AuctionPaymentRepository $payments,
         private readonly AuctionDepositRepository $deposits,
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionSettlementRepository $settlements,
         private readonly PaymentEligibilityRule $eligibility,
-        private readonly PlanNonWinnerDepositRefundsAction $nonWinnerDeposits,
-        private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+        private readonly ApplyPaymentSucceededAction $applyPaymentSucceeded,
     ) {}
 
     public function approve(
@@ -57,7 +50,6 @@ final class ReviewPaymentSubmissionAction
             }
 
             $auction = $this->payments->lockSubmissionAuction($submission);
-            $snapshot = $this->snapshotReader->forAuction($auction);
 
             $deposit = null;
             $participant = null;
@@ -115,7 +107,7 @@ final class ReviewPaymentSubmissionAction
             $this->payments->save($submission);
 
             try {
-                $this->payments->firstOrCreateTransaction(
+                $transaction = $this->payments->firstOrCreateTransaction(
                     [
                         'purpose' => $submission->purpose->value,
                         'idempotency_key' => "submission:{$submission->id}:approved",
@@ -145,62 +137,7 @@ final class ReviewPaymentSubmissionAction
                 throw $exception;
             }
 
-            if ($submission->purpose === PaymentPurpose::SellerDeposit) {
-                $deposit->forceFill([
-                    'status' => AuctionDepositStatus::Held,
-                    'held_amount_minor' => $submission->amount_minor,
-                    'held_at' => Carbon::now(),
-                ]);
-                $this->deposits->save($deposit);
-
-                $this->stateMachine->transition($auction, AuctionStatus::Scheduled, $adminId, 'admin', 'seller deposit approved');
-                $this->audit->log('auction.seller_deposit_payment_approved', $auction, $adminId, 'admin', [
-                    'deposit_public_id' => $deposit->public_id,
-                    'held_amount_minor' => $deposit->held_amount_minor,
-                    'source_payment_submission_public_id' => $submission->public_id,
-                ]);
-                $this->audit->outbox('auction.seller_deposit_held', $auction, [
-                    'deposit_public_id' => $deposit->public_id,
-                    'held_amount_minor' => $deposit->held_amount_minor,
-                ]);
-            }
-
-            if ($submission->purpose === PaymentPurpose::BidderDeposit) {
-                $deposit->forceFill([
-                    'status' => AuctionDepositStatus::Held,
-                    'held_amount_minor' => $submission->amount_minor,
-                    'held_at' => Carbon::now(),
-                ]);
-                $this->deposits->save($deposit);
-
-                $deposit->participant?->forceFill([
-                    'status' => AuctionParticipantStatus::Qualified,
-                    'qualified_at' => Carbon::now(),
-                ]);
-                if ($deposit->participant) {
-                    $this->participants->save($deposit->participant);
-                }
-            }
-
-            if ($submission->purpose === PaymentPurpose::WinnerSettlement) {
-                $newPaid = $settlement->amount_paid_minor + $submission->amount_minor;
-                $remaining = max(0, $settlement->amount_due_minor - $newPaid);
-                $settlement->forceFill([
-                    'amount_paid_minor' => $newPaid,
-                    'remaining_amount_minor' => $remaining,
-                    'status' => $newPaid >= $settlement->amount_due_minor ? SettlementStatus::Paid : SettlementStatus::PaymentPending,
-                    'paid_at' => $newPaid >= $settlement->amount_due_minor ? Carbon::now() : $settlement->paid_at,
-                    'handover_due_at' => $newPaid >= $settlement->amount_due_minor
-                        ? Carbon::now()->addMinutes((int) $snapshot->handover_deadline_minutes)
-                        : $settlement->handover_due_at,
-                ]);
-                $this->settlements->save($settlement);
-
-                if ($newPaid >= $settlement->amount_due_minor) {
-                    $this->stateMachine->transition($auction, AuctionStatus::HandoverPending, $adminId, 'admin', 'winner payment approved');
-                    $this->nonWinnerDeposits->execute($auction->refresh(), 'winner_payment', $adminId, 'admin');
-                }
-            }
+            $this->applyPaymentSucceeded->execute($transaction, $adminId, 'admin');
 
             $this->audit->log('auction.payment_approved', $auction, $adminId, 'admin', [
                 'submission_public_id' => $submission->public_id,

@@ -30,6 +30,7 @@ final class RefundTransaction extends Model
         'amount_minor',
         'held_refund_amount_minor',
         'applied_refund_amount_minor',
+        'provider_fee_minor',
         'currency_code',
         'reason',
         'provider',

@@ -6,6 +6,7 @@ namespace App\Console\Commands\Auction;
 
 use App\Jobs\Auction\FinalizeExpiredAuctionsJob;
 use App\Jobs\Auction\ProcessPendingAuctionRefundsJob;
+use App\Jobs\Auction\ReconcilePendingOnlinePaymentsJob;
 use App\Jobs\Auction\RefundPendingAuctionDepositsJob;
 use App\Jobs\Auction\StartDueAuctionsJob;
 use Illuminate\Console\Command;
@@ -22,6 +23,7 @@ final class RunAuctionOperations extends Command
         FinalizeExpiredAuctionsJob::dispatch();
         RefundPendingAuctionDepositsJob::dispatch();
         ProcessPendingAuctionRefundsJob::dispatch();
+        ReconcilePendingOnlinePaymentsJob::dispatch();
 
         $this->info('Auction operational jobs dispatched.');
 

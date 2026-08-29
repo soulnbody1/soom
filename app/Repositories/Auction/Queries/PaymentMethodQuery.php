@@ -9,13 +9,18 @@ use Illuminate\Database\Eloquent\Collection;
 
 final class PaymentMethodQuery
 {
-    /**
-     * Get all active payment methods.
-     * Replaces ListPaymentMethodsAction query.
-     */
     public function getActive(): Collection
     {
         return PaymentMethod::where('is_active', true)
+            ->orderBy('display_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function getAll(): Collection
+    {
+        return PaymentMethod::orderBy('channel')
+            ->orderBy('display_order')
             ->orderBy('name')
             ->get();
     }

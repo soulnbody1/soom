@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Enums\PaymentChannel;
 use App\Domain\Auction\Enums\PaymentPurpose;
+use App\Domain\Auction\Enums\PaymentRail;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Auction\PaymentMethodResource;
 use App\Models\Auction\Auction;
 use App\Models\Auction\PaymentMethod;
+use App\Repositories\Auction\Queries\PaymentMethodQuery;
 use App\Services\Auction\Actions\CreatePaymentMethodAction;
+use App\Services\Auction\Actions\DescribePaymentProvidersAction;
 use App\Services\Auction\Actions\ListPaymentMethodsAction;
 use App\Services\Auction\Actions\UpdatePaymentMethodAction;
+use App\Services\Auction\Support\OnlinePaymentMethodRule;
 use App\Services\Auction\Support\PaymentMethodDisclosureRule;
 use App\Traits\ApiResponseTrait;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -54,7 +59,8 @@ final class PaymentMethodController extends Controller
         Request $request,
         Auction $auction,
         ListPaymentMethodsAction $action,
-        PaymentMethodDisclosureRule $rule
+        PaymentMethodDisclosureRule $rule,
+        OnlinePaymentMethodRule $availability
     ): JsonResponse {
         if (! Gate::allows('view', $auction)) {
             return $this->sendError(__('auction.errors.auction_not_found'), 404, 'auction_not_found');
@@ -72,8 +78,27 @@ final class PaymentMethodController extends Controller
 
         $rule->assertCanSee($auction, $request->user(), $purpose);
 
+        $available = $action->execute()
+            ->filter(fn ($method): bool => $availability->isAvailableFor($method, $auction, $purpose))
+            ->values();
+
         return $this->sendResponse(
-            PaymentMethodResource::detailedCollection($action->execute()),
+            PaymentMethodResource::detailedCollection($available),
+            __('auction.messages.payment_methods_fetched')
+        );
+    }
+
+    #[Endpoint(
+        title: 'عرض طرق الدفع للإدارة',
+        description: 'يعرض جميع طرق الدفع المفعّلة والموقوفة مع إعدادات الإتاحة وحالة مزوّد الدفع المرتبط بها. لا تُعاد مفاتيح المزوّدين ولا أسرارهم.'
+    )]
+    #[Response(200, description: 'قائمة طرق الدفع مع إعدادات الإدارة.')]
+    public function all(PaymentMethodQuery $query, DescribePaymentProvidersAction $providers): JsonResponse
+    {
+        Gate::authorize('viewAny', Auction::class);
+
+        return $this->sendResponse(
+            PaymentMethodResource::administeredCollection($query->getAll(), $providers->execute()),
             __('auction.messages.payment_methods_fetched')
         );
     }
@@ -98,6 +123,19 @@ final class PaymentMethodController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'code' => ['required', 'string', 'max:80', 'unique:payment_methods,code'],
+            'channel' => ['sometimes', Rule::in(array_column(PaymentChannel::cases(), 'value'))],
+            'rail' => ['sometimes', Rule::in(array_column(PaymentRail::cases(), 'value'))],
+            'provider_code' => ['nullable', 'string', 'max:60', 'required_if:channel,online'],
+            'is_sandbox' => ['sometimes', 'boolean'],
+            'display_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            'allowed_purposes' => ['nullable', 'array'],
+            'allowed_purposes.*' => ['string', Rule::in(array_column(PaymentPurpose::cases(), 'value'))],
+            'country_codes' => ['nullable', 'array'],
+            'country_codes.*' => ['string', 'max:6'],
+            'currency_codes' => ['nullable', 'array'],
+            'currency_codes.*' => ['string', 'size:3'],
+            'min_amount_minor' => ['nullable', 'integer', 'min:0'],
+            'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
             'recipient_name' => ['nullable', 'string', 'max:120'],
             'identifier_type' => ['nullable', 'string', Rule::in(PaymentMethod::IDENTIFIER_TYPES), 'required_with:identifier_value'],
             'identifier_value' => ['nullable', 'string', 'max:190', 'required_with:identifier_type'],
@@ -107,7 +145,7 @@ final class PaymentMethodController extends Controller
         ]);
 
         return $this->sendResponse(
-            (new PaymentMethodResource($action->execute($data)))->withTransferDetails(),
+            (new PaymentMethodResource($action->execute($data)))->withTransferDetails()->withAdministration(),
             __('auction.messages.payment_method_created'),
             201
         );
@@ -143,6 +181,19 @@ final class PaymentMethodController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:120'],
+            'channel' => ['sometimes', Rule::in(array_column(PaymentChannel::cases(), 'value'))],
+            'rail' => ['sometimes', Rule::in(array_column(PaymentRail::cases(), 'value'))],
+            'provider_code' => ['nullable', 'string', 'max:60', 'required_if:channel,online'],
+            'is_sandbox' => ['sometimes', 'boolean'],
+            'display_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            'allowed_purposes' => ['nullable', 'array'],
+            'allowed_purposes.*' => ['string', Rule::in(array_column(PaymentPurpose::cases(), 'value'))],
+            'country_codes' => ['nullable', 'array'],
+            'country_codes.*' => ['string', 'max:6'],
+            'currency_codes' => ['nullable', 'array'],
+            'currency_codes.*' => ['string', 'size:3'],
+            'min_amount_minor' => ['nullable', 'integer', 'min:0'],
+            'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
             'recipient_name' => ['nullable', 'string', 'max:120'],
             'identifier_type' => ['nullable', 'string', Rule::in(PaymentMethod::IDENTIFIER_TYPES), 'required_with:identifier_value'],
             'identifier_value' => ['nullable', 'string', 'max:190', 'required_with:identifier_type'],
@@ -152,7 +203,7 @@ final class PaymentMethodController extends Controller
         ]);
 
         return $this->sendResponse(
-            (new PaymentMethodResource($action->execute($paymentMethod, $data)))->withTransferDetails(),
+            (new PaymentMethodResource($action->execute($paymentMethod, $data)))->withTransferDetails()->withAdministration(),
             __('auction.messages.payment_method_updated')
         );
     }

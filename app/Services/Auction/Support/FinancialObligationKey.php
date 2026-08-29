@@ -34,4 +34,27 @@ final class FinancialObligationKey
 
         throw AuctionException::domain('payment_submission_obligation_mismatch');
     }
+
+    public static function depositId(string $key): ?int
+    {
+        return self::identifier($key, 'deposit');
+    }
+
+    public static function settlementId(string $key): ?int
+    {
+        return self::identifier($key, 'settlement');
+    }
+
+    private static function identifier(string $key, string $type): ?int
+    {
+        $prefix = $type.':';
+
+        if (! str_starts_with($key, $prefix)) {
+            return null;
+        }
+
+        $identifier = substr($key, strlen($prefix));
+
+        return ctype_digit($identifier) ? (int) $identifier : null;
+    }
 }

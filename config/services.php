@@ -71,4 +71,8 @@ return [
         'thinking_budget' => (int) env('GEMINI_THINKING_BUDGET', 0),
     ],
 
+    'fake' => [
+        'webhook_secret' => env('AUCTION_PAYMENTS_FAKE_WEBHOOK_SECRET'),
+    ],
+
 ];

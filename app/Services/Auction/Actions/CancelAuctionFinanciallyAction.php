@@ -326,7 +326,7 @@ final class CancelAuctionFinanciallyAction
             }
 
             $this->refunds->firstOrCreateRefund(
-                ['provider' => $provider, 'idempotency_key' => "{$context->operationKey()}:winner-payment:{$payment->id}"],
+                ['provider' => (string) ($payment->provider ?: $provider), 'idempotency_key' => "{$context->operationKey()}:winner-payment:{$payment->id}"],
                 [
                     'auction_id' => $auction->id,
                     'deposit_id' => null,

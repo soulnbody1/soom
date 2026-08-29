@@ -100,6 +100,11 @@ final class AuctionDepositRepository
             ->get();
     }
 
+    public function lockById(int $depositId): AuctionDeposit
+    {
+        return AuctionDeposit::whereKey($depositId)->lockForUpdate()->firstOrFail();
+    }
+
     /**
      * Lock a deposit by ID for refund processing.
      * Used by RefundAuctionDepositAction.

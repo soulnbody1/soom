@@ -143,7 +143,7 @@ final class FinalizeAuctionAction
 
                     $this->refunds->firstOrCreateRefund(
                         [
-                            'provider' => (string) config('auction.refunds.provider', 'manual'),
+                            'provider' => (string) ($depositPayment->provider ?: config('auction.refunds.provider', 'manual')),
                             'idempotency_key' => "auction:{$auction->id}:winner-deposit-excess:{$winnerDeposit->id}",
                         ],
                         [

@@ -61,7 +61,7 @@ final class RefundAuctionDepositAction
             $amount = $allocation->totalAmountMinor();
             $key = "deposit:{$deposit->id}:refund:held:{$allocation->heldAmountMinor}:applied:{$allocation->appliedAmountMinor}";
 
-            $provider = (string) config('auction.refunds.provider', 'manual');
+            $provider = (string) ($payment->provider ?: config('auction.refunds.provider', 'manual'));
 
             $refund = $this->refunds->firstOrCreateRefund(
                 ['provider' => $provider, 'idempotency_key' => $key],
