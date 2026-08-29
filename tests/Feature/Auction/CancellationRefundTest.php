@@ -134,6 +134,56 @@ final class CancellationRefundTest extends TestCase
         $this->assertSame(1, RefundTransaction::where('payment_transaction_id', $payment->id)->count());
     }
 
+    public function test_cancellation_settlement_refund_can_actually_be_completed(): void
+    {
+        [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::HandoverPending);
+        $settlement = $this->settlement($auction, $bid, 90_000, paid: true);
+        $payment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+
+        $this->cancel($auction);
+
+        $refund = RefundTransaction::where('auction_id', $auction->id)->sole();
+        $this->assertNull($refund->deposit_id);
+        $this->assertSame(0, (int) $refund->held_refund_amount_minor);
+        $this->assertSame(0, (int) $refund->applied_refund_amount_minor);
+
+        $completed = app(RefundAuctionDepositAction::class)
+            ->confirmSucceeded($refund, 'provider-refund-'.Str::ulid());
+
+        $this->assertSame(RefundTransactionStatus::Succeeded, $completed->status);
+        $this->assertSame(90_000, (int) $completed->amount_minor);
+        $this->assertSame(PaymentTransactionStatus::Reversed, $payment->refresh()->status);
+    }
+
+    public function test_cancellation_deposit_and_settlement_refunds_both_complete_and_keep_deposit_math(): void
+    {
+        [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::HandoverPending);
+        $deposit = $this->deposit($auction, $winner, 10_000);
+        $depositPayment = $this->paymentForDeposit($auction, $deposit, $winner, 10_000);
+        $settlement = $this->settlement($auction, $bid, 90_000, paid: true);
+        $settlementPayment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+
+        $this->cancel($auction);
+
+        foreach (RefundTransaction::where('auction_id', $auction->id)->get() as $refund) {
+            app(RefundAuctionDepositAction::class)
+                ->confirmSucceeded($refund, 'provider-refund-'.Str::ulid());
+        }
+
+        $this->assertSame(
+            2,
+            RefundTransaction::where('auction_id', $auction->id)
+                ->where('status', RefundTransactionStatus::Succeeded->value)
+                ->count()
+        );
+        $this->assertSame(PaymentTransactionStatus::Reversed, $depositPayment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Reversed, $settlementPayment->refresh()->status);
+
+        $deposit->refresh();
+        $this->assertSame(10_000, (int) $deposit->refunded_amount_minor);
+        $this->assertSame(0, (int) $deposit->held_amount_minor);
+    }
+
     private function cancel(Auction $auction): Auction
     {
         return app(CancelAuctionAction::class)->execute($auction, $this->user('admin')->id, 'admin', 'test cancellation');

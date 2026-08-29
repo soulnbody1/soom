@@ -60,9 +60,9 @@ final class AuctionRefundCompletion
             $this->settlements->lockById((int) $refund->obligation_id);
         }
 
-        $allocation = DepositRefundAllocation::fromRefund($refund);
-        $amount = $allocation->totalAmountMinor();
-        if ($amount <= 0 || $amount !== (int) $refund->amount_minor) {
+        $amount = (int) $refund->amount_minor;
+
+        if ($amount <= 0) {
             throw AuctionException::domain('refund_exceeds_available');
         }
 
@@ -70,7 +70,15 @@ final class AuctionRefundCompletion
             throw AuctionException::domain('refund_exceeds_available');
         }
 
+        $allocation = null;
+
         if ($deposit) {
+            $allocation = DepositRefundAllocation::fromRefund($refund);
+
+            if ($allocation->totalAmountMinor() !== $amount) {
+                throw AuctionException::domain('refund_exceeds_available');
+            }
+
             $available = DepositRefundAllocation::calculateRefundableDepositAmount(
                 $deposit,
                 (int) ($payment?->amount_minor ?? 0),
@@ -115,7 +123,7 @@ final class AuctionRefundCompletion
             $this->payments->saveTransaction($payment);
         }
 
-        if ($deposit) {
+        if ($deposit && $allocation) {
             $this->applyDepositAllocation($deposit, $allocation);
         }
 

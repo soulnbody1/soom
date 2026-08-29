@@ -7,6 +7,7 @@ namespace App\Services\Auction\Actions;
 use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Domain\Auction\ValueObjects\Currency;
 use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRefundRepository;
@@ -18,6 +19,7 @@ use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\PaymentObligationResolver;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 
 final class SettleOnlinePaymentAction
 {
@@ -60,7 +62,7 @@ final class SettleOnlinePaymentAction
     {
         $this->stateMachine->assert($transaction->status, PaymentTransactionStatus::Succeeded);
 
-        $mismatch = $this->amountMismatch($transaction, $status);
+        $mismatch = $this->mismatchReason($transaction, $status);
 
         $transaction->forceFill([
             'status' => PaymentTransactionStatus::Succeeded,
@@ -71,32 +73,14 @@ final class SettleOnlinePaymentAction
         ]);
 
         if ($mismatch !== null) {
-            $transaction->forceFill(['failure_code' => $mismatch]);
-            $this->payments->saveTransaction($transaction);
-
-            $this->audit->log('auction.online_payment_mismatch', $transaction->auction, null, 'system', [
-                'payment_transaction_public_id' => $transaction->public_id,
-                'provider' => $transaction->provider,
-                'mismatch' => $mismatch,
-                'expected_amount_minor' => $transaction->amount_minor,
-                'expected_currency_code' => $transaction->currency_code,
-                'provider_amount_minor' => $status->amountMinor,
-                'provider_currency_code' => $status->currencyCode,
-            ]);
-            $this->audit->outbox('auction.online_payment_mismatch', $transaction->auction, [
-                'payment_transaction_id' => $transaction->id,
-                'user_id' => $transaction->user_id,
-                'mismatch' => $mismatch,
-            ]);
-
-            return $transaction->refresh();
+            return $this->recordMismatchedCapture($transaction, $status, $mismatch);
         }
 
         $obligationKey = $this->payableObligationKey($transaction);
 
         if ($obligationKey === null) {
             $this->payments->saveTransaction($transaction);
-            $this->createAutomaticRefund($transaction, 'obligation_no_longer_payable');
+            $this->createAutomaticRefund($transaction, 'obligation_no_longer_payable', (string) $transaction->provider);
 
             return $transaction->refresh();
         }
@@ -118,6 +102,49 @@ final class SettleOnlinePaymentAction
             'user_id' => $transaction->user_id,
             'purpose' => $transaction->purpose->value,
         ]);
+
+        return $transaction->refresh();
+    }
+
+    private function recordMismatchedCapture(
+        PaymentTransaction $transaction,
+        ProviderPaymentStatus $status,
+        string $mismatch
+    ): PaymentTransaction {
+        $expectedAmount = (int) $transaction->amount_minor;
+        $expectedCurrency = (string) $transaction->currency_code;
+        $capturedAmount = $status->amountMinor ?? $expectedAmount;
+        $capturedCurrency = $status->currencyCode === null ? $expectedCurrency : strtoupper($status->currencyCode);
+        $representable = $capturedAmount > 0 && $this->isRepresentableCurrency($capturedCurrency);
+
+        $transaction->forceFill([
+            'failure_code' => $mismatch,
+            'amount_minor' => $representable ? $capturedAmount : $expectedAmount,
+            'currency_code' => $representable ? $capturedCurrency : $expectedCurrency,
+        ]);
+        $this->payments->saveTransaction($transaction);
+
+        $this->audit->log('auction.online_payment_mismatch', $transaction->auction, null, 'system', [
+            'payment_transaction_public_id' => $transaction->public_id,
+            'provider' => $transaction->provider,
+            'mismatch' => $mismatch,
+            'expected_amount_minor' => $expectedAmount,
+            'expected_currency_code' => $expectedCurrency,
+            'provider_amount_minor' => $status->amountMinor,
+            'provider_currency_code' => $status->currencyCode,
+            'captured_amount_recorded' => $representable,
+        ]);
+        $this->audit->outbox('auction.online_payment_mismatch', $transaction->auction, [
+            'payment_transaction_id' => $transaction->id,
+            'user_id' => $transaction->user_id,
+            'mismatch' => $mismatch,
+        ]);
+
+        $this->createAutomaticRefund(
+            $transaction,
+            $mismatch,
+            $representable ? (string) $transaction->provider : 'manual'
+        );
 
         return $transaction->refresh();
     }
@@ -151,17 +178,30 @@ final class SettleOnlinePaymentAction
         }
     }
 
-    private function amountMismatch(PaymentTransaction $transaction, ProviderPaymentStatus $status): ?string
+    private function mismatchReason(PaymentTransaction $transaction, ProviderPaymentStatus $status): ?string
     {
         if ($status->currencyCode !== null && strtoupper($status->currencyCode) !== strtoupper((string) $transaction->currency_code)) {
-            return 'currency_mismatch';
+            return $this->isRepresentableCurrency(strtoupper($status->currencyCode))
+                ? 'provider_currency_mismatch'
+                : 'provider_currency_unsupported';
         }
 
         if ($status->amountMinor !== null && $status->amountMinor !== (int) $transaction->amount_minor) {
-            return 'amount_mismatch';
+            return 'provider_amount_mismatch';
         }
 
         return null;
+    }
+
+    private function isRepresentableCurrency(string $currencyCode): bool
+    {
+        try {
+            Currency::fromCode($currencyCode);
+        } catch (InvalidArgumentException) {
+            return false;
+        }
+
+        return true;
     }
 
     private function payableObligationKey(PaymentTransaction $transaction): ?string
@@ -194,14 +234,14 @@ final class SettleOnlinePaymentAction
         return $key;
     }
 
-    private function createAutomaticRefund(PaymentTransaction $transaction, string $reason): void
+    private function createAutomaticRefund(PaymentTransaction $transaction, string $reason, string $provider): void
     {
         $obligationKey = (string) $transaction->idempotency_key;
         [$obligationType, $obligationId] = $this->obligationParts($obligationKey);
 
         $this->refunds->firstOrCreateRefund(
             [
-                'provider' => (string) $transaction->provider,
+                'provider' => $provider,
                 'idempotency_key' => "payment:{$transaction->id}:{$reason}",
             ],
             [
@@ -213,21 +253,23 @@ final class SettleOnlinePaymentAction
                 'user_id' => $transaction->user_id,
                 'status' => RefundTransactionStatus::Pending,
                 'amount_minor' => $transaction->amount_minor,
-                'held_refund_amount_minor' => $transaction->amount_minor,
+                'held_refund_amount_minor' => 0,
                 'applied_refund_amount_minor' => 0,
                 'currency_code' => $transaction->currency_code,
                 'reason' => $reason,
             ]
         );
 
-        $this->audit->log('auction.online_payment_late_success', $transaction->auction, null, 'system', [
+        $this->audit->log('auction.online_payment_auto_refund_planned', $transaction->auction, null, 'system', [
             'payment_transaction_public_id' => $transaction->public_id,
-            'provider' => $transaction->provider,
+            'payment_provider' => $transaction->provider,
+            'refund_provider' => $provider,
             'purpose' => $transaction->purpose->value,
             'amount_minor' => $transaction->amount_minor,
+            'currency_code' => $transaction->currency_code,
             'reason' => $reason,
         ]);
-        $this->audit->outbox('auction.online_payment_late_success', $transaction->auction, [
+        $this->audit->outbox('auction.online_payment_auto_refund_planned', $transaction->auction, [
             'payment_transaction_id' => $transaction->id,
             'user_id' => $transaction->user_id,
             'reason' => $reason,
