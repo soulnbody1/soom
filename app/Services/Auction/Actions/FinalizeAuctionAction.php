@@ -8,6 +8,7 @@ use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
+use App\Domain\Auction\Exceptions\AuctionException;
 use App\DTO\Auction\CreateSettlementDTO;
 use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionBidRepository;
@@ -42,17 +43,45 @@ final class FinalizeAuctionAction
 
     public function execute(Auction $auction): Auction
     {
-        return $this->transaction->run(function () use ($auction): Auction {
+        return $this->finalize($auction, null, 'system', false);
+    }
+
+    public function executeEarly(Auction $auction, int $actorId, string $actorType): Auction
+    {
+        return $this->finalize($auction, $actorId, $actorType, true);
+    }
+
+    private function finalize(Auction $auction, ?int $actorId, string $actorType, bool $early): Auction
+    {
+        return $this->transaction->run(function () use ($auction, $actorId, $actorType, $early): Auction {
             $auction = $this->auctions->lockForFinalization($auction->id);
             $snapshot = $this->snapshotReader->forAuction($auction);
             $now = Carbon::now();
 
+            if ($early && $auction->status !== AuctionStatus::Live) {
+                throw AuctionException::domain('early_end_not_available', [], 409);
+            }
+
             if ($auction->status === AuctionStatus::Live) {
-                if ($auction->ends_at && $now->lessThan($auction->ends_at)) {
+                if ($early) {
+                    $this->assertEarlyEndAllowed($auction);
+                } elseif ($auction->ends_at && $now->lessThan($auction->ends_at)) {
                     return $auction;
                 }
 
-                $auction = $this->stateMachine->transition($auction, AuctionStatus::Ended, null, 'system', 'auction end time reached');
+                $auction = $this->stateMachine->transition(
+                    $auction,
+                    AuctionStatus::Ended,
+                    $actorId,
+                    $actorType,
+                    $early ? 'auction ended early by request' : 'auction end time reached'
+                );
+
+                if ($early) {
+                    $this->audit->log('auction.ended_early', $auction, $actorId, $actorType, [
+                        'auction_public_id' => $auction->public_id,
+                    ]);
+                }
             }
 
             if (! in_array($auction->status, [AuctionStatus::Ended, AuctionStatus::SettlementPending, AuctionStatus::PaymentPending], true)) {
@@ -190,5 +219,18 @@ final class FinalizeAuctionAction
 
             return $auction->refresh()->load('settlement');
         });
+    }
+
+    private function assertEarlyEndAllowed(Auction $auction): void
+    {
+        $winningBid = $this->bids->lockWinningBid($auction->id);
+
+        if (! $winningBid) {
+            throw AuctionException::domain('no_bids_to_accept');
+        }
+
+        if ($auction->reserve_amount_minor !== null && $winningBid->amount_minor < $auction->reserve_amount_minor) {
+            throw AuctionException::domain('reserve_not_met');
+        }
     }
 }

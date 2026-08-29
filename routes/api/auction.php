@@ -12,6 +12,7 @@ use App\Http\Controllers\Auction\MyParticipationController;
 use App\Http\Controllers\Auction\OnlinePaymentController;
 use App\Http\Controllers\Auction\PaymentMethodController;
 use App\Http\Controllers\Auction\PaymentProviderController;
+use App\Http\Controllers\Auction\PaymentRecordController;
 use App\Http\Controllers\Auction\PaymentSubmissionController;
 use App\Http\Controllers\Auction\PaymentWebhookController;
 use App\Http\Controllers\Auction\PayoutDestinationController;
@@ -61,6 +62,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user', AttachServerTime::class])-
         Route::post('/{auction}/reopen', [AuctionController::class, 'reopen']);
         Route::post('/{auction}/submit-review', [AuctionController::class, 'submitForReview']);
         Route::post('/{auction}/seller-deposit', [AuctionController::class, 'submitSellerDeposit']);
+        Route::post('/{auction}/end-now', [AuctionController::class, 'endEarly'])->middleware('throttle:auction-participation');
         Route::post('/{auction}/register', [AuctionController::class, 'register'])->middleware('throttle:auction-participation');
         Route::post('/{auction}/accept-terms', [AuctionController::class, 'acceptTerms'])->middleware('throttle:auction-participation');
         Route::post('/{auction}/bidder-deposit', [AuctionController::class, 'submitBidderDeposit']);
@@ -108,6 +110,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/payouts/{sellerPayout}/mark-failed', [SellerPayoutController::class, 'markFailed']);
     Route::post('/payouts/{sellerPayout}/hold', [SellerPayoutController::class, 'hold']);
     Route::post('/payouts/{sellerPayout}/release', [SellerPayoutController::class, 'release']);
+    Route::post('/{auction}/end-now', [AuctionController::class, 'endEarly']);
     Route::post('/{auction}/review', [AuctionController::class, 'review']);
     Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
     Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);
@@ -116,6 +119,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::post('/{auction}/participants/{participant}/unblock', [AuctionController::class, 'unblockParticipant']);
     Route::get('/{auction}/activity', [AuctionAuditController::class, 'activity']);
     Route::get('/{auction}/status-history', [AuctionAuditController::class, 'statusHistory']);
+    Route::get('/payments', [PaymentRecordController::class, 'index']);
+    Route::get('/payments/{record}', [PaymentRecordController::class, 'show']);
+    Route::post('/payments/{record}/refund', [PaymentRecordController::class, 'refund']);
     Route::get('/payment-submissions', [PaymentSubmissionController::class, 'index']);
     Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
     Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review']);

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Resources\Auction;
 
 use App\Domain\Auction\Enums\AuctionDepositStatus;
+use App\Domain\Auction\Enums\PaymentChannel;
 use App\Models\Auction\PaymentSubmission;
+use App\Models\Auction\RefundTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
@@ -35,6 +37,9 @@ final class AuctionDepositResource extends JsonResource
             'candidate_rank' => isset($metadata['candidate_rank']) ? (int) $metadata['candidate_rank'] : null,
             'hold_metadata' => $metadata,
             'hold_expires_at' => $this->hold_expires_at?->toIso8601String(),
+            'held_at' => $this->held_at?->toIso8601String(),
+            'payment' => $this->when($canReviewPayments, fn () => $this->paymentPayload()),
+            'refunds' => $this->when($canReviewPayments, fn () => $this->refundsPayload()),
             'refund_eligibility' => $this->refundEligibility(),
             'expected_release_condition' => $this->expectedReleaseCondition(),
             'user' => $this->when(
@@ -45,6 +50,49 @@ final class AuctionDepositResource extends JsonResource
                 ]
             ),
         ];
+    }
+
+    private function paymentPayload(): ?array
+    {
+        $payment = $this->relationLoaded('paymentTransaction') ? $this->paymentTransaction : null;
+
+        if ($payment === null) {
+            return null;
+        }
+
+        $method = $payment->relationLoaded('paymentMethod') ? $payment->paymentMethod : null;
+
+        return [
+            'id' => $payment->public_id,
+            'channel' => $payment->isOnline() ? PaymentChannel::Online->value : PaymentChannel::Manual->value,
+            'status' => $payment->status->value,
+            'provider' => $payment->provider,
+            'provider_transaction_id' => $payment->provider_transaction_id,
+            'paid_amount' => MoneyResource::make((int) $payment->amount_minor, (string) $payment->currency_code),
+            'paid_at' => $payment->processed_at?->toIso8601String(),
+            'payment_method' => $method === null ? null : [
+                'id' => $method->public_id,
+                'name' => $method->name,
+            ],
+        ];
+    }
+
+    private function refundsPayload(): array
+    {
+        if (! $this->relationLoaded('refunds')) {
+            return [];
+        }
+
+        return $this->refunds
+            ->map(fn (RefundTransaction $refund): array => [
+                'id' => $refund->public_id,
+                'status' => $refund->status->value,
+                'amount' => MoneyResource::make((int) $refund->amount_minor, (string) $refund->currency_code),
+                'provider' => $refund->provider,
+                'succeeded_at' => $refund->succeeded_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
     }
 
     private function publicMetadata(): array

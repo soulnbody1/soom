@@ -7,6 +7,7 @@ return [
         'auction.cancel',
         'auction.cancel.admin',
         'auction.cancel.compliance',
+        'auction.end_early',
         'auction.payment.review',
         'auction.payment.approve',
         'auction.refund.execute',

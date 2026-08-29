@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 final class AuctionDeposit extends Model
 {
@@ -64,5 +65,20 @@ final class AuctionDeposit extends Model
     public function paymentSubmissions(): HasMany
     {
         return $this->hasMany(PaymentSubmission::class, 'deposit_id');
+    }
+
+    public function paymentTransaction(): HasOne
+    {
+        return $this->hasOne(PaymentTransaction::class, 'successful_obligation_key', 'obligation_key');
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(RefundTransaction::class, 'deposit_id');
+    }
+
+    public function getObligationKeyAttribute(): string
+    {
+        return 'deposit:'.$this->id;
     }
 }

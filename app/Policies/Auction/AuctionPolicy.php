@@ -83,6 +83,16 @@ final class AuctionPolicy
             && in_array($auction->status, [AuctionStatus::Scheduled, AuctionStatus::Live], true);
     }
 
+    public function endEarly(User $user, Auction $auction): bool
+    {
+        if ($auction->status !== AuctionStatus::Live) {
+            return false;
+        }
+
+        return $user->id === $auction->seller_id
+            || $this->hasAuctionPermission($user, 'auction.end_early');
+    }
+
     public function bid(User $user, Auction $auction): bool
     {
         return $user->id !== $auction->seller_id && $auction->status === AuctionStatus::Live;

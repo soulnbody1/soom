@@ -36,6 +36,7 @@ use App\Services\Auction\Actions\CancelAuctionAction;
 use App\Services\Auction\Actions\ConfirmAuctionHandoverBySellerAction;
 use App\Services\Auction\Actions\ConfirmAuctionReceiptByWinnerAction;
 use App\Services\Auction\Actions\CreateAuctionAction;
+use App\Services\Auction\Actions\FinalizeAuctionAction;
 use App\Services\Auction\Actions\ListAdminAuctionsAction;
 use App\Services\Auction\Actions\ListPublicAuctionsAction;
 use App\Services\Auction\Actions\ListSellerAuctionsAction;
@@ -296,6 +297,23 @@ final class AuctionController extends Controller
         );
 
         return $this->auctionResponse($cancelled, __('auction.messages.auction_cancelled'));
+    }
+
+    #[Endpoint(
+        title: 'إنهاء المزاد الآن',
+        description: 'ينهي مزادًا مباشرًا قبل موعد انتهائه بقبول أعلى مزايدة حالية. يمر الإنهاء بمسار الإنهاء الطبيعي نفسه فيحدد الفائز وينشئ التسوية ويطبّق العربونات ويصدر الإشعارات. يُرفض الطلب إذا لم تكن هناك مزايدات أو كانت أعلى مزايدة أقل من السعر الاحتياطي، وإذا لم يكن المزاد مباشرًا. متاح لصاحب المزاد ولمن يملك صلاحية الإنهاء المبكر.'
+    )]
+    #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
+    #[Response(200, description: 'المزاد بعد إنهائه مع التسوية إن وُجدت.')]
+    #[Response(409, description: 'المزاد ليس مباشرًا (early_end_not_available).')]
+    #[Response(422, description: 'لا توجد مزايدات أو أعلى مزايدة أقل من السعر الاحتياطي.')]
+    public function endEarly(Auction $auction, FinalizeAuctionAction $action): JsonResponse
+    {
+        Gate::authorize('endEarly', $auction);
+
+        $ended = $action->executeEarly($auction, (int) Auth::id(), Auth::user()?->role === 'admin' ? 'admin' : 'user');
+
+        return $this->auctionResponse($ended, __('auction.messages.auction_ended_early'));
     }
 
     #[Endpoint(
@@ -606,6 +624,8 @@ final class AuctionController extends Controller
             $relations[] = 'deposits.paymentSubmissions.user';
             $relations[] = 'deposits.paymentSubmissions.paymentMethod';
             $relations[] = 'deposits.paymentSubmissions.transaction.refunds';
+            $relations[] = 'deposits.paymentTransaction.paymentMethod';
+            $relations[] = 'deposits.refunds';
         }
 
         if (Gate::forUser($user)->allows('resolveDispute', $auction)) {
