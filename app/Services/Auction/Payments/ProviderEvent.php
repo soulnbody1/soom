@@ -11,6 +11,7 @@ final readonly class ProviderEvent
         public string $eventType,
         public string $providerTransactionId,
         public bool $signatureVerified,
+        public ?string $merchantReference = null,
         public array $payload = [],
     ) {}
 }

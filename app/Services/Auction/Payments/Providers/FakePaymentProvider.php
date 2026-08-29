@@ -88,6 +88,7 @@ final class FakePaymentProvider implements PaymentProvider
             failureCode: $charge['failure_code'],
             providerFeeMinor: $charge['provider_fee_minor'],
             settlementReference: $charge['settlement_reference'],
+            merchantReference: $charge['merchant_reference'],
             payload: [
                 'status' => $charge['status']->value,
                 'merchant_reference' => $charge['merchant_reference'],
@@ -106,6 +107,7 @@ final class FakePaymentProvider implements PaymentProvider
             eventType: (string) ($payload['event_type'] ?? ''),
             providerTransactionId: (string) ($payload['provider_transaction_id'] ?? ''),
             signatureVerified: $signature !== '' && hash_equals($expected, $signature),
+            merchantReference: isset($payload['merchant_reference']) ? (string) $payload['merchant_reference'] : null,
             payload: $payload,
         );
     }

@@ -194,6 +194,14 @@ final class AuctionPaymentRepository
             ->first();
     }
 
+    public function lockTransactionByMerchantReference(string $provider, string $merchantReference): ?PaymentTransaction
+    {
+        return PaymentTransaction::where('provider', $provider)
+            ->where('public_id', $merchantReference)
+            ->lockForUpdate()
+            ->first();
+    }
+
     public function lockTransaction(int $transactionId): PaymentTransaction
     {
         return PaymentTransaction::whereKey($transactionId)->lockForUpdate()->firstOrFail();

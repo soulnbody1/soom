@@ -131,7 +131,7 @@ final class AppliedDepositRefundTest extends TestCase
         $this->assertSame(2, RefundTransaction::where('payment_transaction_id', $payment->id)->count());
         $this->assertSame(10_000, $deposit->refunded_amount_minor);
         $this->assertSame(0, $deposit->applied_amount_minor);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $payment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
     }
 
     public function test_rejects_forfeited_deposit_refund(): void

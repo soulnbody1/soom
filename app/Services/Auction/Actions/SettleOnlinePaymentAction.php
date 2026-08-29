@@ -40,7 +40,7 @@ final class SettleOnlinePaymentAction
         return $this->transaction->run(function () use ($transactionId, $status): PaymentTransaction {
             $transaction = $this->payments->lockTransaction($transactionId);
 
-            $this->assertProviderReference($transaction, $status);
+            $this->bindProviderReference($transaction, $status);
 
             if ($transaction->status === $status->status) {
                 return $transaction;
@@ -119,6 +119,8 @@ final class SettleOnlinePaymentAction
 
         $transaction->forceFill([
             'failure_code' => $mismatch,
+            'captured_amount_minor' => $capturedAmount,
+            'captured_currency_code' => $capturedCurrency,
             'amount_minor' => $representable ? $capturedAmount : $expectedAmount,
             'currency_code' => $representable ? $capturedCurrency : $expectedCurrency,
         ]);
@@ -171,11 +173,30 @@ final class SettleOnlinePaymentAction
         return $transaction->refresh();
     }
 
-    private function assertProviderReference(PaymentTransaction $transaction, ProviderPaymentStatus $status): void
+    private function bindProviderReference(PaymentTransaction $transaction, ProviderPaymentStatus $status): void
     {
-        if ((string) $transaction->provider_transaction_id !== $status->providerTransactionId) {
+        $local = (string) $transaction->provider_transaction_id;
+
+        if ($local === $status->providerTransactionId) {
+            return;
+        }
+
+        if ($local !== '') {
             throw AuctionException::domain('provider_transaction_mismatch');
         }
+
+        if ($status->providerTransactionId === '') {
+            throw AuctionException::domain('provider_transaction_mismatch');
+        }
+
+        $transaction->forceFill(['provider_transaction_id' => $status->providerTransactionId]);
+        $this->payments->saveTransaction($transaction);
+
+        $this->audit->log('auction.online_payment_reference_recovered', $transaction->auction, null, 'system', [
+            'payment_transaction_public_id' => $transaction->public_id,
+            'provider' => $transaction->provider,
+            'provider_transaction_id' => $status->providerTransactionId,
+        ]);
     }
 
     private function mismatchReason(PaymentTransaction $transaction, ProviderPaymentStatus $status): ?string

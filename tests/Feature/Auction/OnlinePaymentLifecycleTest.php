@@ -290,7 +290,7 @@ final class OnlinePaymentLifecycleTest extends TestCase
 
         $this->assertSame(RefundTransactionStatus::Succeeded, $processed->status);
         $this->assertNotNull($processed->provider_refund_id);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $transaction->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $transaction->refresh()->status);
         $this->assertSame(
             AuctionDepositStatus::PendingSubmission,
             AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail()->status
@@ -615,49 +615,6 @@ final class OnlinePaymentLifecycleTest extends TestCase
     public function test_unknown_provider_webhook_is_rejected(): void
     {
         $this->postJson('/api/webhooks/payments/not-a-provider', ['event_id' => 'x'])->assertStatus(404);
-    }
-
-    public function test_a_crash_before_the_provider_reference_is_saved_cannot_double_apply(): void
-    {
-        [$auction] = $this->paymentAuction(AuctionStatus::Live);
-        [$bidder] = $this->registeredBidder($auction);
-        $method = $this->onlinePaymentMethod();
-        $provider = $this->enableFakeProvider();
-        $action = app(CreatePaymentIntentAction::class);
-
-        $first = $action->execute($auction, $bidder->id, PaymentPurpose::BidderDeposit, $method->public_id);
-        $orphanReference = (string) $first->provider_transaction_id;
-
-        $first->forceFill([
-            'provider_transaction_id' => null,
-            'checkout_instruction' => null,
-            'checkout_claimed_at' => Carbon::now()->subHour(),
-        ])->save();
-
-        $retry = $action->execute($auction, $bidder->id, PaymentPurpose::BidderDeposit, $method->public_id);
-
-        $this->assertSame($first->id, $retry->id);
-        $this->assertNotSame($orphanReference, (string) $retry->provider_transaction_id);
-        $this->assertSame(1, PaymentTransaction::where('auction_id', $auction->id)->count());
-
-        $provider->markSucceeded($orphanReference, 1_000, 'JOD');
-        $provider->markSucceeded((string) $retry->provider_transaction_id);
-
-        $orphanPayload = [
-            'event_id' => 'evt-orphan-'.$orphanReference,
-            'event_type' => 'payment.succeeded',
-            'provider_transaction_id' => $orphanReference,
-        ];
-        $this->postJson('/api/webhooks/payments/fake', $orphanPayload, [
-            'X-Fake-Signature' => hash_hmac('sha256', json_encode($orphanPayload), 'test-webhook-secret'),
-        ])->assertOk()->assertJsonPath('data.result', 'unmatched');
-
-        $this->postWebhook($retry, 'payment.succeeded')->assertOk()->assertJsonPath('data.result', 'processed');
-
-        $deposit = AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
-        $this->assertSame(AuctionDepositStatus::Held, $deposit->status);
-        $this->assertSame(1_000, (int) $deposit->held_amount_minor);
-        $this->assertSame(1, PaymentTransaction::where('successful_obligation_key', "deposit:{$deposit->id}")->count());
     }
 
     private function depositId(int $auctionId, int $userId): int

@@ -6,9 +6,11 @@ namespace App\Services\Auction\Actions;
 
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Models\Auction\PaymentProviderEvent;
+use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\PaymentProviderEventRepository;
 use App\Services\Auction\Payments\PaymentProviderFactory;
+use App\Services\Auction\Payments\ProviderEvent;
 use App\Services\Auction\Payments\ProviderPayloadRedactor;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Http\Request;
@@ -71,9 +73,7 @@ final class HandlePaymentWebhookAction
             return 'duplicate';
         }
 
-        $transaction = $this->transaction->run(
-            fn () => $this->payments->lockTransactionByProviderReference($providerCode, $event->providerTransactionId)
-        );
+        $transaction = $this->resolveTransaction($providerCode, $event);
 
         if (! $transaction) {
             $this->markProcessed($record, 'transaction_not_found');
@@ -93,6 +93,19 @@ final class HandlePaymentWebhookAction
         $this->markProcessed($record, null);
 
         return 'processed';
+    }
+
+    private function resolveTransaction(string $providerCode, ProviderEvent $event): ?PaymentTransaction
+    {
+        return $this->transaction->run(function () use ($providerCode, $event): ?PaymentTransaction {
+            $matched = $this->payments->lockTransactionByProviderReference($providerCode, $event->providerTransactionId);
+
+            if ($matched || $event->merchantReference === null || $event->merchantReference === '') {
+                return $matched;
+            }
+
+            return $this->payments->lockTransactionByMerchantReference($providerCode, $event->merchantReference);
+        });
     }
 
     private function recordEvent(

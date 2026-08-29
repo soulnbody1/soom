@@ -76,7 +76,7 @@ final class AuctionRefundLifecycleTest extends TestCase
         $this->assertSame('provider-ref-1', $processed->provider_refund_id);
         $this->assertSame(10_000, $deposit->refunded_amount_minor);
         $this->assertSame(0, $deposit->held_amount_minor);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $payment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
         $this->assertSame(1, AuctionActivityLog::where('auction_id', $processed->auction_id)->where('event_type', 'auction.refund_succeeded')->count());
         $this->assertSame(1, OutboxMessage::where('aggregate_id', $processed->auction_id)->where('event_type', 'auction.refund_succeeded')->count());
     }

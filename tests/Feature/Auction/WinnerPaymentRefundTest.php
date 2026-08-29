@@ -64,7 +64,7 @@ final class WinnerPaymentRefundTest extends TestCase
 
         $this->assertSame(RefundTransactionStatus::Succeeded, $completed->status);
         $this->assertSame(100_000, (int) $completed->amount_minor);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $transaction->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $transaction->refresh()->status);
     }
 
     public function test_a_winner_payment_refund_is_processed_end_to_end_by_the_provider(): void

@@ -66,8 +66,16 @@ final class AuctionRefundCompletion
             throw AuctionException::domain('refund_exceeds_available');
         }
 
-        if ($payment && ($payment->status !== PaymentTransactionStatus::Succeeded || $amount > (int) $payment->amount_minor)) {
-            throw AuctionException::domain('refund_exceeds_available');
+        if ($payment) {
+            if ($payment->status !== PaymentTransactionStatus::Succeeded) {
+                throw AuctionException::domain('refund_exceeds_available');
+            }
+
+            $alreadyRefunded = $this->refunds->succeededAmountForPayment($payment->id);
+
+            if ($alreadyRefunded + $amount > (int) $payment->amount_minor) {
+                throw AuctionException::domain('refund_exceeds_available');
+            }
         }
 
         $allocation = null;
@@ -113,15 +121,6 @@ final class AuctionRefundCompletion
             'succeeded_at' => $now,
         ]);
         $this->refunds->save($refund);
-
-        if (
-            $payment
-            && $payment->status !== PaymentTransactionStatus::Reversed
-            && $this->refunds->succeededAmountForPayment($payment->id) >= (int) $payment->amount_minor
-        ) {
-            $payment->forceFill(['status' => PaymentTransactionStatus::Reversed]);
-            $this->payments->saveTransaction($payment);
-        }
 
         if ($deposit && $allocation) {
             $this->applyDepositAllocation($deposit, $allocation);

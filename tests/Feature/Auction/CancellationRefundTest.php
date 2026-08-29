@@ -115,7 +115,7 @@ final class CancellationRefundTest extends TestCase
         $this->assertSame(0, RefundTransaction::where('auction_id', $auction->id)->count());
     }
 
-    public function test_payment_transaction_reverses_only_after_refund_succeeds(): void
+    public function test_a_succeeded_payment_and_its_refund_stay_two_separate_financial_events(): void
     {
         [$auction, $seller] = $this->auction(AuctionStatus::Scheduled);
         $deposit = $this->deposit($auction, $seller, 10_000);
@@ -130,7 +130,8 @@ final class CancellationRefundTest extends TestCase
         app(RefundAuctionDepositAction::class)->confirmSucceeded($refund->refresh(), 'provider-refund-'.Str::ulid());
 
         $this->assertSame(RefundTransactionStatus::Succeeded, $refund->refresh()->status);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $payment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
+        $this->assertNotNull($payment->refresh()->successful_obligation_key);
         $this->assertSame(1, RefundTransaction::where('payment_transaction_id', $payment->id)->count());
     }
 
@@ -152,7 +153,7 @@ final class CancellationRefundTest extends TestCase
 
         $this->assertSame(RefundTransactionStatus::Succeeded, $completed->status);
         $this->assertSame(90_000, (int) $completed->amount_minor);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $payment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
     }
 
     public function test_cancellation_deposit_and_settlement_refunds_both_complete_and_keep_deposit_math(): void
@@ -176,8 +177,8 @@ final class CancellationRefundTest extends TestCase
                 ->where('status', RefundTransactionStatus::Succeeded->value)
                 ->count()
         );
-        $this->assertSame(PaymentTransactionStatus::Reversed, $depositPayment->refresh()->status);
-        $this->assertSame(PaymentTransactionStatus::Reversed, $settlementPayment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $depositPayment->refresh()->status);
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $settlementPayment->refresh()->status);
 
         $deposit->refresh();
         $this->assertSame(10_000, (int) $deposit->refunded_amount_minor);

@@ -152,6 +152,7 @@ final class RefundController extends Controller
         $refund->loadMissing([
             'auction:id,public_id,title',
             'user:id,name',
+            'paymentTransaction',
         ]);
 
         return [
@@ -170,10 +171,30 @@ final class RefundController extends Controller
             'reason' => $refund->reason,
             'attempt_count' => (int) $refund->attempt_count,
             'last_error' => $refund->last_error,
+            'captured' => $this->capturedPayload($refund),
             'destination' => $this->destinationPayload($refund, $fallback),
             'has_proof' => $refund->proof_path !== null,
             'created_at' => $refund->created_at?->toIso8601String(),
             'succeeded_at' => $refund->succeeded_at?->toIso8601String(),
+        ];
+    }
+
+    private function capturedPayload(RefundTransaction $refund): ?array
+    {
+        $payment = $refund->paymentTransaction;
+
+        if (! $payment || $payment->captured_amount_minor === null) {
+            return null;
+        }
+
+        return [
+            'amount_minor' => (int) $payment->captured_amount_minor,
+            'currency_code' => $payment->captured_currency_code,
+            'matches_refund' => (int) $payment->captured_amount_minor === (int) $refund->amount_minor
+                && strtoupper((string) $payment->captured_currency_code) === strtoupper((string) $refund->currency_code),
+            'provider' => $payment->provider,
+            'provider_transaction_id' => $payment->provider_transaction_id,
+            'failure_code' => $payment->failure_code,
         ];
     }
 

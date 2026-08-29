@@ -60,14 +60,12 @@ final class CreatePaymentIntentAction
 
             $pending = $this->payments->lockPendingOnlineTransactionForObligation($obligationKey, $providerCode);
 
-            if ($pending && ! $this->isExpired($pending)) {
-                if ($pending->checkout_instruction !== null) {
-                    return $pending;
-                }
-
-                $this->claimCheckout($pending);
-
+            if ($pending && $pending->checkout_instruction !== null && ! $this->isExpired($pending)) {
                 return $pending;
+            }
+
+            if ($pending && $pending->checkout_instruction === null) {
+                $this->assertCheckoutNotInFlight($pending);
             }
 
             $attempt = $this->payments->onlineAttemptCount($obligationKey, $providerCode) + 1;
@@ -87,10 +85,13 @@ final class CreatePaymentIntentAction
                     'currency_code' => $obligation->currencyCode,
                     'provider' => $providerCode,
                     'expires_at' => Carbon::now()->addSeconds($this->intentTtlSeconds()),
+                    'checkout_claimed_at' => Carbon::now(),
                 ]
             );
 
-            $this->claimCheckout($created);
+            if ($created->checkout_claimed_at === null) {
+                $this->claimCheckout($created);
+            }
 
             return $created;
         });
@@ -149,14 +150,19 @@ final class CreatePaymentIntentAction
 
     private function claimCheckout(PaymentTransaction $transaction): void
     {
+        $this->assertCheckoutNotInFlight($transaction);
+
+        $transaction->forceFill(['checkout_claimed_at' => Carbon::now()]);
+        $this->payments->saveTransaction($transaction);
+    }
+
+    private function assertCheckoutNotInFlight(PaymentTransaction $transaction): void
+    {
         $claimedAt = $transaction->checkout_claimed_at;
 
         if ($claimedAt !== null && $claimedAt->addSeconds($this->claimSeconds())->isFuture()) {
             throw AuctionException::domain('payment_checkout_in_progress', [], 409);
         }
-
-        $transaction->forceFill(['checkout_claimed_at' => Carbon::now()]);
-        $this->payments->saveTransaction($transaction);
     }
 
     private function isExpired(PaymentTransaction $transaction): bool

@@ -16,6 +16,7 @@ final readonly class ProviderPaymentStatus
         public ?string $failureCode = null,
         public ?int $providerFeeMinor = null,
         public ?string $settlementReference = null,
+        public ?string $merchantReference = null,
         public array $payload = [],
     ) {}
 }
