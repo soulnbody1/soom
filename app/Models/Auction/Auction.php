@@ -209,6 +209,11 @@ final class Auction extends Model
         return $this->hasMany(PaymentSubmission::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(RefundTransaction::class);
+    }
+
     public function metric(): HasOne
     {
         return $this->hasOne(AuctionMetric::class);

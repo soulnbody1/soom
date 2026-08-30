@@ -623,10 +623,11 @@ final class AuctionController extends Controller
             $relations[] = 'deposits.user';
             $relations[] = 'deposits.paymentSubmissions.user';
             $relations[] = 'deposits.paymentSubmissions.paymentMethod';
-            $relations[] = 'deposits.paymentSubmissions.transaction.refunds';
+            $relations[] = 'deposits.paymentSubmissions.transaction';
             $relations[] = 'deposits.paymentTransaction.paymentMethod';
             $relations[] = 'deposits.paymentTransaction.submission.paymentMethod';
             $relations[] = 'deposits.refunds';
+            $relations[] = 'refunds';
         }
 
         if (Gate::forUser($user)->allows('resolveDispute', $auction)) {

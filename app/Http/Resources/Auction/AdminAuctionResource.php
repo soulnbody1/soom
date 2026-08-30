@@ -25,9 +25,7 @@ final class AdminAuctionResource extends JsonResource
         $user = $request->user();
         $canReviewPayments = $user && Gate::forUser($user)->allows('viewAny', PaymentSubmission::class);
         $canManageSettlement = $user
-            && $this->relationLoaded('settlement')
-            && $this->settlement
-            && Gate::forUser($user)->allows('override', $this->settlement);
+            && Gate::forUser($user)->allows('override', $this->settlement ?? new AuctionSettlement);
         $canResolveDisputes = $user && Gate::forUser($user)->allows('resolveDispute', $this->resource);
 
         $data = [
@@ -114,10 +112,7 @@ final class AdminAuctionResource extends JsonResource
         if ($canReviewPayments) {
             $data['deposits'] = AuctionDepositResource::collection($this->whenLoaded('deposits'));
             $data['payment_submissions'] = PaymentSubmissionResource::collection($this->paymentSubmissions());
-            $refunds = $this->refunds($user);
-            if ($refunds !== []) {
-                $data['refunds'] = $refunds;
-            }
+            $data['refunds'] = $this->refundRows();
         }
 
         if ($canManageSettlement) {
@@ -132,7 +127,7 @@ final class AdminAuctionResource extends JsonResource
                 'settlement' => new AuctionSettlementResource($this->settlement),
             ];
 
-            if ($this->settlement->relationLoaded('sellerPayout') && $this->settlement->sellerPayout) {
+            if ($this->settlement && $this->settlement->relationLoaded('sellerPayout') && $this->settlement->sellerPayout) {
                 $payout = $this->settlement->sellerPayout;
                 $data['financial_details']['seller_payout'] = [
                     'id' => $payout->public_id,
@@ -172,7 +167,12 @@ final class AdminAuctionResource extends JsonResource
             'mode' => $mode->value,
             'mode_label' => __('content_review.modes.'.$mode->value),
             'current' => $review === null ? null : (new ContentReviewResource($review))->toArray($request),
-            'available_actions' => app(ContentReviewActionResolver::class)->for($review, $mode),
+            'available_actions' => app(ContentReviewActionResolver::class)->for(
+                $review,
+                $mode,
+                ReviewableSubjectType::Auction,
+                (int) $this->id
+            ),
         ];
     }
 
@@ -311,18 +311,14 @@ final class AdminAuctionResource extends JsonResource
             ->flatMap(fn ($deposit): Collection => $deposit->paymentSubmissions);
     }
 
-    private function refunds(?object $user): array
+    private function refundRows(): array
     {
-        if (! $user) {
+        if (! $this->relationLoaded('refunds')) {
             return [];
         }
 
-        return $this->paymentSubmissions()
-            ->filter(fn ($submission): bool => $submission->relationLoaded('transaction') && $submission->transaction?->relationLoaded('refunds'))
-            ->flatMap(fn ($submission): Collection => $submission->transaction->refunds)
-            ->filter(fn ($refund): bool => Gate::forUser($user)->allows('execute', $refund)
-                || Gate::forUser($user)->allows('confirmManual', $refund)
-                || Gate::forUser($user)->allows('cancel', $refund))
+        return $this->refunds
+            ->sortByDesc('id')
             ->map(fn ($refund): array => [
                 'id' => $refund->public_id,
                 'status' => $refund->status->value,

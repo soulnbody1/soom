@@ -6,6 +6,7 @@ namespace App\Services\ContentReview\Support;
 
 use App\Domain\ContentReview\Enums\ContentReviewStatus;
 use App\Domain\ContentReview\Enums\DecisionActorType;
+use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Models\ContentReview\ContentReview;
 use App\Models\ContentReview\ContentReviewDecision;
@@ -24,7 +25,10 @@ final class ContentReviewActionResolver
 
     public const OVERRIDE = 'override';
 
-    public function __construct(private readonly ReviewModeResolver $modes) {}
+    public function __construct(
+        private readonly ReviewModeResolver $modes,
+        private readonly ReviewSubjectRegistry $subjects,
+    ) {}
 
     public function isActive(ContentReview $review): bool
     {
@@ -66,20 +70,29 @@ final class ContentReviewActionResolver
             && ! $this->hasHumanDecision($review);
     }
 
-    public function for(?ContentReview $review, ?ReviewMode $mode = null): array
-    {
+    public function for(
+        ?ContentReview $review,
+        ?ReviewMode $mode = null,
+        ?ReviewableSubjectType $type = null,
+        ?int $subjectId = null
+    ): array {
         $actions = [];
+        $reviewable = $this->subjectIsReviewable($review, $type, $subjectId);
+
+        if ($review !== null && $this->isCancellable($review)) {
+            $actions[] = self::CANCEL;
+        }
+
+        if (! $reviewable) {
+            return $actions;
+        }
 
         if ($this->providerModeIsActive($review, $mode)) {
-            $actions[] = self::RUN;
+            array_unshift($actions, self::RUN);
         }
 
         if ($review !== null && $this->isRetryable($review)) {
             $actions[] = self::RETRY;
-        }
-
-        if ($review !== null && $this->isCancellable($review)) {
-            $actions[] = self::CANCEL;
         }
 
         $actions[] = self::FORCE_MANUAL;
@@ -90,6 +103,21 @@ final class ContentReviewActionResolver
         }
 
         return $actions;
+    }
+
+    public function subjectIsReviewable(
+        ?ContentReview $review,
+        ?ReviewableSubjectType $type = null,
+        ?int $subjectId = null
+    ): bool {
+        $type ??= $review?->subject_type;
+        $subjectId ??= $review === null ? null : (int) $review->subject_id;
+
+        if ($type === null || $subjectId === null || ! $this->subjects->supports($type)) {
+            return false;
+        }
+
+        return $this->subjects->for($type)->isReviewable($subjectId);
     }
 
     private function providerModeIsActive(?ContentReview $review, ?ReviewMode $mode): bool
