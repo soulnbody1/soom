@@ -62,6 +62,10 @@ final class AuctionDepositResource extends JsonResource
 
         $method = $payment->relationLoaded('paymentMethod') ? $payment->paymentMethod : null;
 
+        if ($method === null && $payment->relationLoaded('submission')) {
+            $method = $payment->submission?->paymentMethod;
+        }
+
         return [
             'id' => $payment->public_id,
             'channel' => $payment->isOnline() ? PaymentChannel::Online->value : PaymentChannel::Manual->value,

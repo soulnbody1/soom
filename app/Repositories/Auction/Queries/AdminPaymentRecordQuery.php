@@ -18,7 +18,7 @@ final class AdminPaymentRecordQuery
         'auction:id,public_id,title',
         'user:id,name',
         'paymentMethod',
-        'submission',
+        'submission.paymentMethod',
         'refunds',
     ];
 

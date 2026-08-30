@@ -117,6 +117,11 @@ final class PaymentRecordDTO
     private function paymentMethod(): ?array
     {
         $method = $this->record->relationLoaded('paymentMethod') ? $this->record->paymentMethod : null;
+        $submission = $this->submission();
+
+        if ($method === null && $submission?->relationLoaded('paymentMethod')) {
+            $method = $submission->paymentMethod;
+        }
 
         return $method === null ? null : [
             'id' => $method->public_id,

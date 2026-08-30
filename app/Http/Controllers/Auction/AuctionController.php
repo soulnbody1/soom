@@ -625,6 +625,7 @@ final class AuctionController extends Controller
             $relations[] = 'deposits.paymentSubmissions.paymentMethod';
             $relations[] = 'deposits.paymentSubmissions.transaction.refunds';
             $relations[] = 'deposits.paymentTransaction.paymentMethod';
+            $relations[] = 'deposits.paymentTransaction.submission.paymentMethod';
             $relations[] = 'deposits.refunds';
         }
 
