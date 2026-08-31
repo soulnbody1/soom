@@ -94,6 +94,9 @@ final class AuctionRefundRepository
         return RefundTransaction::with([
             'auction:id,public_id,title',
             'user:id,name',
+            // The admin payload reads the captured amount off the source payment,
+            // so it has to come with the page instead of one query per row.
+            'paymentTransaction',
         ])
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($filters['auction_id'] ?? null, function (Builder $query, string $auctionId): void {

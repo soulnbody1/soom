@@ -66,7 +66,8 @@ final class RefundController extends Controller
         return $this->sendResponse(
             $paginator->through(fn (RefundTransaction $refund): array => $this->refundPayload(
                 $refund,
-                $defaults[(int) $refund->user_id] ?? null
+                $defaults[(int) $refund->user_id] ?? null,
+                true
             )),
             __('auction.messages.refunds_fetched')
         );
@@ -147,8 +148,11 @@ final class RefundController extends Controller
         ], __('auction.messages.refund_proof_url_created'));
     }
 
-    private function refundPayload(RefundTransaction $refund, ?PayoutDestination $fallback = null): array
-    {
+    private function refundPayload(
+        RefundTransaction $refund,
+        ?PayoutDestination $fallback = null,
+        bool $fallbackResolved = false
+    ): array {
         $refund->loadMissing([
             'auction:id,public_id,title',
             'user:id,name',
@@ -172,7 +176,7 @@ final class RefundController extends Controller
             'attempt_count' => (int) $refund->attempt_count,
             'last_error' => $refund->last_error,
             'captured' => $this->capturedPayload($refund),
-            'destination' => $this->destinationPayload($refund, $fallback),
+            'destination' => $this->destinationPayload($refund, $fallback, $fallbackResolved),
             'has_proof' => $refund->proof_path !== null,
             'created_at' => $refund->created_at?->toIso8601String(),
             'succeeded_at' => $refund->succeeded_at?->toIso8601String(),
@@ -198,8 +202,11 @@ final class RefundController extends Controller
         ];
     }
 
-    private function destinationPayload(RefundTransaction $refund, ?PayoutDestination $fallback): ?array
-    {
+    private function destinationPayload(
+        RefundTransaction $refund,
+        ?PayoutDestination $fallback,
+        bool $fallbackResolved = false
+    ): ?array {
         if ($refund->hasDestinationSnapshot()) {
             return [
                 'source' => 'snapshot',
@@ -207,6 +214,10 @@ final class RefundController extends Controller
                 'identifier_type' => $refund->identifier_type,
                 'identifier_value' => $refund->identifier_value,
             ];
+        }
+
+        if ($fallback === null && $fallbackResolved) {
+            return null;
         }
 
         $default = $fallback ?? app(PayoutDestinationRepository::class)->defaultFor((int) $refund->user_id);

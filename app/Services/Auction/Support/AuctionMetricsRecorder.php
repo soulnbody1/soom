@@ -6,8 +6,6 @@ namespace App\Services\Auction\Support;
 
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionMetric;
-use App\Models\Auction\AuctionView;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -28,19 +26,24 @@ final class AuctionMetricsRecorder
             config('app.key'),
         ]));
 
-        $this->ensure($auction)->increment('views_count');
+        $now = Carbon::now();
+        $isNewViewer = DB::table('auction_views')->insertOrIgnore([
+            'auction_id' => $auction->id,
+            'user_id' => $userId,
+            'viewer_hash' => $viewerHash,
+            'viewed_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]) === 1;
 
-        try {
-            AuctionView::create([
-                'auction_id' => $auction->id,
-                'user_id' => $userId,
-                'viewer_hash' => $viewerHash,
-                'viewed_at' => Carbon::now(),
-            ]);
+        $counters = ['views_count' => 1];
 
-            AuctionMetric::where('auction_id', $auction->id)->increment('unique_views_count');
-        } catch (QueryException) {
-            // Unique viewer already counted; total views still increments.
+        if ($isNewViewer) {
+            $counters['unique_views_count'] = 1;
+        }
+
+        if (AuctionMetric::where('auction_id', $auction->id)->incrementEach($counters) === 0) {
+            $this->ensure($auction)->incrementEach($counters);
         }
     }
 

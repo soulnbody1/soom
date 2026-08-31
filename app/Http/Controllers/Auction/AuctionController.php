@@ -11,8 +11,8 @@ use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\DTO\Auction\CreateAuctionInputDTO;
 use App\DTO\Auction\UpdateDraftAuctionInputDTO;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auction\AdminAuctionIndexRequest;
 use App\Http\Requests\Auction\AcceptTermsActionRequest;
+use App\Http\Requests\Auction\AdminAuctionIndexRequest;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\CancelAuctionRequest;
 use App\Http\Requests\Auction\MarkWinnerDefaultedRequest;
@@ -183,7 +183,7 @@ final class AuctionController extends Controller
     {
         Gate::authorize('viewAny', Auction::class);
 
-        $loaded = $action->execute($auction, $request->user()?->id);
+        $loaded = $action->execute($auction, null);
         $this->loadAdminAuctionRelations($loaded, $request->user());
 
         return $this->sendResponse(new AdminAuctionResource($loaded), __('auction.messages.auction_fetched'));
@@ -650,10 +650,6 @@ final class AuctionController extends Controller
             $relations[] = 'deposits.paymentTransaction.submission.paymentMethod';
             $relations[] = 'deposits.refunds';
             $relations[] = 'refunds';
-        }
-
-        if (Gate::forUser($user)->allows('resolveDispute', $auction)) {
-            $relations[] = 'disputes';
         }
 
         $relations[] = 'activeContentReview.decisions.decidedBy:id,name';

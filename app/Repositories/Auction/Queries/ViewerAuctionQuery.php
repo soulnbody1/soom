@@ -56,7 +56,7 @@ final class ViewerAuctionQuery
 
     public function loadDetails(Auction $auction, ?int $viewerId): Auction
     {
-        return $auction->load(array_merge($this->relations($viewerId), ['country', 'state', 'city']));
+        return $auction->load($this->relations($viewerId));
     }
 
     public function relations(?int $viewerId): array
@@ -77,19 +77,19 @@ final class ViewerAuctionQuery
             return $relations;
         }
 
+        // Every viewer-scoped relation is filtered to the viewer, so the seller's
+        // own deposit arrives through `deposits` when the viewer is the seller —
+        // there is no separate `sellerDeposit` branch to load and throw away.
         return array_merge($relations, [
             'bids' => fn ($query) => $query->where('bidder_id', $viewerId)->orderBy('sequence_number'),
             'deposits' => fn ($query) => $query
                 ->where('user_id', $viewerId)
                 ->with([
+                    'refunds',
                     'paymentSubmissions.paymentMethod',
                     'paymentSubmissions.transaction.refunds' => fn ($refunds) => $refunds->where('user_id', $viewerId),
                 ]),
-            'sellerDeposit' => fn ($query) => $query->with([
-                'paymentSubmissions.paymentMethod',
-                'paymentSubmissions.transaction.refunds' => fn ($refunds) => $refunds->where('user_id', $viewerId),
-            ]),
-            'settlement.sellerPayout',
+            'settlement.sellerPayout' => fn ($query) => $query->where('seller_id', $viewerId),
             'refunds' => fn ($query) => $query->where('user_id', $viewerId),
         ]);
     }

@@ -11,11 +11,11 @@ use Illuminate\Database\Eloquent\Builder;
 final class PaymentSubmissionQuery
 {
     private const RELATIONS = [
-        'auction',
+        'auction:id,public_id,title',
         'paymentMethod',
         'deposit',
         'settlement',
-        'user',
+        'user:id,name',
     ];
 
     /**

@@ -65,7 +65,7 @@ final class UserAuctionResource extends JsonResource
             'my_payment_submissions' => $this->stableCollection($this->paymentSubmissionsFrom($deposits), PaymentSubmissionResource::class, $request),
             'my_refunds' => $this->myRefunds($viewer),
             'winner_settlement' => $isWinner ? $this->winnerSettlement($settlement) : null,
-            'seller_context' => $isSeller ? $this->sellerContext($settlement, $request) : null,
+            'seller_context' => $isSeller ? $this->sellerContext($settlement, $deposits, $request) : null,
             'handover_status' => ($isSeller || $isWinner) ? $this->handoverStatus($settlement) : null,
             'current_dispute' => $this->currentDispute($isSeller, $isWinner),
         ];
@@ -239,9 +239,9 @@ final class UserAuctionResource extends JsonResource
         ];
     }
 
-    private function sellerContext(?AuctionSettlement $settlement, Request $request): ?array
+    private function sellerContext(?AuctionSettlement $settlement, Collection $deposits, Request $request): ?array
     {
-        $sellerDeposit = $this->resource->relationLoaded('sellerDeposit') ? $this->resource->sellerDeposit : null;
+        $sellerDeposit = $deposits->firstWhere('type', 'seller');
         $currency = (string) $this->resource->currency_code;
 
         return [

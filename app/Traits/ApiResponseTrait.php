@@ -2,6 +2,7 @@
 
 namespace App\Traits;
 
+use App\Http\Middleware\AttachServerTime;
 use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -33,6 +34,10 @@ trait ApiResponseTrait
 
         if (! empty($extra)) {
             $response = array_merge($response, $extra);
+        }
+
+        if (request()->attributes->get(AttachServerTime::REQUEST_FLAG) === true) {
+            $response = AttachServerTime::stamp($response);
         }
 
         return response()->json($response, $status);

@@ -195,8 +195,7 @@ final class Auction extends Model
     public function settlement(): HasOne
     {
         return $this->hasOne(AuctionSettlement::class)
-            ->where('current_marker', 1)
-            ->latestOfMany();
+            ->where('current_marker', 1);
     }
 
     public function settlements(): HasMany
