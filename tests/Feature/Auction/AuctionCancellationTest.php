@@ -132,7 +132,7 @@ final class AuctionCancellationTest extends TestCase
         $winnerDeposit = $this->bidderDeposit($auction, $winner, 10_000, applied: true);
         $depositPayment = $this->paymentForDeposit($auction, $winnerDeposit, $winner, 10_000);
         $settlement = $this->settlement($auction, $bid, paid: true);
-        $winnerPayment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+        $winnerPayment = $this->paymentForSettlement($auction, $settlement, $winner, 60_000);
         $pendingSubmission = $this->pendingWinnerSubmission($auction, $settlement, $winner);
 
         app(CancelAuctionAction::class)->execute($auction, $this->user('admin')->id, 'admin', 'platform_fault: cancellation');
@@ -316,17 +316,17 @@ final class AuctionCancellationTest extends TestCase
             'sequence_number' => 1,
             'is_current' => true,
             'current_marker' => 1,
-            'status' => $paid ? SettlementStatus::Paid : SettlementStatus::PaymentPending,
+            'status' => SettlementStatus::PaymentPending,
             'winning_amount_minor' => 100_000,
             'deposit_applied_minor' => 10_000,
             'platform_fee_minor' => 2_500,
             'seller_net_amount_minor' => 97_500,
             'amount_due_minor' => 90_000,
-            'amount_paid_minor' => $paid ? 90_000 : 0,
-            'remaining_amount_minor' => $paid ? 0 : 90_000,
+            'amount_paid_minor' => $paid ? 60_000 : 0,
+            'remaining_amount_minor' => $paid ? 30_000 : 90_000,
             'currency_code' => 'JOD',
             'payment_due_at' => Carbon::now()->addDay(),
-            'paid_at' => $paid ? Carbon::now()->subMinute() : null,
+            'paid_at' => null,
         ]);
     }
 

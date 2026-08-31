@@ -107,6 +107,7 @@ return [
         'forbidden' => 'غير مصرح.',
         'cancellation_reason_required' => 'سبب إلغاء المزاد مطلوب.',
         'auction_cancellation_not_allowed' => 'لا يمكن إلغاء المزاد في حالته الحالية.',
+        'auction_cancellation_blocked_after_winner_payment' => 'لا يمكن إلغاء المزاد بعد سداد الفائز لمستحقات التسوية بالكامل.',
         'settlement_must_be_paid' => 'يجب سداد التسوية قبل التسليم.',
         'seller_handover_required' => 'يجب تأكيد التسليم من البائع قبل تأكيد استلام الفائز.',
         'handover_already_confirmed' => 'تم تأكيد التسليم بالفعل.',

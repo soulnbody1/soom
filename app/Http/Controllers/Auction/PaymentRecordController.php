@@ -122,6 +122,6 @@ final class PaymentRecordController extends Controller
 
         $depositId = FinancialObligationKey::depositId((string) $record->successful_obligation_key);
 
-        return $depositId === null ? null : AuctionDeposit::find($depositId);
+        return $depositId === null ? null : AuctionDeposit::with('refunds')->find($depositId);
     }
 }

@@ -73,6 +73,16 @@ final readonly class DepositRefundAllocation
         return $this->totalAmountMinor() <= 0;
     }
 
+    public static function reservedHeldAmount(Collection $refunds): int
+    {
+        return (int) $refunds
+            ->filter(fn (RefundTransaction $refund): bool => in_array($refund->status, [
+                RefundTransactionStatus::Pending,
+                RefundTransactionStatus::Processing,
+            ], true))
+            ->sum(fn (RefundTransaction $refund): int => self::fromRefund($refund)->heldAmountMinor);
+    }
+
     public static function hasActiveAppliedSettlement(Collection $relatedSettlements): bool
     {
         return $relatedSettlements->contains(function ($settlement): bool {

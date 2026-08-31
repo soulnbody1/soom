@@ -195,6 +195,7 @@ return [
         'zero_deposit_not_required' => 'Deposit is not required for this auction.',
         'cancellation_reason_required' => 'A cancellation reason is required.',
         'auction_cancellation_not_allowed' => 'The auction cannot be cancelled in its current state.',
+        'auction_cancellation_blocked_after_winner_payment' => 'The auction cannot be cancelled after the winner has fully paid the settlement.',
         'winner_default_state_not_allowed' => 'The winner cannot be marked as defaulted in the current auction state.',
         'winner_default_settlement_not_allowed' => 'The current settlement does not allow marking the winner as defaulted.',
         'current_settlement_missing' => 'There is no current settlement for this auction.',

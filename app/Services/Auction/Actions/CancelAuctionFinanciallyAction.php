@@ -73,9 +73,9 @@ final class CancelAuctionFinanciallyAction
                 return $auction->refresh()->load('settlement');
             }
 
-            $this->assertCancellationAllowed($auction);
-
             $settlement = $this->settlements->lockCurrentSettlementForPayment($auction->id);
+
+            $this->assertCancellationAllowed($auction, $settlement);
             $currentWinnerUserId = $settlement?->winner_id ?? $auction->winningBid?->bidder_id;
             $sellerDeposit = $this->deposits->lockSellerDepositForAuction($auction->id);
             $payments = $this->payments->lockSucceededTransactionsForAuction($auction->id);
@@ -157,10 +157,14 @@ final class CancelAuctionFinanciallyAction
         });
     }
 
-    private function assertCancellationAllowed(Auction $auction): void
+    private function assertCancellationAllowed(Auction $auction, ?AuctionSettlement $settlement): void
     {
         if (! in_array($auction->status, self::CANCELLABLE_STATUSES, true)) {
             throw AuctionException::domain('auction_cancellation_not_allowed');
+        }
+
+        if ($settlement && $settlement->isWinnerPaymentSettled()) {
+            throw AuctionException::domain('auction_cancellation_blocked_after_winner_payment', [], 409);
         }
     }
 

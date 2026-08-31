@@ -108,4 +108,15 @@ final class AuctionSettlement extends Model
     {
         return $this->hasMany(PaymentSubmission::class, 'settlement_id');
     }
+
+    public function isWinnerPaymentSettled(): bool
+    {
+        if (in_array($this->status, [SettlementStatus::Cancelled, SettlementStatus::Defaulted], true)) {
+            return false;
+        }
+
+        return $this->winner_id !== null
+            && $this->paid_at !== null
+            && (int) $this->remaining_amount_minor <= 0;
+    }
 }

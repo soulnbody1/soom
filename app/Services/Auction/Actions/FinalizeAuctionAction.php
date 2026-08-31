@@ -21,6 +21,7 @@ use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\DepositRefundAllocation;
 use App\Services\Auction\Support\FinancialObligationKey;
 use Illuminate\Support\Carbon;
 
@@ -113,7 +114,10 @@ final class FinalizeAuctionAction
 
             $winnerDeposit = $this->deposits->lockWinnerDeposit($auction->id, $winningBid->bidder_id);
 
-            $depositHeld = $winnerDeposit?->held_amount_minor ?? 0;
+            $reservedHeld = $winnerDeposit
+                ? DepositRefundAllocation::reservedHeldAmount($this->refunds->lockActiveOrSucceededForDeposit($winnerDeposit->id))
+                : 0;
+            $depositHeld = max(0, (int) ($winnerDeposit?->held_amount_minor ?? 0) - $reservedHeld);
             $depositApplied = min($depositHeld, $winningBid->amount_minor);
             $depositExcess = max(0, $depositHeld - $depositApplied);
             $platformFee = $snapshot->platformFeeFor($winningBid->amount_minor);
@@ -151,11 +155,12 @@ final class FinalizeAuctionAction
             ));
 
             if ($winnerDeposit && $depositApplied > 0) {
+                $remainingHeld = $depositExcess + $reservedHeld;
                 $winnerDeposit->forceFill([
                     'status' => AuctionDepositStatus::AppliedToSettlement,
                     'applied_amount_minor' => $depositApplied,
-                    'held_amount_minor' => $depositExcess,
-                    'released_at' => $depositExcess === 0 ? $now : null,
+                    'held_amount_minor' => $remainingHeld,
+                    'released_at' => $remainingHeld === 0 ? $now : null,
                 ]);
                 $this->deposits->save($winnerDeposit);
             }

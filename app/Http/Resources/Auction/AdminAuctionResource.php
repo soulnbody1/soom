@@ -235,6 +235,7 @@ final class AdminAuctionResource extends JsonResource
                 && $settlement->handover_completed_at === null
                 && $settlement->handover_due_at !== null
                 && $now->greaterThan($settlement->handover_due_at),
+            'is_winner_payment_settled' => $settlement !== null && $settlement->isWinnerPaymentSettled(),
             'has_open_dispute' => $this->relationLoaded('disputes')
                 ? $this->disputes->contains(fn ($dispute): bool => $dispute->resolved_at === null)
                 : null,

@@ -67,8 +67,8 @@ final class CancellationRefundTest extends TestCase
     public function test_cancellation_plans_one_refund_for_paid_settlement_from_original_payment_transaction(): void
     {
         [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::HandoverPending);
-        $settlement = $this->settlement($auction, $bid, 90_000, paid: true);
-        $payment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+        $settlement = $this->settlement($auction, $bid, 90_000, paidMinor: 60_000);
+        $payment = $this->paymentForSettlement($auction, $settlement, $winner, 60_000);
 
         $this->cancel($auction);
 
@@ -77,7 +77,7 @@ final class CancellationRefundTest extends TestCase
         $this->assertNull($refund->deposit_id);
         $this->assertSame('settlement', $refund->obligation_type);
         $this->assertSame($settlement->id, $refund->obligation_id);
-        $this->assertSame(90_000, $refund->amount_minor);
+        $this->assertSame(60_000, $refund->amount_minor);
         $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
     }
 
@@ -86,15 +86,15 @@ final class CancellationRefundTest extends TestCase
         [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::HandoverPending);
         $deposit = $this->deposit($auction, $winner, 10_000);
         $depositPayment = $this->paymentForDeposit($auction, $deposit, $winner, 10_000);
-        $settlement = $this->settlement($auction, $bid, 90_000, paid: true);
-        $settlementPayment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+        $settlement = $this->settlement($auction, $bid, 90_000, paidMinor: 60_000);
+        $settlementPayment = $this->paymentForSettlement($auction, $settlement, $winner, 60_000);
 
         $this->cancel($auction);
 
         $refunds = RefundTransaction::where('auction_id', $auction->id)->orderBy('amount_minor')->get();
 
         $this->assertCount(2, $refunds);
-        $this->assertSame(100_000, $refunds->sum('amount_minor'));
+        $this->assertSame(70_000, $refunds->sum('amount_minor'));
         $this->assertEqualsCanonicalizing(
             [$depositPayment->id, $settlementPayment->id],
             $refunds->pluck('payment_transaction_id')->all()
@@ -138,8 +138,8 @@ final class CancellationRefundTest extends TestCase
     public function test_cancellation_settlement_refund_can_actually_be_completed(): void
     {
         [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::HandoverPending);
-        $settlement = $this->settlement($auction, $bid, 90_000, paid: true);
-        $payment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+        $settlement = $this->settlement($auction, $bid, 90_000, paidMinor: 60_000);
+        $payment = $this->paymentForSettlement($auction, $settlement, $winner, 60_000);
 
         $this->cancel($auction);
 
@@ -152,7 +152,7 @@ final class CancellationRefundTest extends TestCase
             ->confirmSucceeded($refund, 'provider-refund-'.Str::ulid());
 
         $this->assertSame(RefundTransactionStatus::Succeeded, $completed->status);
-        $this->assertSame(90_000, (int) $completed->amount_minor);
+        $this->assertSame(60_000, (int) $completed->amount_minor);
         $this->assertSame(PaymentTransactionStatus::Succeeded, $payment->refresh()->status);
     }
 
@@ -161,8 +161,8 @@ final class CancellationRefundTest extends TestCase
         [$auction, $winner, $bid] = $this->auctionWithWinner(AuctionStatus::HandoverPending);
         $deposit = $this->deposit($auction, $winner, 10_000);
         $depositPayment = $this->paymentForDeposit($auction, $deposit, $winner, 10_000);
-        $settlement = $this->settlement($auction, $bid, 90_000, paid: true);
-        $settlementPayment = $this->paymentForSettlement($auction, $settlement, $winner, 90_000);
+        $settlement = $this->settlement($auction, $bid, 90_000, paidMinor: 60_000);
+        $settlementPayment = $this->paymentForSettlement($auction, $settlement, $winner, 60_000);
 
         $this->cancel($auction);
 
@@ -278,7 +278,7 @@ final class CancellationRefundTest extends TestCase
         ]);
     }
 
-    private function settlement(Auction $auction, AuctionBid $bid, int $amountDue, bool $paid = false): AuctionSettlement
+    private function settlement(Auction $auction, AuctionBid $bid, int $amountDue, int $paidMinor = 0): AuctionSettlement
     {
         return AuctionSettlement::create([
             'auction_id' => $auction->id,
@@ -287,17 +287,17 @@ final class CancellationRefundTest extends TestCase
             'sequence_number' => 1,
             'is_current' => true,
             'current_marker' => 1,
-            'status' => $paid ? SettlementStatus::Paid : SettlementStatus::PaymentPending,
+            'status' => SettlementStatus::PaymentPending,
             'winning_amount_minor' => 100_000,
             'deposit_applied_minor' => 10_000,
             'platform_fee_minor' => 2_500,
             'seller_net_amount_minor' => 97_500,
             'amount_due_minor' => $amountDue,
-            'amount_paid_minor' => $paid ? $amountDue : 0,
-            'remaining_amount_minor' => $paid ? 0 : $amountDue,
+            'amount_paid_minor' => $paidMinor,
+            'remaining_amount_minor' => $amountDue - $paidMinor,
             'currency_code' => 'JOD',
             'payment_due_at' => now()->addDay(),
-            'paid_at' => $paid ? now()->subMinute() : null,
+            'paid_at' => null,
         ]);
     }
 

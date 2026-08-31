@@ -12,6 +12,7 @@ use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
 use App\Models\Auction\RefundTransaction;
+use App\Services\Auction\Support\AuctionDepositBalance;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -157,13 +158,24 @@ final class PaymentRecordDTO
         $deposit = $this->deposit
             ?? ($submission?->relationLoaded('deposit') ? $submission->deposit : null);
 
-        return $deposit === null ? null : [
+        if ($deposit === null) {
+            return null;
+        }
+
+        $balance = AuctionDepositBalance::for($deposit);
+        $currency = (string) $deposit->currency_code;
+
+        return [
             'id' => $deposit->public_id,
             'type' => $deposit->type,
             'status' => $deposit->status->value,
-            'required_amount' => MoneyResource::make((int) $deposit->required_amount_minor, (string) $deposit->currency_code),
-            'held_amount' => MoneyResource::make((int) $deposit->held_amount_minor, (string) $deposit->currency_code),
-            'refunded_amount' => MoneyResource::make((int) $deposit->refunded_amount_minor, (string) $deposit->currency_code),
+            'required_amount' => MoneyResource::make($balance->requiredMinor, $currency),
+            'held_amount' => MoneyResource::make($balance->heldMinor, $currency),
+            'applied_amount' => MoneyResource::make($balance->appliedMinor, $currency),
+            'refunded_amount' => MoneyResource::make($balance->refundedMinor, $currency),
+            'forfeited_amount' => MoneyResource::make($balance->forfeitedMinor, $currency),
+            'pending_refund_amount' => MoneyResource::make($balance->pendingRefundMinor, $currency),
+            'refundable_amount' => MoneyResource::make($balance->refundableMinor, $currency),
             'held_at' => $deposit->held_at?->toIso8601String(),
         ];
     }

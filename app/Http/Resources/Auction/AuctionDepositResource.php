@@ -8,6 +8,7 @@ use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Enums\PaymentChannel;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
+use App\Services\Auction\Support\AuctionDepositBalance;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
@@ -21,6 +22,7 @@ final class AuctionDepositResource extends JsonResource
         $user = $request->user();
         $canReviewPayments = $user && Gate::forUser($user)->allows('viewAny', PaymentSubmission::class);
         $metadata = $this->publicMetadata();
+        $balance = AuctionDepositBalance::for($this->resource);
 
         return [
             'id' => $this->public_id,
@@ -32,6 +34,8 @@ final class AuctionDepositResource extends JsonResource
             'applied_amount' => MoneyResource::make((int) $this->applied_amount_minor, $this->currency_code),
             'refunded_amount' => MoneyResource::make((int) $this->refunded_amount_minor, $this->currency_code),
             'forfeited_amount' => MoneyResource::make((int) $this->forfeited_amount_minor, $this->currency_code),
+            'pending_refund_amount' => MoneyResource::make($balance->pendingRefundMinor, $this->currency_code),
+            'refundable_amount' => MoneyResource::make($balance->refundableMinor, $this->currency_code),
             'hold_reason' => $this->hold_reason,
             'hold_reason_label' => $this->holdReasonLabel(),
             'candidate_rank' => isset($metadata['candidate_rank']) ? (int) $metadata['candidate_rank'] : null,
