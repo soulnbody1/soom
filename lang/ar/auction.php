@@ -124,6 +124,7 @@ return [
         'terms_registration_required' => 'يجب تسجيل المشارك قبل قبول الشروط.',
         'terms_missing' => 'لا توجد نسخة شروط لهذا المزاد.',
         'terms_already_accepted' => 'سبق أن قبلت شروط هذا المزاد.',
+        'terms_version_mismatch' => 'نسخة الشروط المرسلة لا تطابق النسخة المطلوبة لهذا المزاد.',
         'seller_deposit_only_seller' => 'يمكن للبائع فقط إرسال تأمين البائع.',
         'settlement_payment_unavailable' => 'دفعة التسوية غير متاحة لهذا المستخدم.',
         'seller_cannot_bid' => 'لا يمكن للبائع المزايدة على مزاده.',

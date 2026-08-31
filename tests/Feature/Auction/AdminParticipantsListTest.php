@@ -16,10 +16,13 @@ use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Tests\Feature\Auction\Concerns\AcceptsAuctionTerms;
 use Tests\TestCase;
 
 final class AdminParticipantsListTest extends TestCase
 {
+    use AcceptsAuctionTerms;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -87,7 +90,7 @@ final class AdminParticipantsListTest extends TestCase
         $bidder = $this->user();
 
         $data = $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated()
             ->json('data');
 

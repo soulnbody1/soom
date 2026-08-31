@@ -73,11 +73,10 @@ final class ContentReviewActionResolver
     public function for(
         ?ContentReview $review,
         ?ReviewMode $mode = null,
-        ?ReviewableSubjectType $type = null,
-        ?int $subjectId = null
+        ?bool $subjectReviewable = null
     ): array {
         $actions = [];
-        $reviewable = $this->subjectIsReviewable($review, $type, $subjectId);
+        $reviewable = $subjectReviewable ?? $this->subjectIsReviewable($review);
 
         if ($review !== null && $this->isCancellable($review)) {
             $actions[] = self::CANCEL;

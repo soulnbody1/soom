@@ -63,7 +63,7 @@ final class UserAuctionResource extends JsonResource
             'my_bids' => $this->stableList('bids', AuctionBidResource::class, $request),
             'my_deposits' => $this->stableList('deposits', AuctionDepositResource::class, $request),
             'my_payment_submissions' => $this->stableCollection($this->paymentSubmissionsFrom($deposits), PaymentSubmissionResource::class, $request),
-            'my_refunds' => $this->refundsFrom($deposits),
+            'my_refunds' => $this->myRefunds($viewer),
             'winner_settlement' => $isWinner ? $this->winnerSettlement($settlement) : null,
             'seller_context' => $isSeller ? $this->sellerContext($settlement, $request) : null,
             'handover_status' => ($isSeller || $isWinner) ? $this->handoverStatus($settlement) : null,
@@ -313,11 +313,15 @@ final class UserAuctionResource extends JsonResource
             ->values();
     }
 
-    private function refundsFrom(Collection $deposits): array
+    private function myRefunds(?object $viewer): array
     {
-        return $this->paymentSubmissionsFrom($deposits)
-            ->filter(fn ($submission): bool => $submission->relationLoaded('transaction') && $submission->transaction?->relationLoaded('refunds'))
-            ->flatMap(fn ($submission): Collection => $submission->transaction->refunds)
+        if ($viewer === null || ! $this->resource->relationLoaded('refunds')) {
+            return [];
+        }
+
+        return $this->resource->refunds
+            ->filter(fn ($refund): bool => (int) $refund->user_id === (int) $viewer->id)
+            ->sortByDesc('id')
             ->map(fn ($refund): array => [
                 'id' => $refund->public_id,
                 'status' => $refund->status->value,

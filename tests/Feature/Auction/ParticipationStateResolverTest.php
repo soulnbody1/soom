@@ -64,7 +64,7 @@ final class ParticipationStateResolverTest extends TestCase
         $this->assertSame(ParticipationDepositStatus::NotSubmitted, $state->depositStatus);
     }
 
-    public function test_registered_without_terms_is_asked_for_terms(): void
+    public function test_registered_without_terms_is_sent_back_through_registration(): void
     {
         $auction = $this->auction();
         $user = $this->user();
@@ -75,7 +75,7 @@ final class ParticipationStateResolverTest extends TestCase
         $this->assertTrue($state->isRegistered);
         $this->assertFalse($state->termsAccepted);
         $this->assertSame(BidBlockingReason::TermsRequired, $state->blockingReason);
-        $this->assertSame(NextActionCode::AcceptTerms, $state->nextAction);
+        $this->assertSame(NextActionCode::Register, $state->nextAction);
     }
 
     public function test_registered_with_terms_but_no_deposit_is_asked_for_deposit(): void

@@ -15,10 +15,13 @@ use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Tests\Feature\Auction\Concerns\AcceptsAuctionTerms;
 use Tests\TestCase;
 
 final class ServerTimeMetaTest extends TestCase
 {
+    use AcceptsAuctionTerms;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -59,14 +62,14 @@ final class ServerTimeMetaTest extends TestCase
 
         $this->assertNotNull(
             $this->actingAs($bidder, 'sanctum')
-                ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
+                ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
                 ->assertCreated()
                 ->json('meta.server_time')
         );
 
         $this->assertNotNull(
             $this->actingAs($bidder, 'sanctum')
-                ->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')
+                ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
                 ->assertCreated()
                 ->json('meta.server_time')
         );

@@ -19,6 +19,7 @@ enum NextActionCode: string
     case ConfirmReceipt = 'confirm_receipt';
     case ConfirmHandover = 'confirm_handover';
     case SubmitSellerDeposit = 'submit_seller_deposit';
+    case SubmitForReview = 'submit_for_review';
     case OpenDispute = 'open_dispute';
     case ContactSupport = 'contact_support';
 }

@@ -10,6 +10,7 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionConfigurationVersion;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionParticipant;
+use App\Models\Auction\AuctionTermsAcceptance;
 use App\Models\Auction\AuctionTermsVersion;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Category;
@@ -18,10 +19,13 @@ use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Tests\Feature\Auction\Concerns\AcceptsAuctionTerms;
 use Tests\TestCase;
 
 final class ZeroBidderDepositTest extends TestCase
 {
+    use AcceptsAuctionTerms;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -29,31 +33,13 @@ final class ZeroBidderDepositTest extends TestCase
         Artisan::call('migrate', ['--force' => true]);
     }
 
-    public function test_registration_alone_does_not_qualify_before_terms_are_accepted(): void
+    public function test_registering_with_terms_auto_qualifies_when_no_deposit_is_required(): void
     {
         $auction = $this->zeroDepositAuction();
         $bidder = $this->user();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
-            ->assertCreated();
-
-        $participant = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
-
-        $this->assertSame(AuctionParticipantStatus::Registered, $participant->status);
-        $this->assertNull($participant->qualified_at);
-    }
-
-    public function test_accepting_terms_auto_qualifies_when_no_deposit_is_required(): void
-    {
-        $auction = $this->zeroDepositAuction();
-        $bidder = $this->user();
-
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
-            ->assertCreated();
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated();
 
         $participant = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
@@ -62,46 +48,32 @@ final class ZeroBidderDepositTest extends TestCase
         $this->assertNotNull($participant->qualified_at);
     }
 
-    public function test_repeated_terms_acceptance_is_rejected_and_leaves_state_untouched(): void
+    public function test_repeated_registration_is_idempotent_and_leaves_state_untouched(): void
     {
         $auction = $this->zeroDepositAuction();
         $bidder = $this->user();
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register')->assertCreated();
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $first = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
         $qualifiedAt = $first->qualified_at;
 
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')
-            ->assertStatus(409)
-            ->assertJsonPath('code', 'terms_already_accepted');
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $second = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
 
         $this->assertSame(AuctionParticipantStatus::Qualified, $second->status);
         $this->assertEquals($qualifiedAt, $second->qualified_at);
         $this->assertSame(1, AuctionParticipant::where('auction_id', $auction->id)->count());
+        $this->assertSame(1, AuctionTermsAcceptance::where('auction_id', $auction->id)->where('user_id', $bidder->id)->count());
     }
 
-    public function test_bidding_is_blocked_before_terms_and_allowed_after(): void
+    public function test_bidding_is_allowed_right_after_registering_with_terms(): void
     {
         $auction = $this->zeroDepositAuction();
         $bidder = $this->user();
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register')->assertCreated();
-
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/bids', [
-                'amount' => '100.000',
-                'currency_code' => 'JOD',
-                'idempotency_key' => (string) Str::ulid(),
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('code', 'terms_required_before_bidding');
-
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $this->actingAs($bidder, 'sanctum')
             ->postJson('/api/soom/auctions/'.$auction->public_id.'/bids', [
@@ -117,8 +89,7 @@ final class ZeroBidderDepositTest extends TestCase
         $auction = $this->zeroDepositAuction();
         $bidder = $this->user();
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register')->assertCreated();
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $this->assertSame(0, AuctionDeposit::where('auction_id', $auction->id)->where('user_id', $bidder->id)->count());
         $this->assertSame(0, PaymentSubmission::where('auction_id', $auction->id)->where('user_id', $bidder->id)->count());
@@ -129,7 +100,7 @@ final class ZeroBidderDepositTest extends TestCase
         $auction = $this->zeroDepositAuction();
         $bidder = $this->user();
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $this->actingAs($bidder, 'sanctum')
             ->postJson('/api/soom/auctions/'.$auction->public_id.'/bidder-deposit', [])
@@ -142,8 +113,7 @@ final class ZeroBidderDepositTest extends TestCase
         $auction = $this->zeroDepositAuction(1_000);
         $bidder = $this->user();
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register')->assertCreated();
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $participant = AuctionParticipant::where('auction_id', $auction->id)->where('user_id', $bidder->id)->firstOrFail();
 

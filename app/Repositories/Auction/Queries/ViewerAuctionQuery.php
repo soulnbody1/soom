@@ -90,6 +90,7 @@ final class ViewerAuctionQuery
                 'paymentSubmissions.transaction.refunds' => fn ($refunds) => $refunds->where('user_id', $viewerId),
             ]),
             'settlement.sellerPayout',
+            'refunds' => fn ($query) => $query->where('user_id', $viewerId),
         ]);
     }
 

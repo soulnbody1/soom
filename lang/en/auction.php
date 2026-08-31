@@ -121,6 +121,7 @@ return [
         'terms_registration_required' => 'Participant registration is required before accepting terms.',
         'terms_missing' => 'Auction has no terms version.',
         'terms_already_accepted' => 'You have already accepted the terms of this auction.',
+        'terms_version_mismatch' => 'The submitted terms version does not match the version required for this auction.',
         'seller_deposit_only_seller' => 'Only seller can submit seller deposit.',
         'settlement_payment_unavailable' => 'Settlement payment is not available for this user.',
         'seller_cannot_bid' => 'Seller cannot bid on own auction.',

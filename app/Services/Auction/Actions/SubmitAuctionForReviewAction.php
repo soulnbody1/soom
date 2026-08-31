@@ -10,7 +10,9 @@ use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
 use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionRepository;
+use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionStateMachine;
+use App\Services\Auction\Support\AuctionTermsAcceptanceRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\ContentReview\Actions\RequestContentReviewAction;
 
@@ -20,12 +22,19 @@ final class SubmitAuctionForReviewAction
         private readonly AuctionTransaction $transaction,
         private readonly AuctionStateMachine $stateMachine,
         private readonly AuctionRepository $auctions,
+        private readonly AuctionAudit $audit,
+        private readonly AuctionTermsAcceptanceRecorder $acceptances,
         private readonly RequestContentReviewAction $contentReview,
     ) {}
 
-    public function execute(Auction $auction, int $sellerId): Auction
-    {
-        return $this->transaction->run(function () use ($auction, $sellerId): Auction {
+    public function execute(
+        Auction $auction,
+        int $sellerId,
+        string $termsVersionPublicId,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): Auction {
+        return $this->transaction->run(function () use ($auction, $sellerId, $termsVersionPublicId, $ipAddress, $userAgent): Auction {
             $auction = $this->auctions->lockForStateChange($auction->id);
 
             if ($auction->seller_id !== $sellerId) {
@@ -38,6 +47,21 @@ final class SubmitAuctionForReviewAction
 
             if (! $auction->terms_version_id) {
                 throw AuctionException::domain('active_terms_required');
+            }
+
+            $termsVersionId = $this->acceptances->resolveVersionId($auction, $termsVersionPublicId);
+
+            $acceptance = $this->acceptances->record($auction, $sellerId, $termsVersionId, null, $ipAddress, $userAgent);
+
+            if ($acceptance->wasRecentlyCreated) {
+                $this->audit->log('auction.seller_terms_accepted', $auction, $sellerId, 'user', [
+                    'terms_version_id' => $termsVersionId,
+                    'acceptance_public_id' => $acceptance->public_id,
+                ]);
+            }
+
+            if ($auction->status === AuctionStatus::PendingReview) {
+                return $auction;
             }
 
             $submitted = $this->stateMachine->transition(

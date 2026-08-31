@@ -22,10 +22,13 @@ use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Tests\Feature\Auction\Concerns\AcceptsAuctionTerms;
 use Tests\TestCase;
 
 final class UserFacingEndpointsTest extends TestCase
 {
+    use AcceptsAuctionTerms;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -69,8 +72,7 @@ final class UserFacingEndpointsTest extends TestCase
         $auction = $this->auction();
         $bidder = $this->user();
 
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register')->assertCreated();
-        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')->assertCreated();
+        $this->actingAs($bidder, 'sanctum')->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))->assertCreated();
 
         $data = $this->actingAs($bidder, 'sanctum')
             ->getJson('/api/auctions/'.$auction->public_id.'/terms')
@@ -191,7 +193,7 @@ final class UserFacingEndpointsTest extends TestCase
             ->assertJsonPath('code', 'registration_required');
 
         $this->actingAs($stranger, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated();
 
         $rows = $this->actingAs($stranger, 'sanctum')

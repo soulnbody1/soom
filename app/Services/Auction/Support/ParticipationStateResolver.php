@@ -98,7 +98,7 @@ final class ParticipationStateResolver
         $isSeller = (int) $auction->seller_id === (int) $viewer->id;
         $termsAccepted = $context->hasAcceptedTerms($auctionId, $termsVersionId);
 
-        $blockingReason = $this->ladder->evaluate(new BidEligibilityContextDTO(
+        $eligibility = new BidEligibilityContextDTO(
             viewerId: (int) $viewer->id,
             sellerId: (int) $auction->seller_id,
             status: $auction->status,
@@ -112,14 +112,17 @@ final class ParticipationStateResolver
             depositStatus: $deposit?->status,
             depositHeldMinor: (int) ($deposit->held_amount_minor ?? 0),
             depositRequiredMinor: $depositRequired,
-        ));
+        );
+
+        $blockingReason = $this->ladder->evaluate($eligibility);
 
         [$nextAction, $nextActionAllowed] = $this->nextAction->resolve(
             $auction,
             $viewer,
             $blockingReason,
             $settlement,
-            $openDispute !== null
+            $openDispute !== null,
+            $this->ladder->evaluateParticipantGate($eligibility)
         );
 
         return new ParticipationStateDTO(

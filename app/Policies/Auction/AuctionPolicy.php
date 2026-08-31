@@ -32,7 +32,7 @@ final class AuctionPolicy
     public function submitForReview(User $user, Auction $auction): bool
     {
         return $user->id === $auction->seller_id
-            && in_array($auction->status, [AuctionStatus::Draft, AuctionStatus::Rejected], true);
+            && in_array($auction->status, [AuctionStatus::Draft, AuctionStatus::Rejected, AuctionStatus::PendingReview], true);
     }
 
     public function reopen(User $user, Auction $auction): bool

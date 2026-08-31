@@ -11,6 +11,7 @@ use App\Http\Resources\ContentReview\ContentReviewResource;
 use App\Models\Auction\AuctionConfigurationSnapshot;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
+use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\ContentReview\Support\ContentReviewActionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,6 +26,7 @@ final class AdminAuctionResource extends JsonResource
         $user = $request->user();
         $canReviewPayments = $user && Gate::forUser($user)->allows('viewAny', PaymentSubmission::class);
         $canManageSettlement = $user
+            && $this->relationLoaded('settlement')
             && Gate::forUser($user)->allows('override', $this->settlement ?? new AuctionSettlement);
         $canResolveDisputes = $user && Gate::forUser($user)->allows('resolveDispute', $this->resource);
 
@@ -161,18 +163,16 @@ final class AdminAuctionResource extends JsonResource
     {
         $review = $this->relationLoaded('activeContentReview') ? $this->activeContentReview : null;
         $mode = ContentReviewResource::resolvedMode($request, ReviewableSubjectType::Auction);
+        $reviewable = in_array($this->status, AuctionReviewSubjectAdapter::REVIEWABLE_STATUSES, true);
 
         return [
             'enabled' => config('content_review.enabled') === true,
             'mode' => $mode->value,
             'mode_label' => __('content_review.modes.'.$mode->value),
-            'current' => $review === null ? null : (new ContentReviewResource($review))->toArray($request),
-            'available_actions' => app(ContentReviewActionResolver::class)->for(
-                $review,
-                $mode,
-                ReviewableSubjectType::Auction,
-                (int) $this->id
-            ),
+            'current' => $review === null
+                ? null
+                : (new ContentReviewResource($review))->withSubjectReviewable($reviewable)->toArray($request),
+            'available_actions' => app(ContentReviewActionResolver::class)->for($review, $mode, $reviewable),
         ];
     }
 

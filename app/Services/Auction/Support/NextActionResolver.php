@@ -20,7 +20,8 @@ final class NextActionResolver
         ?User $viewer,
         BidBlockingReason $blockingReason,
         ?AuctionSettlement $settlement,
-        bool $hasOpenDispute
+        bool $hasOpenDispute,
+        ?BidBlockingReason $participantReason = null
     ): array {
         if ($viewer === null) {
             return [NextActionCode::Login, true];
@@ -36,11 +37,16 @@ final class NextActionResolver
             return $this->winnerAction($auction, $viewer, $settlement, $hasOpenDispute);
         }
 
-        return $this->bidderAction($auction, $viewer, $blockingReason);
+        return $this->bidderAction($auction, $viewer, $blockingReason, $participantReason);
     }
 
     private function sellerAction(Auction $auction, User $viewer, ?AuctionSettlement $settlement, bool $hasOpenDispute): array
     {
+        if (Gate::forUser($viewer)->allows('submitForReview', $auction)
+            && $auction->status !== AuctionStatus::PendingReview) {
+            return [NextActionCode::SubmitForReview, true];
+        }
+
         if ($auction->status === AuctionStatus::AwaitingSellerDeposit) {
             return [NextActionCode::SubmitSellerDeposit, true];
         }
@@ -76,18 +82,37 @@ final class NextActionResolver
         return [NextActionCode::None, false];
     }
 
-    private function bidderAction(Auction $auction, User $viewer, BidBlockingReason $blockingReason): array
-    {
+    private function bidderAction(
+        Auction $auction,
+        User $viewer,
+        BidBlockingReason $blockingReason,
+        ?BidBlockingReason $participantReason
+    ): array {
+        if ($blockingReason === BidBlockingReason::AuctionNotLive && $participantReason !== null) {
+            return $this->pendingParticipantAction($auction, $viewer, $participantReason);
+        }
+
         return match ($blockingReason) {
             BidBlockingReason::None => [NextActionCode::PlaceBid, Gate::forUser($viewer)->allows('bid', $auction)],
             BidBlockingReason::NotRegistered => [NextActionCode::Register, Gate::forUser($viewer)->allows('register', $auction)],
-            BidBlockingReason::TermsRequired => [NextActionCode::AcceptTerms, true],
+            BidBlockingReason::TermsRequired => [NextActionCode::Register, Gate::forUser($viewer)->allows('register', $auction)],
             BidBlockingReason::DepositRequired, BidBlockingReason::DepositRejected => [NextActionCode::SubmitBidderDeposit, true],
             BidBlockingReason::DepositUnderReview => [NextActionCode::AwaitDepositReview, false],
             BidBlockingReason::AuctionNotLive => [NextActionCode::Register, Gate::forUser($viewer)->allows('register', $auction)],
             BidBlockingReason::AuctionEnded => [NextActionCode::AwaitResult, false],
             BidBlockingReason::ParticipantBlocked, BidBlockingReason::ConfigurationUnavailable => [NextActionCode::ContactSupport, true],
             default => [NextActionCode::None, false],
+        };
+    }
+
+    private function pendingParticipantAction(Auction $auction, User $viewer, BidBlockingReason $participantReason): array
+    {
+        return match ($participantReason) {
+            BidBlockingReason::DepositRequired, BidBlockingReason::DepositRejected => [NextActionCode::SubmitBidderDeposit, true],
+            BidBlockingReason::DepositUnderReview => [NextActionCode::AwaitDepositReview, false],
+            BidBlockingReason::ParticipantBlocked => [NextActionCode::ContactSupport, true],
+            BidBlockingReason::None => [NextActionCode::AwaitResult, false],
+            default => [NextActionCode::Register, Gate::forUser($viewer)->allows('register', $auction)],
         };
     }
 }

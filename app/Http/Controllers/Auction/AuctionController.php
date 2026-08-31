@@ -12,6 +12,7 @@ use App\DTO\Auction\CreateAuctionInputDTO;
 use App\DTO\Auction\UpdateDraftAuctionInputDTO;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AdminAuctionIndexRequest;
+use App\Http\Requests\Auction\AcceptTermsActionRequest;
 use App\Http\Requests\Auction\AuctionIndexRequest;
 use App\Http\Requests\Auction\CancelAuctionRequest;
 use App\Http\Requests\Auction\MarkWinnerDefaultedRequest;
@@ -241,11 +242,23 @@ final class AuctionController extends Controller
     )]
     #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
     #[Response(200, description: 'المزاد بعد إرساله للمراجعة.')]
-    public function submitForReview(Auction $auction, SubmitAuctionForReviewAction $action): JsonResponse
-    {
+    public function submitForReview(
+        AcceptTermsActionRequest $request,
+        Auction $auction,
+        SubmitAuctionForReviewAction $action
+    ): JsonResponse {
         Gate::authorize('submitForReview', $auction);
 
-        return $this->auctionResponse($action->execute($auction, Auth::id()), __('auction.messages.auction_submitted'));
+        return $this->auctionResponse(
+            $action->execute(
+                $auction,
+                Auth::id(),
+                $request->termsVersionId(),
+                $request->ip(),
+                $request->userAgent()
+            ),
+            __('auction.messages.auction_submitted')
+        );
     }
 
     #[Group(self::ADMIN_GROUP, self::ADMIN_GROUP_DESCRIPTION, self::ADMIN_GROUP_WEIGHT)]
@@ -323,12 +336,21 @@ final class AuctionController extends Controller
     #[PathParameter('auction', description: 'المعرّف العام للمزاد (ULID).')]
     #[Response(201, description: 'بيانات مشاركة المستخدم في المزاد.')]
     #[Response(409, description: 'المستخدم مسجل بالفعل في هذا المزاد (already_registered).')]
-    public function register(Auction $auction, RegisterParticipantAction $action): JsonResponse
-    {
+    public function register(
+        AcceptTermsActionRequest $request,
+        Auction $auction,
+        RegisterParticipantAction $action
+    ): JsonResponse {
         Gate::authorize('register', $auction);
 
         return $this->sendResponse(
-            new AuctionParticipantResource($action->execute($auction, Auth::id())),
+            new AuctionParticipantResource($action->execute(
+                $auction,
+                Auth::id(),
+                $request->termsVersionId(),
+                $request->ip(),
+                $request->userAgent()
+            )),
             __('auction.messages.participant_registered'),
             201
         );

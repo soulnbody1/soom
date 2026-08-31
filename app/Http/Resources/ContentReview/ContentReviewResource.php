@@ -17,9 +17,18 @@ final class ContentReviewResource extends JsonResource
 {
     private bool $includeAutomation = false;
 
+    private ?bool $subjectReviewable = null;
+
     public function withAutomation(bool $include = true): self
     {
         $this->includeAutomation = $include;
+
+        return $this;
+    }
+
+    public function withSubjectReviewable(bool $reviewable): self
+    {
+        $this->subjectReviewable = $reviewable;
 
         return $this;
     }
@@ -86,7 +95,7 @@ final class ContentReviewResource extends JsonResource
             'decisions' => ContentReviewDecisionResource::collection(
                 $this->relationLoaded('decisions') ? $this->decisions : collect()
             ),
-            'available_actions' => $resolver->for($this->resource, $mode),
+            'available_actions' => $resolver->for($this->resource, $mode, $this->subjectReviewable),
             'technical' => [
                 'provider' => $this->provider,
                 'model' => $this->model,

@@ -25,10 +25,13 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Tests\Feature\Auction\Concerns\AcceptsAuctionTerms;
 use Tests\TestCase;
 
 final class AuctionReopenAndUpdateTest extends TestCase
 {
+    use AcceptsAuctionTerms;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -44,7 +47,7 @@ final class AuctionReopenAndUpdateTest extends TestCase
         $admin = $this->user('admin');
         $auction = $this->auction(AuctionStatus::Draft, $version, $seller);
 
-        app(SubmitAuctionForReviewAction::class)->execute($auction, $seller->id);
+        app(SubmitAuctionForReviewAction::class)->execute($auction, $seller->id, $this->requiredTermsVersionId($auction));
         $this->assertSame(AuctionStatus::PendingReview, $auction->refresh()->status);
 
         app(ReviewAuctionAction::class)->reject($auction->refresh(), $admin->id, 'blurred images');
@@ -73,7 +76,7 @@ final class AuctionReopenAndUpdateTest extends TestCase
         $this->assertSame('clear photos and full description', $auction->title);
         $this->assertSame(1, AuctionMedia::where('auction_id', $auction->id)->count());
 
-        $this->postJson("/api/soom/auctions/{$auction->public_id}/submit-review")
+        $this->postJson("/api/soom/auctions/{$auction->public_id}/submit-review", $this->termsBody($auction))
             ->assertOk()
             ->assertJsonPath('data.status', 'pending_review');
 

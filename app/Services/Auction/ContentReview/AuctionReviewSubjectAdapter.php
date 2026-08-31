@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Gate;
 
 final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
 {
+    public const REVIEWABLE_STATUSES = [AuctionStatus::PendingReview];
+
     private const MAX_TEXT_CHARS = 8000;
 
     public function __construct(
@@ -62,10 +64,10 @@ final class AuctionReviewSubjectAdapter implements ReviewSubjectAdapter
         $status = Auction::whereKey($subjectId)->value('status');
 
         if ($status instanceof AuctionStatus) {
-            return $status === AuctionStatus::PendingReview;
+            return in_array($status, self::REVIEWABLE_STATUSES, true);
         }
 
-        return $status !== null && AuctionStatus::tryFrom((string) $status) === AuctionStatus::PendingReview;
+        return $status !== null && in_array(AuctionStatus::tryFrom((string) $status), self::REVIEWABLE_STATUSES, true);
     }
 
     public function reviewableSubjectIds(int $limit, int $afterId): array

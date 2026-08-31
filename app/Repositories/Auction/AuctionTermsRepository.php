@@ -21,6 +21,15 @@ final class AuctionTermsRepository
     }
 
     /**
+     * Resolve a terms version by its public identifier.
+     * Used by RegisterParticipantAction and SubmitAuctionForReviewAction.
+     */
+    public function findVersionByPublicId(string $publicId): ?AuctionTermsVersion
+    {
+        return AuctionTermsVersion::where('public_id', $publicId)->first();
+    }
+
+    /**
      * Check if user has accepted specific terms for an auction.
      * Used by PlaceBidAction.
      */

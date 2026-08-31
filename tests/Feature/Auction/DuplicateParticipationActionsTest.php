@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Tests\Feature\Auction\Concerns\AcceptsAuctionTerms;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,8 @@ use Tests\TestCase;
  */
 final class DuplicateParticipationActionsTest extends TestCase
 {
+    use AcceptsAuctionTerms;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -37,23 +40,24 @@ final class DuplicateParticipationActionsTest extends TestCase
         Artisan::call('migrate', ['--force' => true]);
     }
 
-    public function test_registering_twice_is_rejected_and_records_a_single_trail(): void
+    public function test_registering_twice_is_idempotent_and_records_a_single_trail(): void
     {
         $auction = $this->liveAuction();
         $bidder = $this->user();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
-            ->assertStatus(409)
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('code', 'already_registered')
-            ->assertJsonPath('message', __('auction.errors.already_registered'));
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
+            ->assertCreated()
+            ->assertJsonPath('success', true);
 
         $this->assertSame(1, AuctionParticipant::where('auction_id', $auction->id)
+            ->where('user_id', $bidder->id)
+            ->count());
+        $this->assertSame(1, AuctionTermsAcceptance::where('auction_id', $auction->id)
             ->where('user_id', $bidder->id)
             ->count());
         $this->assertSame(1, AuctionActivityLog::where('auction_id', $auction->id)
@@ -70,10 +74,7 @@ final class DuplicateParticipationActionsTest extends TestCase
         $bidder = $this->user();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
-            ->assertCreated();
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated();
 
         $this->actingAs($bidder, 'sanctum')
@@ -97,10 +98,7 @@ final class DuplicateParticipationActionsTest extends TestCase
         $bidder = $this->user();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
-            ->assertCreated();
-        $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/accept-terms')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated();
 
         $newer = AuctionTermsVersion::create([
@@ -138,7 +136,7 @@ final class DuplicateParticipationActionsTest extends TestCase
         $bidder = $this->user();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertCreated();
 
         AuctionParticipant::where('auction_id', $auction->id)
@@ -148,7 +146,7 @@ final class DuplicateParticipationActionsTest extends TestCase
             ->save();
 
         $this->actingAs($bidder, 'sanctum')
-            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register')
+            ->postJson('/api/soom/auctions/'.$auction->public_id.'/register', $this->termsBody($auction))
             ->assertStatus(403)
             ->assertJsonPath('code', 'blocked_participant');
 
@@ -157,7 +155,7 @@ final class DuplicateParticipationActionsTest extends TestCase
             ->assertStatus(403)
             ->assertJsonPath('code', 'blocked_participant');
 
-        $this->assertSame(0, AuctionTermsAcceptance::where('auction_id', $auction->id)
+        $this->assertSame(1, AuctionTermsAcceptance::where('auction_id', $auction->id)
             ->where('user_id', $bidder->id)
             ->count());
     }

@@ -16,6 +16,7 @@ use App\Repositories\Auction\AuctionRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionConfigurationSnapshotReader;
 use App\Services\Auction\Support\AuctionMetricsRecorder;
+use App\Services\Auction\Support\AuctionTermsAcceptanceRecorder;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\ParticipantQualifier;
 use Illuminate\Support\Carbon;
@@ -29,33 +30,47 @@ final class RegisterParticipantAction
         private readonly AuctionRepository $auctions,
         private readonly AuctionParticipantRepository $participants,
         private readonly AuctionConfigurationSnapshotReader $snapshotReader,
+        private readonly AuctionTermsAcceptanceRecorder $acceptances,
         private readonly ParticipantQualifier $qualifier,
     ) {}
 
-    public function execute(Auction $auction, int $userId): AuctionParticipant
-    {
-        return $this->transaction->run(function () use ($auction, $userId): AuctionParticipant {
+    public function execute(
+        Auction $auction,
+        int $userId,
+        string $termsVersionPublicId,
+        ?string $ipAddress = null,
+        ?string $userAgent = null
+    ): AuctionParticipant {
+        return $this->transaction->run(function () use ($auction, $userId, $termsVersionPublicId, $ipAddress, $userAgent): AuctionParticipant {
             $auction = $this->auctions->lockForStateChange($auction->id);
 
             if ($auction->seller_id === $userId) {
                 throw AuctionException::domain('seller_cannot_register');
             }
 
-            if (! in_array($auction->status, [AuctionStatus::Scheduled, AuctionStatus::Live], true)) {
+            $existing = $this->participants->lockParticipant($auction->id, $userId);
+
+            if ($existing && $existing->status === AuctionParticipantStatus::Blocked) {
+                throw AuctionException::domain('blocked_participant', [], 403);
+            }
+
+            if (! $existing && ! in_array($auction->status, [AuctionStatus::Scheduled, AuctionStatus::Live], true)) {
                 throw AuctionException::domain('registration_closed');
             }
 
-            $existing = $this->participants->lockParticipant($auction->id, $userId);
-
-            if ($existing) {
-                if ($existing->status === AuctionParticipantStatus::Blocked) {
-                    throw AuctionException::domain('blocked_participant', [], 403);
-                }
-
-                throw AuctionException::domain('already_registered', [], 409);
+            try {
+                $snapshot = $this->snapshotReader->forAuction($auction);
+            } catch (AuctionConfigurationSnapshotMissingException|AuctionConfigurationSnapshotIncompleteException) {
+                $snapshot = null;
             }
 
-            $participant = $this->participants->firstOrCreateParticipant(
+            $termsVersionId = $this->acceptances->resolveVersionId(
+                $auction,
+                $termsVersionPublicId,
+                $snapshot?->terms_version_id === null ? null : (int) $snapshot->terms_version_id
+            );
+
+            $participant = $existing ?? $this->participants->firstOrCreateParticipant(
                 $auction->id,
                 $userId,
                 [
@@ -64,22 +79,37 @@ final class RegisterParticipantAction
                 ]
             );
 
-            try {
-                $snapshot = $this->snapshotReader->forAuction($auction);
-                $this->qualifier->qualifyWhenNoDepositRequired($auction, $participant, $snapshot);
-            } catch (AuctionConfigurationSnapshotMissingException|AuctionConfigurationSnapshotIncompleteException) {
+            $acceptance = $this->acceptances->record(
+                $auction,
+                $userId,
+                $termsVersionId,
+                (int) $participant->id,
+                $ipAddress,
+                $userAgent
+            );
+
+            if ($existing === null) {
+                $this->metrics->refreshParticipants($auction->id);
+                $this->audit->log('auction.participant_registered', $auction, $userId, 'user', [
+                    'participant_public_id' => $participant->public_id,
+                    'terms_version_id' => $termsVersionId,
+                ]);
+                $this->audit->outbox('auction.participant_registered', $auction, [
+                    'auction_public_id' => $auction->public_id,
+                    'participant_public_id' => $participant->public_id,
+                    'user_id' => $userId,
+                ]);
             }
 
-            $this->metrics->refreshParticipants($auction->id);
-            $this->audit->log('auction.participant_registered', $auction, $userId, 'user', [
-                'participant_public_id' => $participant->public_id,
-            ]);
+            if ($acceptance->wasRecentlyCreated) {
+                $this->audit->log('auction.terms_accepted', $auction, $userId, 'user', [
+                    'terms_version_id' => $termsVersionId,
+                ]);
+            }
 
-            $this->audit->outbox('auction.participant_registered', $auction, [
-                'auction_public_id' => $auction->public_id,
-                'participant_public_id' => $participant->public_id,
-                'user_id' => $userId,
-            ]);
+            if ($snapshot) {
+                $this->qualifier->qualifyWhenNoDepositRequired($auction, $participant, $snapshot);
+            }
 
             return $participant->refresh();
         });
