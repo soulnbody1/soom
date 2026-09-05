@@ -1,60 +1,55 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Ad;
 
 use App\Http\Controllers\Controller;
-
 use App\Http\Requests\FavoriteRequest;
 use App\Http\Resources\FavoriteResource;
 use App\Models\Favorite;
+use App\Repositories\Ad\Queries\FavoriteListQuery;
 use App\Services\UserAdInteractionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class FavoriteController extends Controller
 {
-    public function __construct(
-        protected UserAdInteractionService $Interaction,
-    ) {}
-    public function index(Request $request)
+    public function __construct(protected UserAdInteractionService $interactions) {}
+
+    public function index(Request $request, FavoriteListQuery $favorites): AnonymousResourceCollection
     {
-        $user = $request->user();
-
-        $favorites = Favorite::with('ad')
-            ->where('user_id', $user->id)
-            ->whereHas('ad')
-            ->latest()
-            ->paginate(10);
-
-        return FavoriteResource::collection($favorites);
+        return FavoriteResource::collection($favorites->paginate($request->user()->id));
     }
 
-    public function store(FavoriteRequest $request)
+    public function store(FavoriteRequest $request): JsonResponse
     {
-        $user = $request->user();
-        $exists = Favorite::where('user_id', $user->id)
+        $userId = $request->user()->id;
+
+        $exists = Favorite::query()
+            ->where('user_id', $userId)
             ->where('ad_id', $request->ad_id)
             ->exists();
+
         if ($exists) {
             return response()->json(['message' => 'الإعلان مضاف بالفعل للمفضلة'], 409);
         }
 
         Favorite::create([
-            'user_id' => $user->id,
+            'user_id' => $userId,
             'ad_id' => $request->ad_id,
         ]);
-        Cache::forget('home_ads_data');
-        $this->Interaction->store($request->ad_id, 'save');
+
+        $this->interactions->store((int) $request->ad_id, 'save');
+
         return response()->json(['message' => 'تمت الإضافة إلى المفضلة']);
     }
 
-
-    public function destroy($adId, Request $request)
+    public function destroy($adId, Request $request): JsonResponse
     {
-        $user = $request->user();
-
-        $favorite = Favorite::where('user_id', $user->id)
+        $favorite = Favorite::query()
+            ->where('user_id', $request->user()->id)
             ->where('ad_id', $adId)
             ->first();
 
@@ -63,7 +58,7 @@ class FavoriteController extends Controller
         }
 
         $favorite->delete();
-        Cache::forget('home_ads_data');
+
         return response()->json(['message' => 'تمت الإزالة من المفضلة']);
     }
 }

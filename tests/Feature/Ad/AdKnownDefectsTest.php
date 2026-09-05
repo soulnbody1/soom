@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Ad;
 
 use App\Models\Favorite;
+use App\Services\Ad\Support\AdCacheVersion;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -17,6 +20,8 @@ use Illuminate\Support\Facades\Schema;
  */
 final class AdKnownDefectsTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     /**
      * Phase 2 — the home payload is computed per user (withIsFavorite) but cached
      * under the global key "home_ads_data", so whoever warms the cache decides
@@ -48,26 +53,98 @@ final class AdKnownDefectsTest extends AdTestCase
     }
 
     /**
-     * Phase 1 — the ads table has no explicit index at all, so every listing scans.
+     * Phase 1 — the ads table shipped with no explicit index at all, so every
+     * listing was a full scan.
+     *
+     * The composites end with created_at rather than id on purpose: InnoDB appends
+     * the primary key to every secondary index, so (col, deleted_at, created_at) is
+     * physically (col, deleted_at, created_at, id). One index therefore serves both
+     * today's "ORDER BY created_at DESC" and the stable "ORDER BY created_at DESC,
+     * id DESC" that Phase 2 introduces.
      */
     public function test_ads_table_is_indexed_for_the_hot_listing_paths(): void
     {
         $this->requireMysql('index introspection needs the MySQL schema');
 
         $indexed = collect(Schema::getIndexes('ads'))
-            ->flatMap(fn (array $index): array => [implode(',', $index['columns'])])
+            ->map(fn (array $index): string => implode(',', $index['columns']))
             ->all();
 
         $missing = array_values(array_filter(
-            ['category_id,deleted_at,id', 'deleted_at,id', 'user_id,deleted_at,id', 'price'],
+            [
+                'deleted_at,created_at',
+                'category_id,deleted_at,created_at',
+                'user_id,created_at',
+                'city_id,deleted_at,created_at',
+                'state_id,deleted_at,created_at',
+                'deleted_at,price',
+                'is_featured',
+            ],
             static fn (string $expected): bool => ! in_array($expected, $indexed, true)
         ));
 
-        if ($missing !== []) {
-            $this->markTestIncomplete('Phase 1: ads is missing indexes: '.implode(' | ', $missing));
+        $this->assertSame([], $missing, 'ads is missing indexes: '.implode(' | ', $missing));
+    }
+
+    /**
+     * Phase 1 — every ad shares one country, so an index led by country_id can
+     * never narrow a result set. Worse, it gave the optimizer a skip-scan plan that
+     * made the pagination COUNT slower than having no index at all. Revisit only if
+     * the platform becomes multi-country.
+     */
+    public function test_ads_has_no_index_led_by_the_single_valued_country_column(): void
+    {
+        $this->requireMysql('index introspection needs the MySQL schema');
+
+        $ledByCountry = collect(Schema::getIndexes('ads'))
+            ->filter(fn (array $index): bool => ($index['columns'][0] ?? null) === 'country_id')
+            ->map(fn (array $index): string => (string) $index['name'])
+            ->values()
+            ->all();
+
+        $this->assertSame(
+            ['ads_country_id_foreign'],
+            $ledByCountry,
+            'Only the foreign key index should lead with country_id.'
+        );
+    }
+
+    /**
+     * Phase 1 — an index that merely repeats the leading columns of another one
+     * costs write throughput and buys nothing, so none should survive.
+     */
+    public function test_no_index_merely_repeats_the_prefix_of_another(): void
+    {
+        $this->requireMysql('index introspection needs the MySQL schema');
+
+        $tables = [
+            'ads', 'ad_images', 'ad_reels', 'ad_reel_views', 'ad_views',
+            'favorites', 'categories', 'attribute_values', 'user_ad_interactions',
+        ];
+
+        $redundant = [];
+
+        foreach ($tables as $table) {
+            $indexes = collect(Schema::getIndexes($table))
+                ->reject(fn (array $index): bool => ($index['type'] ?? '') === 'fulltext')
+                ->map(fn (array $index): array => [
+                    'name' => $table.'.'.$index['name'],
+                    'columns' => implode(',', $index['columns']),
+                ]);
+
+            foreach ($indexes as $candidate) {
+                $covering = $indexes->first(fn (array $other): bool => $other['name'] !== $candidate['name']
+                    && $other['columns'] !== $candidate['columns']
+                    && str_starts_with($other['columns'], $candidate['columns'].','));
+
+                if ($covering !== null) {
+                    $redundant[] = $candidate['name'].' ('.$candidate['columns'].') is a prefix of '
+                        .$covering['name'].' ('.$covering['columns'].')';
+                }
+            }
         }
 
-        $this->assertSame([], $missing);
+        $this->assertSame([], $redundant, "Redundant prefix indexes:\n - ".implode("\n - ", $redundant));
     }
 
     /**
@@ -90,11 +167,7 @@ final class AdKnownDefectsTest extends AdTestCase
             }
         }
 
-        if ($missing !== []) {
-            $this->markTestIncomplete('Phase 1: missing FULLTEXT indexes: '.implode(' | ', $missing));
-        }
-
-        $this->assertSame([], $missing);
+        $this->assertSame([], $missing, 'Missing FULLTEXT indexes: '.implode(' | ', $missing));
     }
 
     /**
@@ -135,14 +208,28 @@ final class AdKnownDefectsTest extends AdTestCase
             ->contains(fn (array $index): bool => ($index['unique'] ?? false)
                 && implode(',', $index['columns']) === 'user_id,ad_id,action');
 
-        if (! $hasUnique) {
-            $this->markTestIncomplete(
-                'Phase 1: user_ad_interactions needs unique(user_id, ad_id, action) '
-                .'to make the interaction write race-safe.'
-            );
-        }
+        $this->assertTrue(
+            $hasUnique,
+            'user_ad_interactions needs unique(user_id, ad_id, action) to make the write race-safe.'
+        );
+    }
 
-        $this->assertTrue($hasUnique);
+    /**
+     * Phase 1 — with the unique key in place the database itself rejects the
+     * duplicate rows the read-then-write service used to allow through.
+     */
+    public function test_the_database_rejects_a_duplicate_interaction(): void
+    {
+        $user = $this->adUser();
+        $ad = $this->makeAd();
+
+        $row = ['user_id' => $user->id, 'ad_id' => $ad->id, 'action' => 'click'];
+
+        \App\Models\UserAdInteraction::create($row);
+
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        \App\Models\UserAdInteraction::create($row);
     }
 
     /**
@@ -171,8 +258,9 @@ final class AdKnownDefectsTest extends AdTestCase
     }
 
     /**
-     * Phase 2 — favouriting any ad by any user busts the single global home cache,
-     * so at scale the cache is never warm and every request rebuilds the feed.
+     * Phase 2 — favouriting used to bust the single global home cache, which kept
+     * it permanently cold. The shared payload no longer carries per-viewer state,
+     * so a favourite toggle must leave it intact.
      */
     public function test_favoriting_does_not_invalidate_the_shared_home_cache(): void
     {
@@ -181,19 +269,33 @@ final class AdKnownDefectsTest extends AdTestCase
 
         $this->getJson('/api/soom/home')->assertOk();
 
+        $cacheKey = 'ads:home:v'.app(AdCacheVersion::class)->current();
+        $this->assertTrue(Cache::has($cacheKey));
+
         $this->actingAs($this->adUser(), 'sanctum')
             ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
             ->assertOk();
 
-        $stillCached = cache()->has('home_ads_data');
+        $this->assertTrue(Cache::has($cacheKey), 'A favourite toggle must not cool the shared home cache.');
+    }
 
-        if (! $stillCached) {
-            $this->markTestIncomplete(
-                'Phase 2: FavoriteController forgets home_ads_data on every toggle, '
-                .'which keeps the shared home cache permanently cold.'
-            );
-        }
+    /**
+     * Phase 2 — publishing or removing an ad must still roll the cache version so
+     * the shared home payload is rebuilt.
+     */
+    public function test_deleting_an_ad_rolls_the_home_cache_version(): void
+    {
+        $owner = $this->adUser();
+        $ad = $this->makeAd(['user_id' => $owner->id, 'category_id' => $this->category(null, 'rolling')->id]);
 
-        $this->assertTrue($stillCached);
+        $this->getJson('/api/soom/home')->assertOk();
+        $before = app(AdCacheVersion::class)->current();
+
+        $this->actingAs($owner, 'sanctum')
+            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->id)
+            ->assertOk();
+
+        $this->assertGreaterThan($before, app(AdCacheVersion::class)->current());
+        $this->assertSame([], $this->getJson('/api/soom/home')->json('data.0.ads'));
     }
 }

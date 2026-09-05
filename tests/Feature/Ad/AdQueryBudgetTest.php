@@ -7,6 +7,7 @@ namespace Tests\Feature\Ad;
 use App\Models\AdImage;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Query budgets for the ad read paths.
@@ -21,6 +22,8 @@ use App\Models\AttributeValue;
  */
 final class AdQueryBudgetTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     private const RELATION_COUNT = 7;
 
     public function test_public_listing_cost_does_not_grow_with_the_page_size(): void

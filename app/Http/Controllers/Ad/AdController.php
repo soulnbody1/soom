@@ -1,35 +1,46 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Ad;
 
+use App\DTO\Ad\AdFilterDTO;
+use App\DTO\Ad\AdSearchDTO;
 use App\Http\Controllers\Controller;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Http\Requests\StoreAdRequest;
+use App\Http\Resources\AdResource;
+use App\Http\Resources\MyAdResource;
+use App\Models\Ad;
+use App\Repositories\Ad\Queries\AdDetailQuery;
+use App\Repositories\Ad\Queries\AdListingQuery;
+use App\Repositories\Ad\Queries\AdminAdQuery;
+use App\Repositories\Ad\Queries\AdSearchQuery;
+use App\Repositories\Ad\Queries\CategoryFeedQuery;
+use App\Repositories\Ad\Queries\HomeFeedQuery;
+use App\Repositories\Ad\Queries\MyAdsQuery;
+use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\AdService;
 use App\Services\UserAdInteractionService;
-use App\Http\Resources\AdResource;
-use App\Models\Ad;
 use App\Traits\ApiResponseTrait;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\Ad\AdFilter;
-use App\Http\Controllers\Ad\AdSearch;
-use App\Http\Resources\MyAdResource;
-use App\Models\Category;
-use Illuminate\Support\Facades\Cache;
-
 
 class AdController extends Controller
 {
-    use AuthorizesRequests, ApiResponseTrait;
+    use ApiResponseTrait, AuthorizesRequests;
+
     public function __construct(
         protected AdService $service,
-        protected UserAdInteractionService $Interaction,
+        protected UserAdInteractionService $interactions,
+        protected AdCacheVersion $cacheVersion,
     ) {}
 
     public function store(StoreAdRequest $request)
     {
         $ad = $this->service->store([...$request->validated(), 'user_id' => Auth::id()]);
+
         return new AdResource($ad);
     }
 
@@ -37,17 +48,13 @@ class AdController extends Controller
     {
         $this->authorize('update', $ad);
         $this->service->update($ad, [...$request->validated(), 'user_id' => Auth::id()]);
+
         return new AdResource($ad->fresh());
     }
 
-    public function filter(Request $request, AdFilter $filter)
+    public function filter(Request $request, AdListingQuery $listing): JsonResponse
     {
-        $user = auth('sanctum')->user();
-        $query = $filter->apply($request, Ad::query());
-        $ads = $query->latest()
-            ->with(['category:id,name'])
-            ->withIsFavorite($user)
-            ->paginate(20);
+        $ads = $listing->paginate(AdFilterDTO::fromRequest($request), $this->viewer());
 
         return $this->sendResponse(
             AdResource::collection($ads),
@@ -55,212 +62,203 @@ class AdController extends Controller
         );
     }
 
-    public function search(Request $request, AdSearch $search)
+    public function search(Request $request, AdSearchQuery $search): JsonResponse
     {
-        $query = $search->apply($request);
-        $ads = $query->latest()->with((Ad::$defaultRelations))->paginate(10);
+        $ads = $search->apply(AdSearchDTO::fromRequest($request))
+            ->latest()
+            ->with(Ad::$defaultRelations)
+            ->paginate(10);
+
         if ($ads->total() === 0) {
             return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
         }
+
         return $this->sendResponse(
             AdResource::collection($ads),
             'تم جلب الإعلانات بنجاح.'
         );
     }
 
-    public function search_for_admin(Request $request, AdSearch $search)
+    public function search_for_admin(Request $request, AdSearchQuery $search, AdminAdQuery $admin): JsonResponse
     {
-        $query = $search->apply($request);
-        $active_ads = $query->count();
-        $query->withTrashed();
-        $this->applyAdStatusFilter($request, $query);
-        $ads = $query->latest()->with((Ad::$defaultRelations))->paginate(20);
+        $filters = AdSearchDTO::fromRequest($request);
+        $query = $search->apply($filters);
+        $activeAds = $query->count();
+
+        $ads = $admin->paginateSearch($query, $filters->status);
+
         if ($ads->total() === 0) {
             return $this->sendEmptyResponse('لم يتم العثور على إعلانات تطابق معايير البحث.');
         }
+
         return $this->sendResponse(
             AdResource::collection($ads),
             'تم جلب الإعلانات بنجاح.',
             200,
-            ['active_ads' => $active_ads]
+            ['active_ads' => $activeAds]
         );
     }
 
-    public function show($id)
+    public function show(int $id, AdDetailQuery $details): JsonResponse
     {
-        $user = auth('sanctum')->user();
-        $ad = $this->service->getAdWithRelations($id, $user);
+        $viewer = $this->viewer();
+        $ad = $details->findOrFail($id, $viewer);
+
         $this->service->recordView($ad);
-        $this->Interaction->store($ad->id, 'click');
+        $this->interactions->store($ad->id, 'click');
+
         return $this->sendResponse(
             new AdResource($ad),
             'تم جلب الاعلان بنجاح.'
         );
     }
 
-    public function adsByCategoryWithChildren($categoryId)
+    public function adsByCategoryWithChildren(int $categoryId, CategoryFeedQuery $feed): JsonResponse
     {
-        $user = auth('sanctum')->user();
-        $data = $this->service->getAdsWithCategoryAndNearby($categoryId, $user);
+        $data = $feed->build($categoryId, $this->viewer());
+        $ads = $data['ads'];
 
         return response()->json([
             'success' => true,
             'data' => [
-                'ads' => AdResource::collection($data['ads']),
+                'ads' => AdResource::collection($ads),
                 'nearby_ads' => AdResource::collection($data['nearby_ads']),
                 'subcategories' => $data['subcategories'],
                 'meta' => [
-                    'current_page' => $data['ads']->currentPage(),
-                    'last_page' => $data['ads']->lastPage(),
-                    'per_page' => $data['ads']->perPage(),
-                    'total' => $data['ads']->total(),
-                    'next_page_url' => $data['ads']->nextPageUrl(),
-                    'prev_page_url' => $data['ads']->previousPageUrl(),
+                    'current_page' => $ads->currentPage(),
+                    'last_page' => $ads->lastPage(),
+                    'per_page' => $ads->perPage(),
+                    'total' => $ads->total(),
+                    'next_page_url' => $ads->nextPageUrl(),
+                    'prev_page_url' => $ads->previousPageUrl(),
                 ],
             ],
             'message' => 'تم جلب الإعلانات والفئات الفرعية والإعلانات القريبة بنجاح.',
         ]);
     }
 
-    public function myads()
+    public function myads(Request $request, MyAdsQuery $myAds): JsonResponse
     {
-        $ads = $this->service->getMyAdsWithStats();
+        $ownerId = (int) Auth::id();
+
+        $data = $request->filled('page')
+            ? MyAdResource::collection($myAds->paginate($ownerId))
+            : MyAdResource::collection($myAds->get($ownerId))->resolve();
+
         return $this->sendResponse(
-            MyAdResource::collection($ads)->resolve(),
+            $data,
             'تم جلب الإعلانات بنجاح.',
             200,
-            ['total_views' => $ads->sum('views_count')]
+            ['total_views' => $myAds->totalViews($ownerId)]
         );
     }
 
-    public function destroy(Ad $ad)
+    public function destroy(Ad $ad): JsonResponse
     {
         $this->authorize('delete', $ad);
         $ad->delete();
-        Cache::forget('home_ads_data');
+        $this->cacheVersion->bump();
+
         return $this->sendResponse([], 'تم حذف الاعلان بنجاح.');
     }
 
-    public function restore($id)
+    public function restore($id): JsonResponse
     {
-        $ad = $this->service->getTrashedAdForUser($id);
+        $ad = $this->service->getTrashedAdForUser((int) $id);
         $this->authorize('restore', $ad);
-        if ($ad->trashed()) {
-            $ad->restore();
-            return $this->sendResponse([], 'تم استرجاع الإعلان بنجاح.');
+
+        if (! $ad->trashed()) {
+            return $this->sendError('الإعلان غير محذوف.', 400);
         }
-        Cache::forget('home_ads_data');
-        return $this->sendError('الإعلان غير محذوف.', 400);
+
+        $ad->restore();
+        $this->cacheVersion->bump();
+
+        return $this->sendResponse([], 'تم استرجاع الإعلان بنجاح.');
     }
 
-    public function forceDelete($id)
+    public function forceDelete($id): JsonResponse
     {
-        $ad = $this->service->getTrashedAdForUser($id);
+        $ad = $this->service->getTrashedAdForUser((int) $id);
         $this->authorize('forceDelete', $ad);
-        if (!$ad) {
-            return $this->sendError('الإعلان غير موجود أو لا ينتمي للمستخدم.', 404);
-        }
 
-        if ($ad) {
-            $ad->forceDelete();
-            Cache::forget('home_ads_data');
-            return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
-        }
+        $ad->forceDelete();
+        $this->cacheVersion->bump();
+
+        return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
     }
 
-    public function home()
+    public function home(HomeFeedQuery $feed): JsonResponse
     {
-        $user = auth('sanctum')->user();
-        $homeData = Cache::remember('home_ads_data', now()->addMinutes(10), function () use ($user) {
-            return $this->service->getHomeAds($user);
-        });
-        return $this->sendResponse($homeData, 'تم جلب الإعلانات بنجاح.');
+        return $this->sendResponse($feed->build($this->viewer()), 'تم جلب الإعلانات بنجاح.');
     }
 
-    public function ads(Request $request)
+    public function ads(Request $request, AdminAdQuery $admin)
     {
-        $query = Ad::withTrashed()->Featured();
-        $this->applyAdStatusFilter($request, $query);
-        $ads = $query->paginate(20);
+        $ads = $admin->paginateFeatured($request->input('status'));
 
         return AdResource::collection($ads)
-            ->additional(['active_ads' => Ad::count()]);
+            ->additional(['active_ads' => $admin->activeCount()]);
     }
 
-    protected function applyAdStatusFilter(Request $request, $query): void
+    public function toggleBlock($id): JsonResponse
     {
-        $status = $request->input('status');
+        $ad = Ad::withTrashed()->find($id);
 
-        if ($status === 'active') {
-            $query->whereNull('deleted_at');
-        } elseif ($status === 'inactive') {
-            $query->whereNotNull('deleted_at');
+        if (! $ad) {
+            return response()->json(['message' => 'الاعلان غير موجود.'], 404);
         }
+
+        if ($ad->trashed()) {
+            $ad->restore();
+            $this->cacheVersion->bump();
+
+            return response()->json(['message' => 'تم استرجاع الاعلان بنجاح.'], 200);
+        }
+
+        $ad->delete();
+        $this->cacheVersion->bump();
+
+        return response()->json(['message' => 'تم توقيف  الاعلان .'], 200);
     }
 
-    public function toggleBlock($id)
+    public function toggleFeatured($id): JsonResponse
     {
-        $Ad = Ad::withTrashed()->find($id);
+        $ad = Ad::withTrashed()->find($id);
 
-        if (!$Ad) {
-            return response()->json([
-                'message' => 'الاعلان غير موجود.'
-            ], 404);
-        }
-
-        if ($Ad->trashed()) {
-            $Ad->restore();
-            Cache::forget('home_ads_data');
-
-            return response()->json([
-                'message' => 'تم استرجاع الاعلان بنجاح.'
-            ], 200);
-        } else {
-            $Ad->delete();
-            Cache::forget('home_ads_data');
-
-            return response()->json([
-                'message' => 'تم توقيف  الاعلان .'
-            ], 200);
-        }
-    }
-
-    public function toggleFeatured($id)
-    {
-        $Ad = Ad::withTrashed()->find($id);
-        if (!$Ad) {
+        if (! $ad) {
             return response()->json(['message' => 'الاعلان غير موجود'], 404);
         }
-        if (!$Ad->is_featured) {
-            $Ad->is_featured = true;
-            $Ad->save();
-            Cache::forget('home_ads_data');
-            return response()->json(['message' => 'تم جعل الاعلان مميز الان '], 200);
-        } else {
-            $Ad->is_featured = false;
-            $Ad->save();
-            Cache::forget('home_ads_data');
-            return response()->json(['message' => 'تم ارجاع الاعلان الى اعلان عادى  .'], 200);
-        }
+
+        $ad->is_featured = ! $ad->is_featured;
+        $ad->save();
+        $this->cacheVersion->bump();
+
+        return response()->json([
+            'message' => $ad->is_featured
+                ? 'تم جعل الاعلان مميز الان '
+                : 'تم ارجاع الاعلان الى اعلان عادى  .',
+        ], 200);
     }
 
-    public function destroybyadmin($id)
+    public function destroybyadmin($id): JsonResponse
     {
-        $ad = $this->service->getTrashedAd($id);
-        if (!$ad) {
-            return $this->sendError('الإعلان غير موجود أو لا ينتمي للمستخدم.', 404);
-        }
+        $ad = $this->service->getTrashedAd((int) $id);
+        $ad->forceDelete();
+        $this->cacheVersion->bump();
 
-        if ($ad) {
-            $ad->forceDelete();
-            Cache::forget('home_ads_data');
-            return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
-        }
+        return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
     }
 
     public function sharePage($id)
     {
-        $ad = Ad::with("images")->findOrFail($id);
+        $ad = Ad::with('images')->findOrFail($id);
+
         return view('share.show', compact('ad'));
+    }
+
+    private function viewer(): ?object
+    {
+        return auth('sanctum')->user();
     }
 }

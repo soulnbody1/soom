@@ -6,12 +6,15 @@ namespace Tests\Feature\Ad;
 
 use App\Models\Favorite;
 use App\Models\UserAdInteraction;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Characterizes /api/soom/favorites.
  */
 final class FavoriteEndpointsTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     public function test_index_returns_the_users_favorites_with_the_nested_ad(): void
     {
         $user = $this->adUser();

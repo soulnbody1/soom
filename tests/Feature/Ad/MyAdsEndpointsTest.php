@@ -10,6 +10,7 @@ use App\Models\Ad;
 use App\Models\AdImage;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Storage;
  */
 final class MyAdsEndpointsTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     public function test_store_creates_an_ad_with_images_attributes_and_returns_the_bare_resource(): void
     {
         Queue::fake();

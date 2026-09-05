@@ -7,12 +7,15 @@ namespace Tests\Feature\Ad;
 use App\Models\AdReel;
 use App\Models\AdReelView;
 use App\Models\Favorite;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Characterizes the reel feed and reel-view endpoints.
  */
 final class AdReelEndpointsTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     public function test_reels_feed_returns_a_paginated_payload(): void
     {
         $this->makeReels(3);

@@ -4,38 +4,27 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Ad;
 
+use Illuminate\Foundation\Testing\DatabaseTruncation;
+
 /**
  * Characterizes the fulltext-backed search endpoints.
  *
  * Both use MATCH ... AGAINST, which has no SQLite equivalent, so the whole class
  * only runs on MySQL — via phpunit.ads-mysql.xml / `composer test:ads:mysql`.
+ *
+ * DatabaseTruncation rather than RefreshDatabase: InnoDB does not expose rows
+ * written by an uncommitted transaction to its fulltext index, so a wrapped test
+ * would search an empty index.
  */
 final class AdSearchEndpointsTest extends AdTestCase
 {
+    use DatabaseTruncation;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->requireMysql('search uses MATCH ... AGAINST');
-        $this->requireAdsFulltextIndex();
-    }
-
-    /**
-     * No migration creates the FULLTEXT index these endpoints match against, so a
-     * freshly migrated database raises MySQL error 1191 on every search request.
-     * Phase 1 adds the index; until then the suite reports the gap instead of
-     * failing on a defect that is already tracked in AdKnownDefectsTest.
-     */
-    private function requireAdsFulltextIndex(): void
-    {
-        $hasIndex = collect(\Illuminate\Support\Facades\Schema::getIndexes('ads'))
-            ->contains(fn (array $index): bool => implode(',', $index['columns']) === 'title,description');
-
-        if (! $hasIndex) {
-            $this->markTestIncomplete(
-                'Phase 1: ads has no FULLTEXT(title, description) index, so search raises MySQL error 1191.'
-            );
-        }
     }
 
     public function test_search_by_title_returns_the_standard_paginated_envelope(): void

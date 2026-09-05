@@ -10,6 +10,7 @@ use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\Favorite;
 use App\Models\UserAdInteraction;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Characterizes the unauthenticated read surface:
@@ -17,6 +18,8 @@ use App\Models\UserAdInteraction;
  */
 final class AdPublicEndpointsTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     public function test_listing_returns_the_standard_envelope_and_resource_keys(): void
     {
         $category = $this->category();

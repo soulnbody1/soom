@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Ad;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\AssertsQueryCount;
 use Tests\Feature\Ad\Concerns\CreatesAdFixtures;
@@ -21,10 +20,6 @@ abstract class AdTestCase extends TestCase
 {
     use AssertsQueryCount;
     use CreatesAdFixtures;
-
-    // RefreshDatabase, not a bare migrate: on MySQL the schema persists between
-    // tests, so without it fixtures from one test leak into the next.
-    use RefreshDatabase;
 
     protected function setUp(): void
     {

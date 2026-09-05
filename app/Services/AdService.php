@@ -4,18 +4,18 @@ namespace App\Services;
 
 use App\Jobs\ProcessAdReel;
 use App\Jobs\SendAdNotification;
-use App\Repositories\AdRepository;
 use App\Models\Ad;
 use App\Models\AdView;
-use App\Models\Category;
+use App\Repositories\AdRepository;
+use App\Services\Ad\Support\AdCacheVersion;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
-
-
 
 class AdService
 {
-    public function __construct(protected AdRepository $repo) {}
+    public function __construct(
+        protected AdRepository $repo,
+        protected AdCacheVersion $cacheVersion,
+    ) {}
 
     public function store(array $data): Ad
     {
@@ -30,73 +30,9 @@ class AdService
         $this->repo->attachImages($ad, $images);
         $this->handleReelVideo($ad, $reel_video);
         SendAdNotification::dispatch($ad);
-        Cache::forget('home_ads_data');
+        $this->cacheVersion->bump();
+
         return $ad;
-    }
-    public function getAdsWithCategoryAndNearby($categoryId, ?object $user)
-    {
-        $allCategories = Category::select('id', 'parent_id', 'name')->get()->groupBy('parent_id');
-        $categoryIds = $this->getAllCategoryIdsEfficient($categoryId, $allCategories);
-
-        return [
-            'ads' => $this->repo->getAdsByCategoryIds($categoryIds, $user),
-            'subcategories' => $this->repo->getSubcategoriesWithAdCount($categoryId),
-            'nearby_ads' => $user && ($user->city_id)
-                ? $this->repo->getNearbyAds($categoryIds, $user)
-                : collect()
-        ];
-    }
-
-    public function getHomeAds(?object $user)
-    {
-        $allCategories = Category::select('id', 'parent_id', 'name', 'display_order')->orderBy('display_order', 'asc')->get()->groupBy('parent_id');
-        $parentCategories = $allCategories->get(null, collect());
-        $categoryIdsMap = [];
-        foreach ($parentCategories as $category) {
-            $categoryIdsMap[$category->id] = $this->getAllCategoryIdsEfficient($category->id, $allCategories);
-        }
-        $allCategoryIds = collect($categoryIdsMap)->flatten()->unique()->values()->toArray();
-        $ads = $this->repo->getHomeAdsByCategoryIds($allCategoryIds, $user);
-        $result = [];
-        foreach ($parentCategories as $category) {
-            $categoryIds = $categoryIdsMap[$category->id];
-            $groupedAds = $ads->whereIn('category_id', $categoryIds)->take(4)->values();
-            $result[] = [
-                'category' => $category->name,
-                'ads' => $groupedAds,
-            ];
-        }
-
-        return $result;
-    }
-
-    protected function getAllCategoryIdsEfficient($parentId, $allCategories)
-    {
-        $ids = [$parentId];
-        $children = $allCategories->get($parentId, collect());
-        foreach ($children as $child) {
-            $ids = array_merge($ids, $this->getAllCategoryIdsEfficient($child->id, $allCategories));
-        }
-        return $ids;
-    }
-
-    public function recordView(Ad $ad): void
-    {
-        $user = auth('sanctum')->user();
-
-        if (!$user) {
-            return;
-        }
-
-        AdView::firstOrCreate(
-            [
-                'ad_id' => $ad->id,
-                'user_id' => $user->id,
-            ],
-            [
-                'viewed_at' => now(),
-            ]
-        );
     }
 
     public function update(Ad $ad, array $data): Ad
@@ -110,28 +46,24 @@ class AdService
         $this->repo->update($ad, $data);
         $this->repo->syncAttributes($ad, $attributes);
         $this->repo->replaceImages($ad, $images);
-
         $this->handleReelVideo($ad, $reel_video);
-        Cache::forget('home_ads_data');
+        $this->cacheVersion->bump();
+
         return $ad;
     }
 
-    public function getAdWithRelations(int $id, ?object $user = null): Ad
+    public function recordView(Ad $ad): void
     {
-        $query = Ad::with([
-            'user:id,name,phone,logo',
-            'category',
-            'country',
-            'state',
-            'city',
-            'images',
-        ]);
+        $user = auth('sanctum')->user();
 
-        if ($user) {
-            $query->withIsFavorite($user);
+        if (! $user) {
+            return;
         }
 
-        return $query->findOrFail($id);
+        AdView::firstOrCreate(
+            ['ad_id' => $ad->id, 'user_id' => $user->id],
+            ['viewed_at' => now()],
+        );
     }
 
     public function getTrashedAdForUser(int $id): Ad
@@ -141,22 +73,12 @@ class AdService
             ->where('user_id', Auth::id())
             ->firstOrFail();
     }
+
     public function getTrashedAd(int $id): Ad
     {
-        return Ad::withTrashed()
-            ->where('id', $id)
-            ->firstOrFail();
+        return Ad::withTrashed()->where('id', $id)->firstOrFail();
     }
 
-    public function getMyAdsWithStats()
-    {
-        return Ad::withTrashed()
-            ->where('user_id', Auth::id())
-            ->withCount('views')
-            ->with(Ad::$defaultRelations)
-            ->latest()
-            ->get();
-    }
     protected function handleReelVideo(Ad $ad, $reel_video): void
     {
         if ($reel_video) {

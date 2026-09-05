@@ -1,0 +1,77 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Ad\Support;
+
+use App\Models\Category;
+use Illuminate\Support\Facades\Cache;
+
+final class CategoryTreeResolver
+{
+    private const CACHE_KEY = 'ads:category_tree';
+
+    private const TTL_SECONDS = 604800;
+
+    private ?array $tree = null;
+
+    public function subtreeIds(int $categoryId): array
+    {
+        $children = $this->tree()['children'];
+        $ids = [];
+        $pending = [$categoryId];
+
+        while ($pending !== []) {
+            $current = array_pop($pending);
+            $ids[] = $current;
+
+            foreach ($children[$current] ?? [] as $child) {
+                $pending[] = $child;
+            }
+        }
+
+        return $ids;
+    }
+
+    public function roots(): array
+    {
+        return $this->tree()['roots'];
+    }
+
+    public function forget(): void
+    {
+        $this->tree = null;
+        Cache::forget(self::CACHE_KEY);
+    }
+
+    private function tree(): array
+    {
+        return $this->tree ??= Cache::remember(
+            self::CACHE_KEY,
+            self::TTL_SECONDS,
+            static fn (): array => self::build()
+        );
+    }
+
+    private static function build(): array
+    {
+        $children = [];
+        $roots = [];
+
+        Category::query()
+            ->select('id', 'parent_id', 'name', 'display_order')
+            ->orderBy('display_order')
+            ->get()
+            ->each(function (Category $category) use (&$children, &$roots): void {
+                if ($category->parent_id === null) {
+                    $roots[] = ['id' => (int) $category->id, 'name' => $category->name];
+
+                    return;
+                }
+
+                $children[(int) $category->parent_id][] = (int) $category->id;
+            });
+
+        return ['children' => $children, 'roots' => $roots];
+    }
+}

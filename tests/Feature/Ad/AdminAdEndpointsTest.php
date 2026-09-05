@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Ad;
 
 use App\Models\Ad;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Characterizes /api/admin/ads (list plus the moderation actions).
@@ -13,6 +14,8 @@ use App\Models\Ad;
  */
 final class AdminAdEndpointsTest extends AdTestCase
 {
+    use RefreshDatabase;
+
     public function test_listing_returns_featured_ads_first(): void
     {
         $this->makeAds(2);
