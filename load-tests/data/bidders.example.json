@@ -1,0 +1,6 @@
+[
+  { "name": "bidder-1", "token": "replace-with-sanctum-token-1" },
+  { "name": "bidder-2", "token": "replace-with-sanctum-token-2" },
+  { "name": "bidder-3", "token": "replace-with-sanctum-token-3" },
+  { "name": "bidder-4", "token": "replace-with-sanctum-token-4" }
+]

@@ -33,7 +33,7 @@ Operational checklist:
 - Configure private payment receipt storage with the `spaces_private` disk. Payment receipt uploads use private object storage and authorized temporary URLs.
 - Review manual payment submissions through `api/admin/auctions/payment-submissions/{paymentSubmission}/review`; payment methods are addressed by public ULID, not database IDs.
 - Process outbox messages through the scheduled outbox job. Outbox rows are leased before notifications are sent.
-- Exercise the hot bid path with k6: `k6 run load-tests/auction-hot-bid.js -e BASE_URL=http://127.0.0.1:8000 -e AUCTION_ID=<public-id> -e AUTH_TOKEN=<token>`.
+- Exercise the hot bid path with k6: `k6 run load-tests/auction-bidding.k6.js -e BASE_URL=http://127.0.0.1:8000 -e AUCTION_ID=<public-id> -e AUTH_TOKEN=<token>`.
 
 ## AI Content Review
 
