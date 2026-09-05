@@ -32,7 +32,6 @@ class AttributeResource extends JsonResource
         ];
     }
 
-
     protected function getBetweenValues($options)
     {
         $grouped = [];
@@ -42,7 +41,7 @@ class AttributeResource extends JsonResource
 
             $grouped[] = [
                 'parent_option_id' => $parentId,
-                'value' => (int) $option['value']
+                'value' => (int) $option['value'],
             ];
         }
         $groupedByParent = [];
@@ -56,7 +55,7 @@ class AttributeResource extends JsonResource
             $start = $values[0] ?? null;
             $end = $values[1] ?? null;
 
-            if (!is_null($start) && !is_null($end) && $start <= $end) {
+            if (! is_null($start) && ! is_null($end) && $start <= $end) {
                 $range = range($start, $end);
 
                 $result[] = [

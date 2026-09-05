@@ -19,15 +19,16 @@ class AdResource extends JsonResource
                 $this->state?->name,
                 $this->city?->name,
             ])),
-            'latitude'  => $this->latitude,
+            'latitude' => $this->latitude,
             'longitude' => $this->longitude,
-            'attributes'=> $this->attributeValues
+            'attributes' => $this->attributeValues
                 ->groupBy('attribute.name')
                 ->map(function ($items, $attributeName) {
                     $values = $items->pluck('value');
+
                     return [
                         'attribute' => $attributeName,
-                        'value'     => $values->count() === 1 ? $values->first() : $values->values()
+                        'value' => $values->count() === 1 ? $values->first() : $values->values(),
                     ];
                 })
                 ->values(),

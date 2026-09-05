@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,7 +16,7 @@ class StoreAdReelViewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ad_reel_id' => 'required|exists:ad_reels,id',
+            'ad_reel_id' => 'required|integer|exists:ad_reels,id',
         ];
     }
 
@@ -21,8 +24,7 @@ class StoreAdReelViewRequest extends FormRequest
     {
         return [
             'ad_reel_id.required' => 'رقم الإعلان مطلوب',
-            'ad_reel_id.exists'   => 'الإعلان غير موجود',
+            'ad_reel_id.exists' => 'الإعلان غير موجود',
         ];
     }
-    
 }

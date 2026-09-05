@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Resources\Location;
 
 use Illuminate\Http\Request;
@@ -16,4 +17,3 @@ class CityResource extends JsonResource
         ];
     }
 }
-

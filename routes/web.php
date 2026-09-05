@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Controllers\Ad\AdSharePageController;
+use App\Http\Controllers\Auction\PaymentReturnController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Ad\AdController;
-use App\Http\Controllers\Auction\PaymentReturnController;
 
 Route::get('/', function () {
     return response()->json(['status' => 'ok']);
@@ -11,9 +11,10 @@ Route::get('/', function () {
 
 Route::get('/clear-cache', function () {
     Artisan::call('optimize:clear');
+
     return 'تم مسح الكاش بنجاح';
 });
-Route::get('/share/show/{id}', [AdController::class, 'sharePage'])->name('share.show');
+Route::get('/share/show/{id}', AdSharePageController::class)->name('share.show');
 Route::get('/open/soom', function () {
     return view('share.soom');
 })->name('open.soom');

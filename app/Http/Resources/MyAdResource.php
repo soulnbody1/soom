@@ -17,22 +17,27 @@ class MyAdResource extends JsonResource
                 'id' => $this->category?->id,
                 'name' => $this->category?->name,
             ],
-            'location'    => [
-                'LocationName' => $this->country->name . ', ' . $this->state->name . ', ' . $this->city->name,
-                'country' => $this->country->id ?? null,
-                'state'   => $this->state->id ?? null,
-                'city'    => $this->city->id ?? null,
+            'location' => [
+                'LocationName' => implode(', ', array_filter([
+                    $this->country?->name,
+                    $this->state?->name,
+                    $this->city?->name,
+                ])),
+                'country' => $this->country?->id,
+                'state' => $this->state?->id,
+                'city' => $this->city?->id,
             ],
-            'latitude'  => $this->latitude,
+            'latitude' => $this->latitude,
             'longitude' => $this->longitude,
             'attributes' => $this->attributeValues
                 ->groupBy('attribute.name')
                 ->map(function ($items, $attributeName) {
                     $values = $items->pluck('value');
+
                     return [
                         'id' => $items->first()->attribute_id,
                         'attribute' => $attributeName,
-                        'value' => $values->count() === 1 ? $values->first() : $values->values()
+                        'value' => $values->count() === 1 ? $values->first() : $values->values(),
                     ];
                 })
                 ->values(),
@@ -42,7 +47,7 @@ class MyAdResource extends JsonResource
                 'logo' => $this->user?->logo,
             ],
             'images' => $this->images->pluck('image_path'),
-            'created_at'  => $this->created_at->toDateTimeString(),
+            'created_at' => $this->created_at?->toDateTimeString(),
             'views_count' => $this->views_count ?? 0,
             'status' => $this->deleted_at ? false : true,
         ];

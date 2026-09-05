@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Ad;
+use App\Models\AdReel;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionDispute;
@@ -9,6 +11,8 @@ use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
+use App\Policies\AdPolicy;
+use App\Policies\AdReelPolicy;
 use App\Policies\Auction\AuctionDashboardPolicy;
 use App\Policies\Auction\AuctionDepositPolicy;
 use App\Policies\Auction\AuctionDisputePolicy;
@@ -88,11 +92,33 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuctionDispute::class, AuctionDisputePolicy::class);
         Gate::policy(AuctionSellerPayout::class, SellerPayoutPolicy::class);
         Gate::define('auction.dashboard.view', [AuctionDashboardPolicy::class, 'view']);
+        Gate::policy(Ad::class, AdPolicy::class);
+        Gate::policy(AdReel::class, AdReelPolicy::class);
 
         $this->configurePaymentRateLimiting();
         $this->configureBidRateLimiting();
         $this->configureParticipationRateLimiting();
         $this->configureContentReviewRateLimiting();
+        $this->configureAdRateLimiting();
+    }
+
+    private function configureAdRateLimiting(): void
+    {
+        RateLimiter::for('ads-public', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('ads.rate_limits.public_per_minute')
+        )->by('ads-public:'.$request->ip()));
+
+        RateLimiter::for('ads-search', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('ads.rate_limits.search_per_minute')
+        )->by('ads-search:'.$request->ip()));
+
+        RateLimiter::for('ads-write', fn (Request $request): Limit => Limit::perHour(
+            (int) config('ads.rate_limits.write_per_hour')
+        )->by('ads-write:user:'.(int) ($request->user()?->id ?? 0)));
+
+        RateLimiter::for('ads-engagement', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('ads.rate_limits.engagement_per_minute')
+        )->by('ads-engagement:user:'.(int) ($request->user()?->id ?? 0)));
     }
 
     private function configureContentReviewRateLimiting(): void

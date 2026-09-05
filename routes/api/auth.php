@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,4 +11,3 @@ Route::prefix('auth')->group(function () {
     Route::post('/refreshToken', [AuthController::class, 'refreshToken']);
     Route::post('/verify-otp', [AuthController::class, 'verify_otp']);
 });
-

@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Ad\AdController;
+use App\Http\Controllers\Ad\AdListingController;
 use App\Http\Controllers\Ad\AdReelViewController;
+use App\Http\Controllers\Ad\AdSearchController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Attribute\AttributeController;
 use App\Http\Controllers\BannerController;
@@ -19,12 +21,15 @@ Route::prefix('soom')->group(function () {
     });
 
     Route::prefix('ads')->group(function () {
-        Route::get('/', [AdController::class, 'filter']);
-        Route::get('/reels', [AdReelViewController::class, 'reels']);
-        Route::get('/reels/{id}', [AdReelViewController::class, 'ReelsForCategories']);
-        Route::get('/search', [AdController::class, 'search']);
-        Route::get('/{id}', [AdController::class, 'show']);
-        Route::get('/category/{id}', [AdController::class, 'adsByCategoryWithChildren']);
+        Route::get('/search', AdSearchController::class)->middleware('throttle:ads-search');
+
+        Route::middleware('throttle:ads-public')->group(function () {
+            Route::get('/', [AdListingController::class, 'index']);
+            Route::get('/reels', [AdReelViewController::class, 'reels']);
+            Route::get('/reels/{id}', [AdReelViewController::class, 'ReelsForCategories']);
+            Route::get('/{id}', [AdController::class, 'show']);
+            Route::get('/category/{id}', [AdListingController::class, 'byCategory']);
+        });
     });
 
     Route::prefix('countries')->group(function () {
@@ -57,5 +62,5 @@ Route::prefix('soom')->group(function () {
         Route::get('/by-category', [AttributeController::class, 'getAttributesByCategory']);
     });
 
-    Route::get('home', [AdController::class, 'home']);
+    Route::get('home', [AdListingController::class, 'home'])->middleware('throttle:ads-public');
 });

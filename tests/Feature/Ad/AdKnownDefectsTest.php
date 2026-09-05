@@ -171,28 +171,24 @@ final class AdKnownDefectsTest extends AdTestCase
     }
 
     /**
-     * Phase 4 — StoreAdRequest marks state_id/city_id nullable while the ads table
-     * declares them NOT NULL, so omitting them is a 500 rather than a 422.
+     * Phase 4 — StoreAdRequest marked state_id/city_id nullable while the ads table
+     * declares them NOT NULL, so omitting them reached the database and 500ed.
      */
-    public function test_omitting_the_optional_location_ids_is_a_validation_error_not_a_server_error(): void
+    public function test_omitting_the_location_ids_is_a_validation_error_not_a_server_error(): void
     {
-        $response = $this->actingAs($this->adUser(), 'sanctum')->postJson('/api/soom/ads', [
-            'title' => 'No location',
-            'description' => 'State and city omitted',
-            'price' => 10,
-            'category_id' => $this->category()->id,
-            'country_id' => $this->country()->id,
-            'images' => [\Illuminate\Http\UploadedFile::fake()->image('a.jpg')],
-        ]);
+        $this->actingAs($this->adUser(), 'sanctum')
+            ->postJson('/api/soom/ads', [
+                'title' => 'No location',
+                'description' => 'State and city omitted',
+                'price' => 10,
+                'category_id' => $this->category()->id,
+                'country_id' => $this->country()->id,
+                'images' => [\Illuminate\Http\UploadedFile::fake()->image('a.jpg')],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['state_id', 'city_id']);
 
-        if ($response->status() === 500) {
-            $this->markTestIncomplete(
-                'Phase 4: state_id/city_id are validated as nullable but the schema is NOT NULL, '
-                .'so the request 500s instead of returning 422.'
-            );
-        }
-
-        $response->assertStatus(422);
+        $this->assertDatabaseCount('ads', 0);
     }
 
     /**

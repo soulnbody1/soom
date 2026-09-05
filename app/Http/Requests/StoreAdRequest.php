@@ -1,13 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class StoreAdRequest extends FormRequest
 {
+    private const MAX_IMAGES = 30;
+
+    private const MAX_TOTAL_IMAGE_BYTES = 104857600;
+
     public function authorize(): bool
     {
         return true;
@@ -17,30 +24,41 @@ class StoreAdRequest extends FormRequest
     {
         return [
             'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'price' => 'required|numeric',
-            'category_id' => 'required|exists:categories,id',
-            'country_id' => 'required|exists:countries,id',
-            'state_id' => 'nullable|exists:states,id',
-            'city_id' => 'nullable|exists:cities,id',
+            'description' => 'required|string|max:5000',
+            'price' => 'required|numeric|min:0|max:999999999',
+            'category_id' => 'required|integer|exists:categories,id',
+            'country_id' => 'required|integer|exists:countries,id',
+            'state_id' => [
+                'required',
+                'integer',
+                Rule::exists('states', 'id')->where('country_id', $this->input('country_id')),
+            ],
+            'city_id' => [
+                'required',
+                'integer',
+                Rule::exists('cities', 'id')->where('state_id', $this->input('state_id')),
+            ],
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
-            'attributes' => 'array',
-            'attributes.*.id' => 'required|exists:attributes,id',
+            'attributes' => 'nullable|array',
+            'attributes.*.id' => 'required|integer|exists:attributes,id',
             'attributes.*.value' => 'required',
-            'images' => 'nullable|array|max:30',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif,svg|max:4096',
+            'attributes.*.value.*' => 'string|max:255',
+            'images' => 'nullable|array|max:'.self::MAX_IMAGES,
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:4096',
             'reel_video' => 'nullable|file|mimes:mp4,mov,avi,webm|max:30000',
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('attributes') && is_string($this->input('attributes'))) {
-            $this->merge([
-                'attributes' => json_decode($this->input('attributes'), true)
-            ]);
+        if (! $this->has('attributes') || ! is_string($this->input('attributes'))) {
+            return;
         }
+
+        $decoded = json_decode((string) $this->input('attributes'), true);
+
+        $this->merge(['attributes' => is_array($decoded) ? $decoded : []]);
     }
 
     protected function failedValidation(Validator $validator)
@@ -48,7 +66,7 @@ class StoreAdRequest extends FormRequest
         throw new HttpResponseException(response()->json([
             'success' => false,
             'message' => 'Validation failed.',
-            'errors' => $validator->errors()
+            'errors' => $validator->errors(),
         ], 422));
     }
 
@@ -60,29 +78,30 @@ class StoreAdRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'state_id.exists' => '⚠️ المحافظة المختارة لا تتبع الدولة المحددة.',
+            'city_id.exists' => '⚠️ المدينة المختارة لا تتبع المحافظة المحددة.',
             'reel_video.max' => '⚠️ لا يمكن رفع فيديو يتجاوز حجمه 30 ميغابايت.',
             'reel_video.mimes' => '⚠️ صيغة الفيديو غير مدعومة. الصيغ المقبولة: mp4, mov, avi, webm.',
             'images.*.max' => '⚠️ حجم الصورة يجب ألا يتجاوز 4 ميغابايت.',
-            'images.*.mimes' => '⚠️ الصيغ المسموح بها للصور: jpeg, png, jpg, gif, svg.',
+            'images.*.mimes' => '⚠️ الصيغ المسموح بها للصور: jpeg, png, jpg, gif.',
         ];
     }
 
     public function withValidator($validator)
     {
-        $validator->after(function ($validator) {
-            $totalSize = 0;
+        $validator->after(function ($validator): void {
             $images = $this->file('images');
-            if (!is_array($images) || count($images) < 1) {
-                $validator->errors()->add('images', 'يجب رفع 1 صور على الأقل للإعلان.');
-            }
-            if ($images) {
-                foreach ($images as $image) {
-                    $totalSize += $image->getSize();
-                }
 
-                if ($totalSize > 100 * 1024 * 1024) {
-                    $validator->errors()->add('images', 'إجمالي حجم الصور يجب ألا يتجاوز 100 ميجا بايت.');
-                }
+            if (! is_array($images) || $images === []) {
+                $validator->errors()->add('images', 'يجب رفع 1 صور على الأقل للإعلان.');
+
+                return;
+            }
+
+            $totalSize = array_sum(array_map(static fn ($image): int => (int) $image->getSize(), $images));
+
+            if ($totalSize > self::MAX_TOTAL_IMAGE_BYTES) {
+                $validator->errors()->add('images', 'إجمالي حجم الصور يجب ألا يتجاوز 100 ميجا بايت.');
             }
         });
     }

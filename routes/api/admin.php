@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Ad\AdController;
+use App\Http\Controllers\Admin\Ad\AdminAdController;
 use App\Http\Controllers\Admin\AdminUserAuctionsController;
 use App\Http\Controllers\Admin\AdminUserConversationController;
 use App\Http\Controllers\Admin\AdminUserFinanceController;
@@ -90,11 +90,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     });
 
     Route::prefix('ads')->group(function () {
-        Route::get('/', [AdController::class, 'ads']);
-        Route::get('/search', [AdController::class, 'search_for_admin']);
-        Route::delete('/force-delete/{id}', [AdController::class, 'destroybyadmin']);
-        Route::put('/toggle-block/{id}', [AdController::class, 'toggleBlock']);
-        Route::put('/toggle-featured/{id}', [AdController::class, 'toggleFeatured']);
+        Route::get('/', [AdminAdController::class, 'index']);
+        Route::get('/search', [AdminAdController::class, 'search']);
+        Route::delete('/force-delete/{id}', [AdminAdController::class, 'forceDelete']);
+        Route::put('/toggle-block/{id}', [AdminAdController::class, 'toggleBlock']);
+        Route::put('/toggle-featured/{id}', [AdminAdController::class, 'toggleFeatured']);
     });
 
     Route::prefix('attribute-options')->group(function () {

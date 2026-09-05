@@ -1,10 +1,11 @@
 <?php
+
 namespace App\Http\Resources\Location;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class CountyResource  extends JsonResource
+class CountyResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
@@ -16,4 +17,3 @@ class CountyResource  extends JsonResource
         ];
     }
 }
-

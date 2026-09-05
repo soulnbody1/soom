@@ -5,10 +5,8 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-
 class UserResource extends JsonResource
 {
-
     public function toArray(Request $request): array
     {
         return [
@@ -28,8 +26,8 @@ class UserResource extends JsonResource
             'city_id' => $this->city_id,
             'fcm_token' => $this->fcm_token,
             'allow_ad_notifications' => (bool) $this->allow_ad_notifications,
-            'is_blocked' => $this->deleted_at ,
-             'hasAds' => $this->hasAds ?? false,
+            'is_blocked' => $this->deleted_at,
+            'hasAds' => $this->hasAds ?? false,
             'created_at' => $this->created_at,
         ];
     }

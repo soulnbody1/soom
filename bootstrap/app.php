@@ -85,20 +85,30 @@ return Application::configure(basePath: dirname(__DIR__))
             return ApiErrorResponse::make(__('auction.errors.unauthenticated'), 'unauthenticated', 401);
         });
 
-        $exceptions->render(function (AuthorizationException $exception, $request) use ($wantsJson) {
+        $forbidden = function (string $denial) {
+            $isGeneric = $denial === '' || $denial === 'This action is unauthorized.';
+
+            return ApiErrorResponse::make(
+                $isGeneric ? __('auction.errors.forbidden') : $denial,
+                'forbidden',
+                403
+            );
+        };
+
+        $exceptions->render(function (AuthorizationException $exception, $request) use ($wantsJson, $forbidden) {
             if (! $wantsJson($request)) {
                 return null;
             }
 
-            return ApiErrorResponse::make(__('auction.errors.forbidden'), 'forbidden', 403);
+            return $forbidden($exception->getMessage());
         });
 
-        $exceptions->render(function (AccessDeniedHttpException $exception, $request) use ($wantsJson) {
+        $exceptions->render(function (AccessDeniedHttpException $exception, $request) use ($wantsJson, $forbidden) {
             if (! $wantsJson($request)) {
                 return null;
             }
 
-            return ApiErrorResponse::make(__('auction.errors.forbidden'), 'forbidden', 403);
+            return $forbidden($exception->getMessage());
         });
 
         $exceptions->render(function (ModelNotFoundException $exception, $request) use ($wantsJson) {
