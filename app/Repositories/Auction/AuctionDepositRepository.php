@@ -46,6 +46,18 @@ final class AuctionDepositRepository
         return $this->lockPaymentDeposit($auctionId, $userId, $type);
     }
 
+    /**
+     * Read-only counterpart of lockDepositForPayment, for paths that must not
+     * take row locks (synchronous inbound reads).
+     */
+    public function findDepositForPayment(int $auctionId, int $userId, string $type): ?AuctionDeposit
+    {
+        return AuctionDeposit::where('auction_id', $auctionId)
+            ->where('user_id', $userId)
+            ->where('type', $type)
+            ->first();
+    }
+
     public function lockSellerDepositForAuction(int $auctionId): ?AuctionDeposit
     {
         return AuctionDeposit::where('auction_id', $auctionId)

@@ -160,6 +160,16 @@ final class AuctionPaymentRepository
             ->first();
     }
 
+    /**
+     * Read-only counterpart of lockSucceededTransactionForObligation.
+     */
+    public function succeededTransactionExistsForObligation(string $obligationKey): bool
+    {
+        return PaymentTransaction::where('successful_obligation_key', $obligationKey)
+            ->where('status', PaymentTransactionStatus::Succeeded->value)
+            ->exists();
+    }
+
     public function lockSucceededTransactionsForAuction(int $auctionId): Collection
     {
         return PaymentTransaction::with(['submission.deposit', 'submission.settlement'])

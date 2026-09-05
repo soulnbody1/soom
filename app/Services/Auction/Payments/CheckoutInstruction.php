@@ -12,6 +12,7 @@ final readonly class CheckoutInstruction
         public ?string $redirectUrl = null,
         public ?string $reference = null,
         public ?int $expiresInSeconds = null,
+        public array $details = [],
     ) {}
 
     public function toArray(): array
@@ -20,6 +21,7 @@ final readonly class CheckoutInstruction
             'type' => $this->type,
             'redirect_url' => $this->redirectUrl,
             'reference' => $this->reference,
+            'details' => $this->details,
         ];
     }
 }

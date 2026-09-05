@@ -10,7 +10,7 @@ use Illuminate\Contracts\Container\Container;
 
 final class PaymentProviderFactory
 {
-    private const FAKE = 'fake';
+    private const FAKE_CODES = ['fake', 'fake_bill'];
 
     private array $resolved = [];
 
@@ -26,7 +26,7 @@ final class PaymentProviderFactory
             throw AuctionException::domain('payment_provider_unknown', ['code' => $code]);
         }
 
-        if ($code === self::FAKE && ! $this->fakeProviderAllowed()) {
+        if ($this->isFake($code) && ! $this->fakeProviderAllowed()) {
             throw AuctionException::domain('payment_provider_not_available', ['code' => $code]);
         }
 
@@ -44,7 +44,7 @@ final class PaymentProviderFactory
             return false;
         }
 
-        if ($code === self::FAKE && ! $this->fakeProviderAllowed()) {
+        if ($this->isFake($code) && ! $this->fakeProviderAllowed()) {
             return false;
         }
 
@@ -78,6 +78,11 @@ final class PaymentProviderFactory
         }
 
         return $binding;
+    }
+
+    private function isFake(string $code): bool
+    {
+        return in_array($code, self::FAKE_CODES, true);
     }
 
     private function fakeProviderAllowed(): bool

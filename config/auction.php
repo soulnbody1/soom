@@ -37,12 +37,21 @@ return [
         'webhook_max_body_bytes' => (int) env('AUCTION_PAYMENTS_WEBHOOK_MAX_BODY_BYTES', 65536),
         'intent_rate_limit_per_minute' => (int) env('AUCTION_PAYMENTS_INTENT_RATE_LIMIT_PER_MINUTE', 10),
         'webhook_rate_limit_per_minute' => (int) env('AUCTION_PAYMENTS_WEBHOOK_RATE_LIMIT_PER_MINUTE', 600),
+        'bill_query_rate_limit_per_minute' => (int) env('AUCTION_PAYMENTS_BILL_QUERY_RATE_LIMIT_PER_MINUTE', 3000),
         'return_url' => env('AUCTION_PAYMENTS_RETURN_URL', env('APP_URL', 'http://localhost').'/payments/return'),
         'providers' => [
             'fake' => [
                 'class' => App\Services\Auction\Payments\Providers\FakePaymentProvider::class,
                 'required_credentials' => ['webhook_secret'],
                 'checkout_url' => env('AUCTION_PAYMENTS_FAKE_CHECKOUT_URL', 'https://fake-checkout.test'),
+            ],
+
+            'fake_bill' => [
+                'class' => App\Services\Auction\Payments\Providers\FakeBillPaymentProvider::class,
+                'required_credentials' => ['webhook_secret'],
+                'bill_ttl_seconds' => (int) env('AUCTION_PAYMENTS_FAKE_BILL_TTL_SECONDS', 86400),
+                'billing_reference' => ['length' => 10, 'charset' => 'numeric', 'check_digit' => true],
+                'bill_reference' => ['length' => 12, 'charset' => 'numeric', 'check_digit' => true],
             ],
 
             'ngenius' => [

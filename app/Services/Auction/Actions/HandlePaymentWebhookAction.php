@@ -9,9 +9,12 @@ use App\Models\Auction\PaymentProviderEvent;
 use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\PaymentProviderEventRepository;
+use App\Services\Auction\Payments\Contracts\DerivesStatusFromEvent;
+use App\Services\Auction\Payments\Contracts\PaymentProvider;
 use App\Services\Auction\Payments\PaymentProviderFactory;
 use App\Services\Auction\Payments\ProviderEvent;
 use App\Services\Auction\Payments\ProviderPayloadRedactor;
+use App\Services\Auction\Payments\ProviderPaymentStatus;
 use App\Services\Auction\Support\AuctionTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -84,7 +87,7 @@ final class HandlePaymentWebhookAction
         $this->link($record, (int) $transaction->id);
 
         try {
-            $status = $provider->fetchStatus($event->providerTransactionId);
+            $status = $this->statusFor($provider, $event);
         } catch (Throwable) {
             throw AuctionException::domain('payment_provider_unavailable', [], 502);
         }
@@ -93,6 +96,22 @@ final class HandlePaymentWebhookAction
         $this->markProcessed($record, null);
 
         return 'processed';
+    }
+
+    /**
+     * The event payload is never trusted for money when the provider can be
+     * re-read: we go back to the provider for the authoritative status. Only a
+     * provider that declares no inquiry capability may state the outcome in the
+     * event itself, and even then the amount is re-checked against the expected
+     * obligation before anything is applied.
+     */
+    private function statusFor(PaymentProvider $provider, ProviderEvent $event): ProviderPaymentStatus
+    {
+        if (! $provider->capabilities()->supportsInquiry && $provider instanceof DerivesStatusFromEvent) {
+            return $provider->statusFromEvent($event);
+        }
+
+        return $provider->fetchStatus($event->providerTransactionId);
     }
 
     private function resolveTransaction(string $providerCode, ProviderEvent $event): ?PaymentTransaction

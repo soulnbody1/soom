@@ -20,6 +20,7 @@ use App\Policies\Auction\SellerPayoutPolicy;
 use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\Auction\Payments\PaymentProviderFactory;
+use App\Services\Auction\Payments\Providers\FakeBillPaymentProvider;
 use App\Services\Auction\Payments\Providers\FakePaymentProvider;
 use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
 use App\Services\Auction\Refunds\ManualReviewRefundProcessor;
@@ -51,6 +52,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AuctionRefundProcessorInterface::class, ManualReviewRefundProcessor::class);
 
         $this->app->singleton(FakePaymentProvider::class);
+        $this->app->singleton(FakeBillPaymentProvider::class);
         $this->app->singleton(PaymentProviderFactory::class);
 
         $this->app->singleton(ProviderModelCatalog::class);
@@ -124,6 +126,17 @@ class AppServiceProvider extends ServiceProvider
             return [
                 Limit::perMinute((int) config('auction.payments.webhook_rate_limit_per_minute', 600))
                     ->by("payment-webhooks:{$provider}"),
+            ];
+        });
+
+        // Bill lookups are read-only and far chattier than payment events, so
+        // they get their own, higher, budget.
+        RateLimiter::for('payment-bill-queries', function (Request $request): array {
+            $provider = (string) ($request->route('provider') ?? 'unknown');
+
+            return [
+                Limit::perMinute((int) config('auction.payments.bill_query_rate_limit_per_minute', 3000))
+                    ->by("payment-bill-queries:{$provider}"),
             ];
         });
     }

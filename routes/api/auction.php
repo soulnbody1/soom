@@ -8,6 +8,7 @@ use App\Http\Controllers\Auction\AuctionDisputeController;
 use App\Http\Controllers\Auction\AuctionOperationalSettingsController;
 use App\Http\Controllers\Auction\AuctionTermsController;
 use App\Http\Controllers\Auction\BidController;
+use App\Http\Controllers\Auction\BillPresentmentController;
 use App\Http\Controllers\Auction\MyParticipationController;
 use App\Http\Controllers\Auction\OnlinePaymentController;
 use App\Http\Controllers\Auction\PaymentMethodController;
@@ -32,6 +33,10 @@ Route::prefix('auctions')->middleware([OptionalSanctumAuthentication::class, Att
 
 Route::post('webhooks/payments/{provider}', [PaymentWebhookController::class, 'handle'])
     ->middleware('throttle:payment-webhooks')
+    ->where('provider', '[A-Za-z0-9_-]+');
+
+Route::post('webhooks/payments/{provider}/bills', [BillPresentmentController::class, 'handle'])
+    ->middleware('throttle:payment-bill-queries')
     ->where('provider', '[A-Za-z0-9_-]+');
 
 Route::prefix('soom')->group(function () {

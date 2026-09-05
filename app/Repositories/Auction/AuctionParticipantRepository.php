@@ -44,6 +44,16 @@ final class AuctionParticipantRepository
     }
 
     /**
+     * Read-only counterpart of lockParticipant.
+     */
+    public function findParticipant(int $auctionId, int $userId): ?AuctionParticipant
+    {
+        return AuctionParticipant::where('auction_id', $auctionId)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    /**
      * Find or create a participant (idempotent registration).
      * Used by RegisterParticipantAction.
      */

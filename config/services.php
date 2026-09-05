@@ -75,6 +75,10 @@ return [
         'webhook_secret' => env('AUCTION_PAYMENTS_FAKE_WEBHOOK_SECRET'),
     ],
 
+    'fake_bill' => [
+        'webhook_secret' => env('AUCTION_PAYMENTS_FAKE_BILL_WEBHOOK_SECRET'),
+    ],
+
     'ngenius' => [
         'api_key' => env('NGENIUS_API_KEY'),
         'outlet_reference' => env('NGENIUS_OUTLET_REFERENCE'),

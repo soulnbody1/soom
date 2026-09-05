@@ -6,6 +6,7 @@ namespace App\Services\Auction\Support;
 
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionSettlement;
+use Carbon\CarbonImmutable;
 
 final readonly class PaymentObligation
 {
@@ -14,6 +15,7 @@ final readonly class PaymentObligation
         public ?AuctionSettlement $settlement,
         public int $amountMinor,
         public string $currencyCode,
+        public ?CarbonImmutable $payableUntil = null,
     ) {}
 
     public function key(): string

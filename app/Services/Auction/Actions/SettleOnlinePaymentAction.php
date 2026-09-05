@@ -11,13 +11,12 @@ use App\Domain\Auction\ValueObjects\Currency;
 use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRefundRepository;
-use App\Repositories\Auction\AuctionRepository;
 use App\Services\Auction\Payments\PaymentTransactionStateMachine;
 use App\Services\Auction\Payments\ProviderPayloadRedactor;
 use App\Services\Auction\Payments\ProviderPaymentStatus;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
-use App\Services\Auction\Support\PaymentObligationResolver;
+use App\Services\Auction\Support\ObligationPayabilityRule;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -26,10 +25,9 @@ final class SettleOnlinePaymentAction
     public function __construct(
         private readonly AuctionTransaction $transaction,
         private readonly AuctionAudit $audit,
-        private readonly AuctionRepository $auctions,
         private readonly AuctionPaymentRepository $payments,
         private readonly AuctionRefundRepository $refunds,
-        private readonly PaymentObligationResolver $obligations,
+        private readonly ObligationPayabilityRule $payability,
         private readonly PaymentTransactionStateMachine $stateMachine,
         private readonly ApplyPaymentSucceededAction $applyPaymentSucceeded,
         private readonly ProviderPayloadRedactor $redactor,
@@ -69,6 +67,7 @@ final class SettleOnlinePaymentAction
             'provider_payload' => $this->redactor->redact($status->payload),
             'provider_fee_minor' => $status->providerFeeMinor,
             'settlement_reference' => $status->settlementReference,
+            'settled_at' => $status->settledAt,
             'processed_at' => Carbon::now(),
         ]);
 
@@ -76,7 +75,7 @@ final class SettleOnlinePaymentAction
             return $this->recordMismatchedCapture($transaction, $status, $mismatch);
         }
 
-        $obligationKey = $this->payableObligationKey($transaction);
+        $obligationKey = $this->payability->payableObligationKey($transaction, lock: true);
 
         if ($obligationKey === null) {
             $this->payments->saveTransaction($transaction);
@@ -223,36 +222,6 @@ final class SettleOnlinePaymentAction
         }
 
         return true;
-    }
-
-    private function payableObligationKey(PaymentTransaction $transaction): ?string
-    {
-        try {
-            $auction = $this->auctions->lockAuctionForPayment((int) $transaction->auction_id);
-            $obligation = $this->obligations->resolve($auction, (int) $transaction->user_id, $transaction->purpose);
-        } catch (AuctionException) {
-            return null;
-        }
-
-        $key = $obligation->key();
-
-        if (! str_starts_with((string) $transaction->idempotency_key, $key.':')) {
-            return null;
-        }
-
-        if ($obligation->amountMinor !== (int) $transaction->amount_minor) {
-            return null;
-        }
-
-        if ($obligation->currencyCode !== (string) $transaction->currency_code) {
-            return null;
-        }
-
-        if ($this->payments->lockSucceededTransactionForObligation($key)) {
-            return null;
-        }
-
-        return $key;
     }
 
     private function createAutomaticRefund(PaymentTransaction $transaction, string $reason, string $provider): void

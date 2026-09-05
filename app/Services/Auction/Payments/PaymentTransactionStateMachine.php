@@ -20,8 +20,12 @@ final class PaymentTransactionStateMachine
             PaymentTransactionStatus::Reversed,
         ],
         'failed' => [],
-        'cancelled' => [],
-        'expired' => [],
+        'cancelled' => [
+            PaymentTransactionStatus::Succeeded,
+        ],
+        'expired' => [
+            PaymentTransactionStatus::Succeeded,
+        ],
         'reversed' => [],
     ];
 

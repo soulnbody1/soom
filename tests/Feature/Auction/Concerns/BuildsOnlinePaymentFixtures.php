@@ -21,6 +21,7 @@ use App\Models\Auction\PaymentMethod;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Services\Auction\Payments\Providers\FakeBillPaymentProvider;
 use App\Services\Auction\Payments\Providers\FakePaymentProvider;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
@@ -55,6 +56,52 @@ trait BuildsOnlinePaymentFixtures
             'is_active' => true,
             'display_order' => 1,
         ], $overrides));
+    }
+
+    protected function enableFakeBillProvider(): FakeBillPaymentProvider
+    {
+        config([
+            'auction.payments.allow_fake_provider' => true,
+            'auction.payments.disabled_providers' => [],
+            'services.fake_bill.webhook_secret' => 'test-bill-secret',
+        ]);
+
+        return app(FakeBillPaymentProvider::class);
+    }
+
+    protected function billPaymentMethod(array $overrides = []): PaymentMethod
+    {
+        return PaymentMethod::create(array_replace([
+            'name' => 'Fake bill rail',
+            'code' => 'fake-bill-'.Str::ulid(),
+            'channel' => PaymentChannel::Online,
+            'rail' => PaymentRail::Bill,
+            'provider_code' => FakeBillPaymentProvider::CODE,
+            'is_sandbox' => true,
+            'requires_manual_review' => false,
+            'is_active' => true,
+            'display_order' => 2,
+        ], $overrides));
+    }
+
+    protected function registerBidder(Auction $auction, User $bidder): AuctionParticipant
+    {
+        $participant = AuctionParticipant::create([
+            'auction_id' => $auction->id,
+            'user_id' => $bidder->id,
+            'status' => AuctionParticipantStatus::Registered,
+            'registered_at' => Carbon::now()->subDay(),
+        ]);
+
+        AuctionTermsAcceptance::create([
+            'auction_id' => $auction->id,
+            'participant_id' => $participant->id,
+            'user_id' => $bidder->id,
+            'terms_version_id' => $auction->terms_version_id,
+            'accepted_at' => Carbon::now()->subDay(),
+        ]);
+
+        return $participant;
     }
 
     protected function manualPaymentMethod(): PaymentMethod

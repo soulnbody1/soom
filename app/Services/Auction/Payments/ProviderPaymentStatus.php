@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Auction\Payments;
 
 use App\Domain\Auction\Enums\PaymentTransactionStatus;
+use Carbon\CarbonImmutable;
 
 final readonly class ProviderPaymentStatus
 {
@@ -16,6 +17,7 @@ final readonly class ProviderPaymentStatus
         public ?string $failureCode = null,
         public ?int $providerFeeMinor = null,
         public ?string $settlementReference = null,
+        public ?CarbonImmutable $settledAt = null,
         public ?string $merchantReference = null,
         public array $payload = [],
     ) {}

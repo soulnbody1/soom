@@ -30,6 +30,10 @@ final class RefreshOnlinePaymentAction
 
         $provider = $this->providers->make((string) $transaction->provider);
 
+        if (! $provider->capabilities()->supportsInquiry) {
+            return $this->expireWithoutInquiry($transaction, $allowExpiry);
+        }
+
         try {
             $status = $provider->fetchStatus((string) $transaction->provider_transaction_id);
         } catch (Throwable) {
@@ -50,6 +54,25 @@ final class RefreshOnlinePaymentAction
         }
 
         return $this->settle->execute((int) $transaction->id, $status);
+    }
+
+    /**
+     * Providers without a status inquiry API have nothing to poll: the pending
+     * intent stays pending until an event settles it, and only local expiry can
+     * close it. Without this branch such intents would never expire, because the
+     * expiry check below sits behind a successful fetchStatus() call.
+     */
+    private function expireWithoutInquiry(PaymentTransaction $transaction, bool $allowExpiry): PaymentTransaction
+    {
+        if (! $allowExpiry || ! $this->isExpired($transaction)) {
+            return $transaction;
+        }
+
+        return $this->settle->execute((int) $transaction->id, new ProviderPaymentStatus(
+            status: PaymentTransactionStatus::Expired,
+            providerTransactionId: (string) $transaction->provider_transaction_id,
+            failureCode: 'intent_expired',
+        ));
     }
 
     private function isExpired(PaymentTransaction $transaction): bool

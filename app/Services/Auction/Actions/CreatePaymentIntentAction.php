@@ -18,6 +18,8 @@ use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
 use App\Services\Auction\Support\OnlinePaymentMethodRule;
 use App\Services\Auction\Support\PaymentObligationResolver;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Throwable;
 
@@ -40,10 +42,12 @@ final class CreatePaymentIntentAction
         string $paymentMethodPublicId
     ): PaymentTransaction {
         $method = $this->payments->findActivePaymentMethod($paymentMethodPublicId);
+        $payableUntil = null;
 
-        $prepared = $this->transaction->run(function () use ($auction, $userId, $purpose, $method): PaymentTransaction {
+        $prepared = $this->transaction->run(function () use ($auction, $userId, $purpose, $method, &$payableUntil): PaymentTransaction {
             $auction = $this->auctions->lockAuctionForPayment($auction->id);
             $obligation = $this->obligations->resolve($auction, $userId, $purpose);
+            $payableUntil = $obligation->payableUntil;
 
             if ($obligation->amountMinor <= 0) {
                 throw AuctionException::domain('zero_payment_not_allowed');
@@ -84,7 +88,7 @@ final class CreatePaymentIntentAction
                     'amount_minor' => $obligation->amountMinor,
                     'currency_code' => $obligation->currencyCode,
                     'provider' => $providerCode,
-                    'expires_at' => Carbon::now()->addSeconds($this->intentTtlSeconds()),
+                    'expires_at' => $this->cappedExpiry($this->intentTtlSeconds(), $payableUntil),
                     'checkout_claimed_at' => Carbon::now(),
                 ]
             );
@@ -100,11 +104,14 @@ final class CreatePaymentIntentAction
             return $prepared;
         }
 
-        return $this->openCheckout($prepared, $method);
+        return $this->openCheckout($prepared, $method, $payableUntil);
     }
 
-    private function openCheckout(PaymentTransaction $transaction, PaymentMethod $method): PaymentTransaction
-    {
+    private function openCheckout(
+        PaymentTransaction $transaction,
+        PaymentMethod $method,
+        ?CarbonImmutable $payableUntil
+    ): PaymentTransaction {
         $provider = $this->providers->make((string) $transaction->provider);
 
         try {
@@ -119,6 +126,8 @@ final class CreatePaymentIntentAction
                     'payer_email' => (string) $transaction->user?->email,
                     'payer_name' => (string) $transaction->user?->name,
                 ],
+                payerId: (int) $transaction->user_id,
+                payableUntil: $payableUntil,
             ));
         } catch (Throwable $exception) {
             $this->markCheckoutFailed($transaction, $exception);
@@ -126,15 +135,16 @@ final class CreatePaymentIntentAction
             throw AuctionException::domain('payment_provider_unavailable');
         }
 
-        return $this->transaction->run(function () use ($transaction, $instruction, $method): PaymentTransaction {
+        return $this->transaction->run(function () use ($transaction, $instruction, $method, $payableUntil): PaymentTransaction {
             $locked = $this->payments->lockTransaction($transaction->id);
 
             $locked->forceFill([
                 'provider_transaction_id' => $instruction->providerTransactionId,
                 'checkout_instruction' => $instruction->toArray(),
                 'checkout_claimed_at' => null,
-                'expires_at' => Carbon::now()->addSeconds(
-                    $instruction->expiresInSeconds ?? $this->intentTtlSeconds()
+                'expires_at' => $this->cappedExpiry(
+                    $instruction->expiresInSeconds ?? $this->intentTtlSeconds(),
+                    $payableUntil
                 ),
             ]);
             $this->payments->saveTransaction($locked);
@@ -201,6 +211,21 @@ final class CreatePaymentIntentAction
     private function returnUrl(PaymentTransaction $transaction): string
     {
         return rtrim((string) config('auction.payments.return_url'), '/').'/'.$transaction->public_id;
+    }
+
+    /**
+     * An intent must never outlive the obligation it pays for, whatever TTL the
+     * provider asks for.
+     */
+    private function cappedExpiry(int $seconds, ?CarbonImmutable $payableUntil): CarbonInterface
+    {
+        $expiresAt = Carbon::now()->addSeconds($seconds);
+
+        if ($payableUntil !== null && $payableUntil->lessThan($expiresAt)) {
+            return $payableUntil;
+        }
+
+        return $expiresAt;
     }
 
     private function intentTtlSeconds(): int

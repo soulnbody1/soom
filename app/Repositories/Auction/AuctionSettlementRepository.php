@@ -31,6 +31,16 @@ final class AuctionSettlementRepository
             ->first();
     }
 
+    /**
+     * Read-only counterpart of lockCurrentSettlementForPayment.
+     */
+    public function findCurrentSettlementForPayment(int $auctionId): ?AuctionSettlement
+    {
+        return AuctionSettlement::where('auction_id', $auctionId)
+            ->where('current_marker', 1)
+            ->first();
+    }
+
     public function lockById(int $settlementId): AuctionSettlement
     {
         return AuctionSettlement::whereKey($settlementId)

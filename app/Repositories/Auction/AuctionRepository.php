@@ -43,6 +43,14 @@ final class AuctionRepository
     }
 
     /**
+     * Read-only counterpart of lockAuctionForPayment.
+     */
+    public function findAuctionForPayment(int $auctionId): Auction
+    {
+        return Auction::whereKey($auctionId)->firstOrFail();
+    }
+
+    /**
      * Save auction with finalization data (winning_bid_id).
      */
     public function setWinningBid(Auction $auction, int $bidId): void

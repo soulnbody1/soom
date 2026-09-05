@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Payments;
 
+use Carbon\CarbonImmutable;
+
 final readonly class PaymentIntent
 {
     public function __construct(
@@ -13,5 +15,7 @@ final readonly class PaymentIntent
         public string $purpose,
         public string $returnUrl,
         public array $metadata = [],
+        public ?int $payerId = null,
+        public ?CarbonImmutable $payableUntil = null,
     ) {}
 }
