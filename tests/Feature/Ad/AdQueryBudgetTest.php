@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Ad;
 
+use App\Jobs\Ad\RecordAdEngagement;
 use App\Models\AdImage;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 
 /**
  * Query budgets for the ad read paths.
@@ -86,16 +88,19 @@ final class AdQueryBudgetTest extends AdTestCase
     }
 
     /**
-     * The detail endpoint writes an ad_view and a user_ad_interaction inline today,
-     * so the hottest read path in the app also writes to two ever-growing tables.
-     * Phase 3 moves both onto the RecordAdEngagement job, leaving the request read-only.
+     * The detail endpoint used to write an ad_view and a user_ad_interaction inline,
+     * so the hottest read path also wrote to two ever-growing tables. Both now go
+     * through RecordAdEngagement, leaving the request itself read-only.
      */
-    public function test_show_does_not_write_on_the_request_path(): void
+    public function test_show_defers_engagement_writes_to_the_queue(): void
     {
+        Queue::fake();
+
         $ad = $this->makeAd();
+        $viewer = $this->adUser();
 
         $this->countQueries(
-            fn () => $this->actingAs($this->adUser(), 'sanctum')->getJson('/api/soom/ads/'.$ad->id)->assertOk()
+            fn () => $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->id)->assertOk()
         );
 
         $writes = array_values(array_filter(
@@ -103,18 +108,23 @@ final class AdQueryBudgetTest extends AdTestCase
             static fn (string $sql): bool => (bool) preg_match('/^\s*(insert|update)\b/i', $sql)
         ));
 
-        if ($writes !== []) {
-            $this->markTestIncomplete(sprintf(
-                'Phase 3: GET /api/soom/ads/{id} still performs %d write(s) inline: %s',
-                count($writes),
-                implode(' | ', array_map(
-                    static fn (string $sql): string => substr($sql, 0, 60),
-                    $writes
-                ))
-            ));
-        }
+        $this->assertSame([], $writes, "GET /api/soom/ads/{id} still writes inline:\n - ".implode("\n - ", $writes));
 
-        $this->assertSame([], $writes);
+        Queue::assertPushed(RecordAdEngagement::class);
+    }
+
+    public function test_favoriting_defers_the_interaction_write_to_the_queue(): void
+    {
+        Queue::fake();
+
+        $ad = $this->makeAd();
+
+        $this->actingAs($this->adUser(), 'sanctum')
+            ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
+            ->assertOk();
+
+        Queue::assertPushed(RecordAdEngagement::class);
+        $this->assertDatabaseCount('user_ad_interactions', 0);
     }
 
     /**

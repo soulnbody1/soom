@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Ad;
 
+use App\Domain\Ad\Enums\AdInteractionAction;
 use App\DTO\Ad\AdFilterDTO;
 use App\DTO\Ad\AdSearchDTO;
+use App\DTO\Ad\AdWriteInputDTO;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAdRequest;
 use App\Http\Resources\AdResource;
 use App\Http\Resources\MyAdResource;
+use App\Jobs\Ad\RecordAdEngagement;
 use App\Models\Ad;
 use App\Repositories\Ad\Queries\AdDetailQuery;
 use App\Repositories\Ad\Queries\AdListingQuery;
@@ -18,9 +21,14 @@ use App\Repositories\Ad\Queries\AdSearchQuery;
 use App\Repositories\Ad\Queries\CategoryFeedQuery;
 use App\Repositories\Ad\Queries\HomeFeedQuery;
 use App\Repositories\Ad\Queries\MyAdsQuery;
-use App\Services\Ad\Support\AdCacheVersion;
+use App\Services\Ad\Actions\CreateAdAction;
+use App\Services\Ad\Actions\DeleteAdAction;
+use App\Services\Ad\Actions\ForceDeleteAdAction;
+use App\Services\Ad\Actions\RestoreAdAction;
+use App\Services\Ad\Actions\ToggleAdBlockAction;
+use App\Services\Ad\Actions\ToggleAdFeaturedAction;
+use App\Services\Ad\Actions\UpdateAdAction;
 use App\Services\AdService;
-use App\Services\UserAdInteractionService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
@@ -31,25 +39,25 @@ class AdController extends Controller
 {
     use ApiResponseTrait, AuthorizesRequests;
 
-    public function __construct(
-        protected AdService $service,
-        protected UserAdInteractionService $interactions,
-        protected AdCacheVersion $cacheVersion,
-    ) {}
+    public function __construct(protected AdService $service) {}
 
-    public function store(StoreAdRequest $request)
+    public function store(StoreAdRequest $request, CreateAdAction $createAd)
     {
-        $ad = $this->service->store([...$request->validated(), 'user_id' => Auth::id()]);
+        $ad = $createAd->execute(
+            AdWriteInputDTO::fromValidated($request->validated()),
+            (int) Auth::id()
+        );
 
-        return new AdResource($ad);
+        return new AdResource($ad->load(Ad::$defaultRelations));
     }
 
-    public function update(StoreAdRequest $request, Ad $ad)
+    public function update(StoreAdRequest $request, Ad $ad, UpdateAdAction $updateAd)
     {
         $this->authorize('update', $ad);
-        $this->service->update($ad, [...$request->validated(), 'user_id' => Auth::id()]);
 
-        return new AdResource($ad->fresh());
+        $updateAd->execute($ad, AdWriteInputDTO::fromValidated($request->validated()));
+
+        return new AdResource($ad->fresh(Ad::$defaultRelations));
     }
 
     public function filter(Request $request, AdListingQuery $listing): JsonResponse
@@ -104,8 +112,9 @@ class AdController extends Controller
         $viewer = $this->viewer();
         $ad = $details->findOrFail($id, $viewer);
 
-        $this->service->recordView($ad);
-        $this->interactions->store($ad->id, 'click');
+        if ($viewer !== null) {
+            RecordAdEngagement::dispatch((int) $ad->id, (int) $viewer->id, AdInteractionAction::Click, true);
+        }
 
         return $this->sendResponse(
             new AdResource($ad),
@@ -153,16 +162,15 @@ class AdController extends Controller
         );
     }
 
-    public function destroy(Ad $ad): JsonResponse
+    public function destroy(Ad $ad, DeleteAdAction $deleteAd): JsonResponse
     {
         $this->authorize('delete', $ad);
-        $ad->delete();
-        $this->cacheVersion->bump();
+        $deleteAd->execute($ad);
 
         return $this->sendResponse([], 'تم حذف الاعلان بنجاح.');
     }
 
-    public function restore($id): JsonResponse
+    public function restore($id, RestoreAdAction $restoreAd): JsonResponse
     {
         $ad = $this->service->getTrashedAdForUser((int) $id);
         $this->authorize('restore', $ad);
@@ -171,19 +179,17 @@ class AdController extends Controller
             return $this->sendError('الإعلان غير محذوف.', 400);
         }
 
-        $ad->restore();
-        $this->cacheVersion->bump();
+        $restoreAd->execute($ad);
 
         return $this->sendResponse([], 'تم استرجاع الإعلان بنجاح.');
     }
 
-    public function forceDelete($id): JsonResponse
+    public function forceDelete($id, ForceDeleteAdAction $forceDeleteAd): JsonResponse
     {
         $ad = $this->service->getTrashedAdForUser((int) $id);
         $this->authorize('forceDelete', $ad);
 
-        $ad->forceDelete();
-        $this->cacheVersion->bump();
+        $forceDeleteAd->execute($ad);
 
         return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
     }
@@ -201,7 +207,7 @@ class AdController extends Controller
             ->additional(['active_ads' => $admin->activeCount()]);
     }
 
-    public function toggleBlock($id): JsonResponse
+    public function toggleBlock($id, ToggleAdBlockAction $toggleBlock): JsonResponse
     {
         $ad = Ad::withTrashed()->find($id);
 
@@ -209,20 +215,14 @@ class AdController extends Controller
             return response()->json(['message' => 'الاعلان غير موجود.'], 404);
         }
 
-        if ($ad->trashed()) {
-            $ad->restore();
-            $this->cacheVersion->bump();
-
-            return response()->json(['message' => 'تم استرجاع الاعلان بنجاح.'], 200);
-        }
-
-        $ad->delete();
-        $this->cacheVersion->bump();
-
-        return response()->json(['message' => 'تم توقيف  الاعلان .'], 200);
+        return response()->json([
+            'message' => $toggleBlock->execute($ad)
+                ? 'تم استرجاع الاعلان بنجاح.'
+                : 'تم توقيف  الاعلان .',
+        ], 200);
     }
 
-    public function toggleFeatured($id): JsonResponse
+    public function toggleFeatured($id, ToggleAdFeaturedAction $toggleFeatured): JsonResponse
     {
         $ad = Ad::withTrashed()->find($id);
 
@@ -230,22 +230,16 @@ class AdController extends Controller
             return response()->json(['message' => 'الاعلان غير موجود'], 404);
         }
 
-        $ad->is_featured = ! $ad->is_featured;
-        $ad->save();
-        $this->cacheVersion->bump();
-
         return response()->json([
-            'message' => $ad->is_featured
+            'message' => $toggleFeatured->execute($ad)
                 ? 'تم جعل الاعلان مميز الان '
                 : 'تم ارجاع الاعلان الى اعلان عادى  .',
         ], 200);
     }
 
-    public function destroybyadmin($id): JsonResponse
+    public function destroybyadmin($id, ForceDeleteAdAction $forceDeleteAd): JsonResponse
     {
-        $ad = $this->service->getTrashedAd((int) $id);
-        $ad->forceDelete();
-        $this->cacheVersion->bump();
+        $forceDeleteAd->execute($this->service->getTrashedAd((int) $id));
 
         return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
     }

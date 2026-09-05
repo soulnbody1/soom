@@ -4,20 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Ad;
 
+use App\Domain\Ad\Enums\AdInteractionAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\FavoriteRequest;
 use App\Http\Resources\FavoriteResource;
+use App\Jobs\Ad\RecordAdEngagement;
 use App\Models\Favorite;
 use App\Repositories\Ad\Queries\FavoriteListQuery;
-use App\Services\UserAdInteractionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class FavoriteController extends Controller
 {
-    public function __construct(protected UserAdInteractionService $interactions) {}
-
     public function index(Request $request, FavoriteListQuery $favorites): AnonymousResourceCollection
     {
         return FavoriteResource::collection($favorites->paginate($request->user()->id));
@@ -41,7 +40,7 @@ class FavoriteController extends Controller
             'ad_id' => $request->ad_id,
         ]);
 
-        $this->interactions->store((int) $request->ad_id, 'save');
+        RecordAdEngagement::dispatch((int) $request->ad_id, (int) $userId, AdInteractionAction::Save);
 
         return response()->json(['message' => 'تمت الإضافة إلى المفضلة']);
     }

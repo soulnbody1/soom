@@ -6,10 +6,10 @@ namespace App\Repositories\Ad\Queries;
 
 use App\Models\AdReel;
 use App\Services\Ad\Support\FavoriteFlagHydrator;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\JoinClause;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 
 final class ReelFeedQuery

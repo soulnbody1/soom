@@ -23,7 +23,6 @@ class Ad extends Model
         'city_id',
         'latitude',
         'longitude',
-        'is_featured',
     ];
 
     protected $casts = [
