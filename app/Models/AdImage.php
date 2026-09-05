@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class AdImage extends Model
 {
+    use HasFactory;
+
     protected $fillable = ['ad_id', 'image_path'];
 
     public function ad()
@@ -18,6 +21,7 @@ class AdImage extends Model
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');
+
         return $value ? $disk->url($value) : null;
     }
 }

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class Category extends Model
 {
-    protected $fillable = ['name', 'image','display_order','parent_id'];
+    use HasFactory;
+
+    protected $fillable = ['name', 'image', 'display_order', 'parent_id'];
 
     public function parent()
     {
@@ -56,6 +59,7 @@ class Category extends Model
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');
+
         return $value ? $disk->url($value) : null;
     }
 

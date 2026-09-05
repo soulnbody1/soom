@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
 class Ad extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
+
     protected $fillable = [
         'user_id',
         'category_id',
@@ -22,18 +23,19 @@ class Ad extends Model
         'city_id',
         'latitude',
         'longitude',
-        'is_featured'
+        'is_featured',
     ];
+
     protected $casts = [
         'is_favorite' => 'boolean',
         'is_featured' => 'boolean',
 
     ];
+
     public function scopeFeatured($query)
     {
         return $query->orderByDesc('is_featured')->latest('id');
     }
-
 
     public function country()
     {
@@ -49,7 +51,6 @@ class Ad extends Model
     {
         return $this->belongsTo(City::class);
     }
-
 
     public function attributeValues(): HasMany
     {
@@ -93,20 +94,21 @@ class Ad extends Model
         'state:id,name',
         'city:id,name',
         'images:id,ad_id,image_path',
-        'attributeValues.attribute:id,name'
+        'attributeValues.attribute:id,name',
     ];
+
     public function scopeWithIsFavorite($query, $user)
     {
         if ($user) {
             $query->withExists([
                 'favoritedByUsers as is_favorite' => function ($q) use ($user) {
                     $q->where('user_id', $user->id);
-                }
+                },
             ]);
         } else {
             $query->addSelect([
                 '*',
-                DB::raw('false as is_favorite')
+                DB::raw('false as is_favorite'),
             ]);
         }
 

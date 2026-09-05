@@ -10,7 +10,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\User;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -18,13 +18,15 @@ use Tests\TestCase;
 
 final class AdminAdsListingTest extends TestCase
 {
+    // On MySQL the schema persists between tests, so a bare migrate would let one
+    // test's ads inflate the next one's pagination totals.
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Storage::fake('spaces');
-
-        Artisan::call('migrate', ['--force' => true]);
     }
 
     public function test_listing_exposes_pagination_metadata_and_the_active_count(): void

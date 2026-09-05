@@ -26,8 +26,10 @@ class UserFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
+            'phone' => $this->uniquePhone(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => 'user',
             'remember_token' => Str::random(10),
         ];
     }
@@ -40,5 +42,21 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => ['role' => 'admin']);
+    }
+
+    /**
+     * The users table stores phone as a unique NOT NULL column, and the ad module
+     * exposes it, so every generated user needs a collision-free number.
+     */
+    private function uniquePhone(): string
+    {
+        static $sequence = 0;
+
+        return '+96270'.str_pad((string) (++$sequence), 7, '0', STR_PAD_LEFT);
     }
 }

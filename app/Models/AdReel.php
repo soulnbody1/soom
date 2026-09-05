@@ -1,11 +1,16 @@
 <?php
+
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class AdReel extends Model
 {
+    use HasFactory;
+
     protected $table = 'ad_reels';
+
     protected $fillable = [
         'ad_id',
         'video_path',
@@ -19,10 +24,7 @@ class AdReel extends Model
     }
 
     public function views()
-{
-    return $this->hasMany(AdReelView::class, 'ad_reel_id');
+    {
+        return $this->hasMany(AdReelView::class, 'ad_reel_id');
+    }
 }
-}
-
-
-

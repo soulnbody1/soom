@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Attribute extends Model
 {
+    use HasFactory;
+
     protected $fillable = ['name', 'type', 'is_required', 'is_multiple', 'parent_attribute_id'];
 
     public function values(): HasMany
@@ -29,6 +32,7 @@ class Attribute extends Model
     {
         return $this->hasMany(Attribute::class, 'parent_attribute_id');
     }
+
     public function categories()
     {
         return $this->belongsToMany(Category::class, 'attribute_category')
