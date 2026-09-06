@@ -1,45 +1,54 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use Illuminate\Support\Facades\RateLimiter;
 
 class OtpRateLimiterService
 {
-    protected $cooldownSeconds = 120;    // 2 دقيقة
-    protected $maxAttempts = 4;
-    protected $blockSeconds = 86400;     // 24 ساعة
-
-    public function check(string $phone): ?array
+    public function check(string $phone, ?string $ip = null): ?array
     {
-        $phone = preg_replace('/\D/', '', $phone);
-        $cooldownKey = 'otp_cooldown:' . $phone;
-        $blockKey = 'otp_block:' . $phone;
+        $phone = (string) preg_replace('/\D/', '', $phone);
 
-        // تحقق من الحظر بسبب كثرة المحاولات
-        if (RateLimiter::tooManyAttempts($blockKey, $this->maxAttempts)) {
-            $seconds = RateLimiter::availableIn($blockKey);
-            return [
-                'status' => false,
-                'message' => 'لقد تجاوزت عدد المحاولات المسموح بها. الرجاء المحاولة بعد ' . gmdate("H:i:s", $seconds),
-                'code' => 429,
-            ];
+        $cooldownKey = 'otp_cooldown:'.$phone;
+        $blockKey = 'otp_block:'.$phone;
+        $ipKey = 'otp_ip:'.($ip ?? 'unknown');
+
+        $maxPerWindow = (int) config('otp.send.max_per_window');
+        $maxPerIp = (int) config('otp.send.max_per_ip_per_hour');
+
+        if (RateLimiter::tooManyAttempts($blockKey, $maxPerWindow)) {
+            return $this->blocked(
+                'لقد تجاوزت عدد المحاولات المسموح بها. الرجاء المحاولة بعد '
+                .gmdate('H:i:s', RateLimiter::availableIn($blockKey))
+            );
         }
 
-        // تحقق من التكرار في وقت قصير
+        if (RateLimiter::tooManyAttempts($ipKey, $maxPerIp)) {
+            return $this->blocked(
+                'لقد تجاوزت عدد المحاولات المسموح بها. الرجاء المحاولة بعد '
+                .gmdate('H:i:s', RateLimiter::availableIn($ipKey))
+            );
+        }
+
         if (RateLimiter::tooManyAttempts($cooldownKey, 1)) {
-            $seconds = RateLimiter::availableIn($cooldownKey);
-            return [
-                'status' => false,
-                'message' => 'لقد قمت بطلب رمز مؤخرًا. الرجاء المحاولة بعد ' . gmdate("i:s", $seconds),
-                'code' => 429,
-            ];
+            return $this->blocked(
+                'لقد قمت بطلب رمز مؤخرًا. الرجاء المحاولة بعد '
+                .gmdate('i:s', RateLimiter::availableIn($cooldownKey))
+            );
         }
 
-        // سجل المحاولة في كلا المفتاحين
-        RateLimiter::hit($cooldownKey, $this->cooldownSeconds);
-        RateLimiter::hit($blockKey, $this->blockSeconds);
+        RateLimiter::hit($cooldownKey, (int) config('otp.send.cooldown_seconds'));
+        RateLimiter::hit($blockKey, (int) config('otp.send.window_seconds'));
+        RateLimiter::hit($ipKey, 3600);
 
-        return null; // كل شيء تمام
+        return null;
+    }
+
+    private function blocked(string $message): array
+    {
+        return ['status' => false, 'message' => $message, 'code' => 429];
     }
 }

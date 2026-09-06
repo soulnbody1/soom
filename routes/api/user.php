@@ -4,7 +4,8 @@ use App\Http\Controllers\Ad\AdController;
 use App\Http\Controllers\Ad\AdReelViewController;
 use App\Http\Controllers\Ad\FavoriteController;
 use App\Http\Controllers\Ad\MyAdController;
-use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Message\MessageController;
 use App\Http\Controllers\Notification\NotificationController;
 use App\Http\Controllers\User\ProfileController;
@@ -54,8 +55,8 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
         Route::delete('/', [ProfileController::class, 'destroy']);
     });
 
-    Route::post('/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/change-password', PasswordController::class);
 
     // ============= تسجيل الخروج ============
-    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/logout', [SessionController::class, 'logout']);
 });

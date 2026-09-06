@@ -109,6 +109,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureParticipationRateLimiting();
         $this->configureContentReviewRateLimiting();
         $this->configureAdRateLimiting();
+        $this->configureAuthRateLimiting();
     }
 
     private function invalidateAdLookupCaches(): void
@@ -123,6 +124,31 @@ class AppServiceProvider extends ServiceProvider
                 $model::{$event}(fn () => app(GeoNameResolver::class)->forget());
             }
         }
+    }
+
+    private function configureAuthRateLimiting(): void
+    {
+        RateLimiter::for('auth-login', fn (Request $request): array => [
+            Limit::perMinute((int) config('otp.rate_limits.login_per_minute'))->by('auth-login:ip:'.$request->ip()),
+            Limit::perMinute((int) config('otp.rate_limits.login_per_minute'))->by('auth-login:phone:'.$request->input('phone')),
+        ]);
+
+        RateLimiter::for('auth-register', fn (Request $request): Limit => Limit::perHour(
+            (int) config('otp.rate_limits.register_per_hour')
+        )->by('auth-register:'.$request->ip()));
+
+        RateLimiter::for('auth-otp-request', fn (Request $request): Limit => Limit::perHour(
+            (int) config('otp.rate_limits.otp_request_per_hour')
+        )->by('auth-otp-request:'.$request->ip()));
+
+        RateLimiter::for('auth-otp-verify', fn (Request $request): array => [
+            Limit::perMinute((int) config('otp.rate_limits.otp_verify_per_minute'))->by('auth-otp-verify:ip:'.$request->ip()),
+            Limit::perMinute((int) config('otp.rate_limits.otp_verify_per_minute'))->by('auth-otp-verify:phone:'.$request->input('phone')),
+        ]);
+
+        RateLimiter::for('auth-refresh', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('otp.rate_limits.refresh_per_minute')
+        )->by('auth-refresh:'.$request->ip()));
     }
 
     private function configureAdRateLimiting(): void

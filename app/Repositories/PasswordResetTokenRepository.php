@@ -1,39 +1,48 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Repositories;
 
 use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class PasswordResetTokenRepository
 {
-    public function storeOrUpdate(string $phone, string $otp)
+    public function storeHashed(string $phone, string $hashedOtp): void
     {
-        return DB::table('password_reset_tokens')->updateOrInsert(
+        DB::table('password_reset_tokens')->updateOrInsert(
             ['phone' => $phone],
             [
-                'token' => $otp,
-                'created_at' => now()
-            ]
-        );
-    }
-    public function storeOrUpdateWhatsApp(string $phone, string $otp)
-    {
-        return DB::table('password_reset_tokens')->updateOrInsert(
-            ['phone' => $phone],
-            [
-                'token' => $otp,
-                'created_at' => now()
+                'token' => $hashedOtp,
+                'attempts' => 0,
+                'created_at' => now(),
             ]
         );
     }
 
-    public function getByPhone(string $phone)
+    public function lockByPhone(string $phone): ?stdClass
+    {
+        return DB::table('password_reset_tokens')
+            ->where('phone', $phone)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    public function getByPhone(string $phone): ?stdClass
     {
         return DB::table('password_reset_tokens')->where('phone', $phone)->first();
     }
 
-    public function deleteByPhone(string $phone)
+    public function incrementAttempts(string $phone): int
     {
-        return DB::table('password_reset_tokens')->where('phone', $phone)->delete();
+        DB::table('password_reset_tokens')->where('phone', $phone)->increment('attempts');
+
+        return (int) DB::table('password_reset_tokens')->where('phone', $phone)->value('attempts');
+    }
+
+    public function deleteByPhone(string $phone): void
+    {
+        DB::table('password_reset_tokens')->where('phone', $phone)->delete();
     }
 }
