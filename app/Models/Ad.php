@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -31,7 +32,7 @@ class Ad extends Model
 
     ];
 
-    public function scopeFeatured($query)
+    public function scopeFeatured(Builder $query): Builder
     {
         return $query->orderByDesc('is_featured')->latest('id');
     }
@@ -96,7 +97,7 @@ class Ad extends Model
         'attributeValues.attribute:id,name',
     ];
 
-    public function scopeWithIsFavorite($query, $user)
+    public function scopeWithIsFavorite(Builder $query, ?object $user): Builder
     {
         if ($user) {
             $query->withExists([

@@ -11,6 +11,10 @@ use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
+use App\Models\Category;
+use App\Models\City;
+use App\Models\Country;
+use App\Models\State;
 use App\Policies\AdPolicy;
 use App\Policies\AdReelPolicy;
 use App\Policies\Auction\AuctionDashboardPolicy;
@@ -21,6 +25,9 @@ use App\Policies\Auction\AuctionRefundPolicy;
 use App\Policies\Auction\AuctionSettlementPolicy;
 use App\Policies\Auction\PaymentSubmissionPolicy;
 use App\Policies\Auction\SellerPayoutPolicy;
+use App\Services\Ad\Support\AdCacheVersion;
+use App\Services\Ad\Support\CategoryTreeResolver;
+use App\Services\Ad\Support\GeoNameResolver;
 use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\Auction\Payments\PaymentProviderFactory;
@@ -95,11 +102,27 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Ad::class, AdPolicy::class);
         Gate::policy(AdReel::class, AdReelPolicy::class);
 
+        $this->invalidateAdLookupCaches();
+
         $this->configurePaymentRateLimiting();
         $this->configureBidRateLimiting();
         $this->configureParticipationRateLimiting();
         $this->configureContentReviewRateLimiting();
         $this->configureAdRateLimiting();
+    }
+
+    private function invalidateAdLookupCaches(): void
+    {
+        foreach (['saved', 'deleted'] as $event) {
+            Category::{$event}(function (): void {
+                app(CategoryTreeResolver::class)->forget();
+                app(AdCacheVersion::class)->bump();
+            });
+
+            foreach ([Country::class, State::class, City::class] as $model) {
+                $model::{$event}(fn () => app(GeoNameResolver::class)->forget());
+            }
+        }
     }
 
     private function configureAdRateLimiting(): void

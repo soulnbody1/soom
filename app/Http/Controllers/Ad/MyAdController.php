@@ -8,10 +8,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\MyAdResource;
 use App\Models\Ad;
 use App\Repositories\Ad\Queries\MyAdsQuery;
+use App\Repositories\Ad\Queries\TrashedAdQuery;
 use App\Services\Ad\Actions\DeleteAdAction;
 use App\Services\Ad\Actions\ForceDeleteAdAction;
 use App\Services\Ad\Actions\RestoreAdAction;
-use App\Services\AdService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +22,7 @@ class MyAdController extends Controller
 {
     use ApiResponseTrait, AuthorizesRequests;
 
-    public function __construct(protected AdService $service) {}
+    public function __construct(protected TrashedAdQuery $trashedAds) {}
 
     public function index(Request $request, MyAdsQuery $myAds): JsonResponse
     {
@@ -50,7 +50,7 @@ class MyAdController extends Controller
 
     public function restore(int $id, RestoreAdAction $restoreAd): JsonResponse
     {
-        $ad = $this->service->getTrashedAdForUser($id);
+        $ad = $this->trashedAds->ownedOrFail($id);
         $this->authorize('restore', $ad);
 
         if (! $ad->trashed()) {
@@ -64,7 +64,7 @@ class MyAdController extends Controller
 
     public function forceDelete(int $id, ForceDeleteAdAction $forceDeleteAd): JsonResponse
     {
-        $ad = $this->service->getTrashedAdForUser($id);
+        $ad = $this->trashedAds->ownedOrFail($id);
         $this->authorize('forceDelete', $ad);
 
         $forceDeleteAd->execute($ad);

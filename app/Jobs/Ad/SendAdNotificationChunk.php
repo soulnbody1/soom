@@ -24,8 +24,8 @@ final class SendAdNotificationChunk implements ShouldQueue
     public array $backoff = [10, 60, 300];
 
     public function __construct(
-        private readonly int $adId,
-        private readonly array $userIds,
+        public readonly int $adId,
+        public readonly array $userIds,
     ) {}
 
     public function handle(): void

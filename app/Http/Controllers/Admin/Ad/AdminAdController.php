@@ -10,10 +10,10 @@ use App\Http\Resources\AdResource;
 use App\Models\Ad;
 use App\Repositories\Ad\Queries\AdminAdQuery;
 use App\Repositories\Ad\Queries\AdSearchQuery;
+use App\Repositories\Ad\Queries\TrashedAdQuery;
 use App\Services\Ad\Actions\ForceDeleteAdAction;
 use App\Services\Ad\Actions\ToggleAdBlockAction;
 use App\Services\Ad\Actions\ToggleAdFeaturedAction;
-use App\Services\AdService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +23,7 @@ class AdminAdController extends Controller
 {
     use ApiResponseTrait;
 
-    public function __construct(protected AdService $service) {}
+    public function __construct(protected TrashedAdQuery $trashedAds) {}
 
     public function index(Request $request, AdminAdQuery $ads): AnonymousResourceCollection
     {
@@ -83,7 +83,7 @@ class AdminAdController extends Controller
 
     public function forceDelete(int $id, ForceDeleteAdAction $forceDeleteAd): JsonResponse
     {
-        $forceDeleteAd->execute($this->service->getTrashedAd($id));
+        $forceDeleteAd->execute($this->trashedAds->findOrFail($id));
 
         return $this->sendResponse([], 'تم حذف الإعلان نهائيًا.');
     }

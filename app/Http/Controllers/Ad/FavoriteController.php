@@ -45,7 +45,7 @@ class FavoriteController extends Controller
         return response()->json(['message' => 'تمت الإضافة إلى المفضلة']);
     }
 
-    public function destroy($adId, Request $request): JsonResponse
+    public function destroy(int $adId, Request $request): JsonResponse
     {
         $favorite = Favorite::query()
             ->where('user_id', $request->user()->id)

@@ -176,7 +176,7 @@ final class AdNotificationFanOutTest extends AdTestCase
 
     private function recipientsOf(SendAdNotificationChunk $job): array
     {
-        $recipients = (fn () => $this->userIds)->call($job);
+        $recipients = $job->userIds;
         sort($recipients);
 
         return $recipients;

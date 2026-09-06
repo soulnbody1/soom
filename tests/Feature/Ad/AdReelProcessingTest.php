@@ -30,7 +30,7 @@ final class AdReelProcessingTest extends AdTestCase
 
         Queue::assertPushed(
             ProcessAdReel::class,
-            fn (ProcessAdReel $job): bool => str_starts_with($this->sourcePathOf($job), 'temp_reels/')
+            fn (ProcessAdReel $job): bool => str_starts_with($job->videoPath, 'temp_reels/')
         );
     }
 
@@ -77,10 +77,5 @@ final class AdReelProcessingTest extends AdTestCase
     private function localTempReelFiles(): array
     {
         return glob(sys_get_temp_dir().DIRECTORY_SEPARATOR.'ad_reel_*') ?: [];
-    }
-
-    private function sourcePathOf(ProcessAdReel $job): string
-    {
-        return (fn (): string => $this->videoPath)->call($job);
     }
 }

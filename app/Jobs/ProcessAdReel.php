@@ -28,8 +28,8 @@ class ProcessAdReel implements ShouldQueue
     public array $backoff = [30, 120, 600];
 
     public function __construct(
-        protected Ad $ad,
-        protected string $videoPath
+        public readonly Ad $ad,
+        public readonly string $videoPath
     ) {}
 
     public function handle(): void

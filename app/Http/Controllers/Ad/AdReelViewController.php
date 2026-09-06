@@ -10,8 +10,8 @@ use App\Http\Resources\AdReelViewResource;
 use App\Models\AdReel;
 use App\Models\Category;
 use App\Repositories\Ad\Queries\ReelFeedQuery;
+use App\Services\Ad\Actions\RecordAdReelViewAction;
 use App\Services\Ad\Support\CategoryTreeResolver;
-use App\Services\AdReelViewService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 
@@ -19,11 +19,11 @@ class AdReelViewController extends Controller
 {
     use AuthorizesRequests;
 
-    public function __construct(protected AdReelViewService $service) {}
+    public function __construct(protected RecordAdReelViewAction $recordView) {}
 
     public function store(StoreAdReelViewRequest $request)
     {
-        $view = $this->service->store((int) $request->ad_reel_id);
+        $view = $this->recordView->execute((int) $request->ad_reel_id);
 
         if ($view->wasRecentlyCreated) {
             return new AdReelViewResource($view);
@@ -44,7 +44,7 @@ class AdReelViewController extends Controller
         );
     }
 
-    public function delete($adReelId): JsonResponse
+    public function delete(int $adReelId): JsonResponse
     {
         $reel = AdReel::query()
             ->select('id', 'ad_id')

@@ -15,7 +15,7 @@ final class PaymentMethodFactory extends Factory
     {
         return [
             'name' => 'Manual bank transfer',
-            'code' => 'bank_transfer_' . $this->faker->unique()->numberBetween(1, 999999),
+            'code' => 'bank_transfer_'.$this->faker->unique()->numberBetween(1, 999999),
             'instructions' => 'Upload a clear receipt image or PDF.',
             'requires_manual_review' => true,
             'is_active' => true,
