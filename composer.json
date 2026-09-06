@@ -73,7 +73,9 @@
         "test:content-review": "@php artisan test tests/Feature/ContentReview tests/Unit/ContentReview",
         "test:content-review:mysql": "@php artisan test --configuration=phpunit.content-review-mysql.xml",
         "test:ads": "@php artisan test tests/Feature/Ad",
-        "test:ads:mysql": "@php artisan test --configuration=phpunit.ads-mysql.xml"
+        "test:ads:mysql": "@php artisan test --configuration=phpunit.ads-mysql.xml",
+        "test:messages": "@php artisan test tests/Feature/Message",
+        "test:messages:mysql": "@php artisan test --configuration=phpunit.messages-mysql.xml"
     },
     "extra": {
         "laravel": {
