@@ -45,7 +45,7 @@ class MessageRepository
             $q->select('message_id')
                 ->from('message_deletions')
                 ->where('user_id', $currentUserId);
-        })->orderBy('created_at', 'desc')
+        })->orderByDesc('id')
             ->paginate(20);
     }
 
@@ -197,7 +197,7 @@ class MessageRepository
                     ->from('message_deletions')
                     ->where('user_id', $userId);
             })
-            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->first();
     }
 
