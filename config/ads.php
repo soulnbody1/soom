@@ -9,4 +9,9 @@ return [
         'write_per_hour' => (int) env('ADS_WRITE_RATE_LIMIT_PER_HOUR', 10),
         'engagement_per_minute' => (int) env('ADS_ENGAGEMENT_RATE_LIMIT_PER_MINUTE', 60),
     ],
+
+    'notifications' => [
+        'chunk_size' => (int) env('ADS_NOTIFICATION_CHUNK_SIZE', 200),
+        'interaction_threshold' => (int) env('ADS_NOTIFICATION_INTERACTION_THRESHOLD', 3),
+    ],
 ];

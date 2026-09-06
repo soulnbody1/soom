@@ -33,6 +33,20 @@ final class CategoryTreeResolver
         return $ids;
     }
 
+    public function ancestorIds(int $categoryId): array
+    {
+        $parents = $this->tree()['parents'];
+        $ids = [$categoryId];
+        $current = $categoryId;
+
+        while (isset($parents[$current]) && ! in_array($parents[$current], $ids, true)) {
+            $current = $parents[$current];
+            $ids[] = $current;
+        }
+
+        return $ids;
+    }
+
     public function roots(): array
     {
         return $this->tree()['roots'];
@@ -56,13 +70,14 @@ final class CategoryTreeResolver
     private static function build(): array
     {
         $children = [];
+        $parents = [];
         $roots = [];
 
         Category::query()
             ->select('id', 'parent_id', 'name', 'display_order')
             ->orderBy('display_order')
             ->get()
-            ->each(function (Category $category) use (&$children, &$roots): void {
+            ->each(function (Category $category) use (&$children, &$parents, &$roots): void {
                 if ($category->parent_id === null) {
                     $roots[] = ['id' => (int) $category->id, 'name' => $category->name];
 
@@ -70,8 +85,9 @@ final class CategoryTreeResolver
                 }
 
                 $children[(int) $category->parent_id][] = (int) $category->id;
+                $parents[(int) $category->id] = (int) $category->parent_id;
             });
 
-        return ['children' => $children, 'roots' => $roots];
+        return ['children' => $children, 'parents' => $parents, 'roots' => $roots];
     }
 }

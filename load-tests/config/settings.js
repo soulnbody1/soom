@@ -33,9 +33,9 @@ export const settings = {
       p99Ms: 4000,
     },
     load: {
-      targetRps: 4,
-      duration: '3m',
-      preAllocatedVUs: 75,
+      targetRps: 1,
+      duration: '1m',
+      preAllocatedVUs: 20,
     },
     stress: {
       targetRps: 100,

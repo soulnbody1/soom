@@ -1,21 +1,31 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs;
 
 use App\Models\Ad;
+use Cloudinary\Cloudinary;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Cloudinary\Cloudinary;
-
-
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ProcessAdReel implements ShouldQueue
 {
-    use Dispatchable, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public const TEMP_DISK = 'spaces_private';
+
+    public bool $deleteWhenMissingModels = true;
+
+    public int $tries = 3;
+
+    public array $backoff = [30, 120, 600];
 
     public function __construct(
         protected Ad $ad,
@@ -24,26 +34,73 @@ class ProcessAdReel implements ShouldQueue
 
     public function handle(): void
     {
-        $localPath = Storage::disk('local')->path($this->videoPath);
+        if (! Storage::disk(self::TEMP_DISK)->exists($this->videoPath)) {
+            Log::error('Ad reel source missing', ['ad_id' => $this->ad->id, 'path' => $this->videoPath]);
 
-        if (!file_exists($localPath)) {
-            Log::error("❌ ملف الفيديو غير موجود: $localPath");
             return;
         }
 
+        $localPath = null;
+
+        try {
+            $localPath = $this->copyToLocalTemp();
+            $upload = $this->uploadToCloudinary($localPath);
+
+            $this->ad->reel()->create([
+                'video_path' => $upload['secure_url'] ?? null,
+                'thumbnail_path' => $this->thumbnailUrl($upload),
+                'duration' => $upload['duration'] ?? null,
+            ]);
+
+            $this->discardSource();
+        } finally {
+            if ($localPath !== null && file_exists($localPath)) {
+                @unlink($localPath);
+            }
+        }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        Log::error('Ad reel processing failed', [
+            'ad_id' => $this->ad->id,
+            'path' => $this->videoPath,
+            'error' => $exception?->getMessage(),
+        ]);
+
+        $this->discardSource();
+    }
+
+    private function copyToLocalTemp(): string
+    {
+        $localPath = tempnam(sys_get_temp_dir(), 'ad_reel_');
+        $stream = Storage::disk(self::TEMP_DISK)->readStream($this->videoPath);
+
+        if ($stream === null) {
+            @unlink($localPath);
+
+            throw new \RuntimeException('Unable to read ad reel source: '.$this->videoPath);
+        }
+
+        $target = fopen($localPath, 'wb');
+        stream_copy_to_stream($stream, $target);
+        fclose($target);
+        fclose($stream);
+
+        return $localPath;
+    }
+
+    private function uploadToCloudinary(string $localPath): array
+    {
         $cloudinary = new Cloudinary([
             'cloud' => [
                 'cloud_name' => config('services.cloudinary.cloud_name'),
-                'api_key'    => config('services.cloudinary.api_key'),
+                'api_key' => config('services.cloudinary.api_key'),
                 'api_secret' => config('services.cloudinary.api_secret'),
             ],
         ]);
-    
-        $uploadApi = $cloudinary->uploadApi();
 
-        // $uploadApi = new UploadApi();
-
-        $uploadResponse = $uploadApi->upload($localPath, [
+        return (array) $cloudinary->uploadApi()->upload($localPath, [
             'folder' => 'ads/reels',
             'resource_type' => 'video',
             'use_filename' => true,
@@ -53,25 +110,24 @@ class ProcessAdReel implements ShouldQueue
             ],
             'eager_async' => false,
         ]);
+    }
 
-        $videoUrl = $uploadResponse['secure_url'] ?? null;
-        $publicId = $uploadResponse['public_id'] ?? null; // e.g. "ads/reels/filename"
-        $duration = $uploadResponse['duration'] ?? null;
+    private function thumbnailUrl(array $upload): ?string
+    {
+        return $upload['eager'][0]['secure_url']
+            ?? $upload['eager'][0]['url']
+            ?? null;
+    }
 
-        // استخراج اسم الملف فقط من public_id
-        $filename = basename($publicId);
-        // $cloudName = env('CLOUDINARY_CLOUD_NAME');
-        $cloudName = config('services.cloudinary.cloud_name');
-
-        // بناء رابط الصورة يدويًا باستخدام المسار الصحيح
-        $thumbnailUrl = "https://res.cloudinary.com/{$cloudName}/video/upload/so_2/ads/reels/{$filename}.jpg";
-
-        $this->ad->reel()->create([
-            'video_path' => $videoUrl,
-            'thumbnail_path' => $thumbnailUrl,
-            'duration' => $duration,
-        ]);
-
-        unlink($localPath);
+    private function discardSource(): void
+    {
+        try {
+            Storage::disk(self::TEMP_DISK)->delete($this->videoPath);
+        } catch (Throwable $exception) {
+            Log::warning('Unable to discard ad reel source', [
+                'path' => $this->videoPath,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 }

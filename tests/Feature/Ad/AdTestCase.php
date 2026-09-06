@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Ad;
 
+use App\Jobs\ProcessAdReel;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\AssertsQueryCount;
 use Tests\Feature\Ad\Concerns\CreatesAdFixtures;
@@ -26,6 +27,7 @@ abstract class AdTestCase extends TestCase
         parent::setUp();
 
         Storage::fake('spaces');
+        Storage::fake(ProcessAdReel::TEMP_DISK);
     }
 
     /**

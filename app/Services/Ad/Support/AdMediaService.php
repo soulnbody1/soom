@@ -60,6 +60,6 @@ final class AdMediaService
             return;
         }
 
-        ProcessAdReel::dispatch($ad, $reelVideo->store('temp_reels', 'local'));
+        ProcessAdReel::dispatch($ad, $reelVideo->store('temp_reels', ProcessAdReel::TEMP_DISK));
     }
 }
