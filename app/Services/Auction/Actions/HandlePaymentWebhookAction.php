@@ -72,14 +72,14 @@ final class HandlePaymentWebhookAction
             $event->payload
         );
 
-        if (! $record->wasRecentlyCreated && $record->processed_at !== null) {
+        if (! $record->wasRecentlyCreated && $this->isSettled($record)) {
             return 'duplicate';
         }
 
         $transaction = $this->resolveTransaction($providerCode, $event);
 
         if (! $transaction) {
-            $this->markProcessed($record, 'transaction_not_found');
+            $this->markUnresolved($record, 'transaction_not_found');
 
             return 'unmatched';
         }
@@ -152,6 +152,26 @@ final class HandlePaymentWebhookAction
         $this->transaction->run(function () use ($record, $transactionId): void {
             $locked = $this->events->lockById($record->id);
             $locked->forceFill(['payment_transaction_id' => $transactionId]);
+            $this->events->save($locked);
+        });
+    }
+
+    /**
+     * A schedule that retries delivery only helps if a retry can still change
+     * the outcome. An event we could not match is therefore left unfinished, so
+     * a later attempt — once the claim exists, or once the cause is fixed — runs
+     * the lookup again instead of being waved through as a duplicate.
+     */
+    private function isSettled(PaymentProviderEvent $record): bool
+    {
+        return $record->processed_at !== null && $record->process_error === null;
+    }
+
+    private function markUnresolved(PaymentProviderEvent $record, string $error): void
+    {
+        $this->transaction->run(function () use ($record, $error): void {
+            $locked = $this->events->lockById($record->id);
+            $locked->forceFill(['process_error' => $error]);
             $this->events->save($locked);
         });
     }

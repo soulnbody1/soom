@@ -235,6 +235,80 @@ final class BillRailPaymentLifecycleTest extends TestCase
         $this->assertNull($processed->provider_refund_id);
     }
 
+    public function test_an_unmatched_notification_is_retried_rather_than_swallowed(): void
+    {
+        [$auction] = $this->paymentAuction(AuctionStatus::Live);
+        [$payer, $participant] = $this->registeredBidder($auction);
+        $transaction = $this->billIntent($auction, $payer->id);
+
+        $claim = (string) $transaction->provider_transaction_id;
+        $payload = [
+            'event_id' => 'evt-retry',
+            'event_type' => 'bill.paid',
+            'bill_reference' => 'unknown-'.$claim,
+            'paid_amount' => '1.000',
+            'currency' => 'JOD',
+        ];
+
+        // Delivery one: the scheme quotes a claim we cannot match.
+        $first = $this->postBillEvent($payload);
+        $first->assertOk();
+        $this->assertSame('unmatched', $first->json('outcome'));
+
+        $record = PaymentProviderEvent::where('event_id', 'evt-retry')->firstOrFail();
+        $this->assertNull($record->processed_at);
+        $this->assertSame('transaction_not_found', $record->process_error);
+
+        // Whatever caused the mismatch is fixed, and they deliver again.
+        $payload['bill_reference'] = $claim;
+        $second = $this->postBillEvent($payload);
+
+        $second->assertOk();
+        $this->assertSame('processed', $second->json('outcome'));
+        $this->assertSame(PaymentTransactionStatus::Succeeded, $transaction->refresh()->status);
+        $this->assertSame(AuctionParticipantStatus::Qualified, $participant->refresh()->status);
+
+        // Still one event row, and now genuinely finished.
+        $this->assertSame(1, PaymentProviderEvent::where('event_id', 'evt-retry')->count());
+        $record->refresh();
+        $this->assertNotNull($record->processed_at);
+        $this->assertNull($record->process_error);
+    }
+
+    public function test_a_settled_notification_is_never_reprocessed(): void
+    {
+        [$auction] = $this->paymentAuction(AuctionStatus::Live);
+        [$payer] = $this->registeredBidder($auction);
+        $transaction = $this->billIntent($auction, $payer->id);
+
+        $payload = [
+            'event_id' => 'evt-settled',
+            'event_type' => 'bill.paid',
+            'bill_reference' => (string) $transaction->provider_transaction_id,
+            'paid_amount' => '1.000',
+            'currency' => 'JOD',
+        ];
+
+        $this->postBillEvent($payload)->assertOk();
+
+        foreach (range(1, 3) as $ignored) {
+            $this->assertSame('duplicate', $this->postBillEvent($payload)->json('outcome'));
+        }
+
+        $this->assertSame(1, PaymentProviderEvent::where('event_id', 'evt-settled')->count());
+    }
+
+    public function test_a_claim_reference_is_numeric_and_never_starts_with_zero(): void
+    {
+        [$auction] = $this->paymentAuction(AuctionStatus::Live);
+        [$payer] = $this->registeredBidder($auction);
+
+        $reference = (string) $this->billIntent($auction, $payer->id)->provider_transaction_id;
+
+        $this->assertMatchesRegularExpression('/^[1-9][0-9]*$/', $reference);
+        $this->assertLessThanOrEqual(50, strlen($reference));
+    }
+
     private function billIntent($auction, int $payerId): PaymentTransaction
     {
         return app(CreatePaymentIntentAction::class)

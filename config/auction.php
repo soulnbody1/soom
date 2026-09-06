@@ -51,7 +51,7 @@ return [
                 'required_credentials' => ['webhook_secret'],
                 'bill_ttl_seconds' => (int) env('AUCTION_PAYMENTS_FAKE_BILL_TTL_SECONDS', 86400),
                 'billing_reference' => ['length' => 10, 'charset' => 'numeric', 'check_digit' => true],
-                'bill_reference' => ['length' => 12, 'charset' => 'numeric', 'check_digit' => true],
+                'bill_reference' => ['length' => 12, 'charset' => 'numeric', 'check_digit' => true, 'no_leading_zero' => true],
             ],
 
             'ngenius' => [

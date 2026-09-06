@@ -19,10 +19,13 @@ use Illuminate\Support\Collection;
 /**
  * Answers "what does this payer owe right now?".
  *
- * One algorithm serves both shapes of the question. A bill reference and a
- * purpose are filters over the same candidate set, not alternative code paths,
- * so a protocol that sends one, the other, both, or neither needs no change
- * here.
+ * One algorithm serves every shape of the question. Finding the payer is the
+ * only step that differs: a billing reference names them directly, while a bill
+ * reference reaches them through the claim it names. From there a bill
+ * reference and a purpose are filters over the same candidate set, not
+ * alternative code paths, so a scheme that quotes a lasting subscription
+ * number, one whose number is the claim itself, or one that sends both, all
+ * resolve identically.
  *
  * The read is deliberately lock-free: this runs inside a synchronous inbound
  * request whose caller-side timeout is not ours to control, and taking auction
@@ -38,13 +41,13 @@ final class ResolveBillPresentmentAction
 
     public function execute(BillQuery $query): BillResolution
     {
-        $payer = $this->references->findByReference($query->providerCode, $query->billingReference);
+        $payerId = $this->payerId($query);
 
-        if (! $payer) {
-            return BillResolution::rejected(BillRejectionReason::UnknownBillingReference);
+        if ($payerId === null) {
+            return BillResolution::rejected($this->unknownPayerReason($query));
         }
 
-        $candidates = $this->candidates($query, (int) $payer->user_id);
+        $candidates = $this->candidates($query, $payerId);
 
         $bills = $candidates
             ->filter(fn (PaymentTransaction $transaction): bool => $this->payability->isPayable($transaction, lock: false))
@@ -60,11 +63,36 @@ final class ResolveBillPresentmentAction
             return BillResolution::rejected(BillRejectionReason::NoPayableBills);
         }
 
-        return BillResolution::rejected(
-            $candidates->isEmpty()
-                ? BillRejectionReason::BillNotFound
-                : BillRejectionReason::BillNotPayable
-        );
+        if (! $candidates->isEmpty()) {
+            return BillResolution::rejected(BillRejectionReason::BillNotPayable);
+        }
+
+        return BillResolution::rejected($this->closedReason($query, $payerId));
+    }
+
+    private function payerId(BillQuery $query): ?int
+    {
+        if ($query->billingReference !== null) {
+            $reference = $this->references->findByReference($query->providerCode, $query->billingReference);
+
+            return $reference ? (int) $reference->user_id : null;
+        }
+
+        $payerId = $this->claim($query->providerCode, $query->billReference)?->user_id;
+
+        return $payerId === null ? null : (int) $payerId;
+    }
+
+    /**
+     * A quoted subscription number that names nobody and a claim number that
+     * exists nowhere are different failures, and the payer deserves to be told
+     * which one happened.
+     */
+    private function unknownPayerReason(BillQuery $query): BillRejectionReason
+    {
+        return $query->billingReference !== null
+            ? BillRejectionReason::UnknownBillingReference
+            : BillRejectionReason::BillNotFound;
     }
 
     /**
@@ -95,13 +123,45 @@ final class ResolveBillPresentmentAction
             ->get();
     }
 
+    /**
+     * A claim that was settled is not a claim that never existed. Telling the
+     * two apart is what lets a scheme say "already paid" rather than send the
+     * payer looking for a typo.
+     */
+    private function closedReason(BillQuery $query, int $userId): BillRejectionReason
+    {
+        $claim = $this->claim($query->providerCode, $query->billReference, $userId);
+
+        if (! $claim) {
+            return BillRejectionReason::BillNotFound;
+        }
+
+        return $claim->status === PaymentTransactionStatus::Succeeded
+            ? BillRejectionReason::BillAlreadyPaid
+            : BillRejectionReason::BillNotPayable;
+    }
+
+    private function claim(string $providerCode, ?BillReference $reference, ?int $userId = null): ?PaymentTransaction
+    {
+        if ($reference === null) {
+            return null;
+        }
+
+        return PaymentTransaction::query()
+            ->where('provider', $providerCode)
+            ->where('provider_transaction_id', $reference->value)
+            ->when($userId, fn ($builder, int $id) => $builder->where('user_id', $id))
+            ->first();
+    }
+
     private function present(BillQuery $query, PaymentTransaction $transaction): PresentableBill
     {
         return new PresentableBill(
             billingReference: $query->billingReference,
             billReference: new BillReference((string) $transaction->provider_transaction_id),
             purpose: $transaction->purpose,
-            amountMinor: (int) $transaction->amount_minor,
+            principalMinor: (int) $transaction->amount_minor,
+            customerFeeMinor: (int) $transaction->customer_fee_minor,
             currencyCode: (string) $transaction->currency_code,
             issuedAt: CarbonImmutable::instance($transaction->created_at),
             payableUntil: $transaction->expires_at,

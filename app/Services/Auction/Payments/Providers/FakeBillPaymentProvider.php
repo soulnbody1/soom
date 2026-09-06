@@ -168,15 +168,16 @@ final class FakeBillPaymentProvider implements DerivesStatusFromEvent, PaymentPr
 
         $payload = (array) $request->json()->all();
         $billingReference = BillingReference::tryFrom($payload['billing_reference'] ?? null);
+        $billReference = BillReference::tryFrom($payload['bill_reference'] ?? null);
 
-        if (! $billingReference) {
-            throw new RuntimeException('A bill query must carry a billing reference.');
+        if (! $billingReference && ! $billReference) {
+            throw new RuntimeException('A bill query must carry at least one reference.');
         }
 
         return new BillQuery(
             providerCode: self::CODE,
             billingReference: $billingReference,
-            billReference: BillReference::tryFrom($payload['bill_reference'] ?? null),
+            billReference: $billReference,
             purpose: $this->purpose($payload['purpose'] ?? null),
             receivedAt: CarbonImmutable::now(),
         );
@@ -185,13 +186,15 @@ final class FakeBillPaymentProvider implements DerivesStatusFromEvent, PaymentPr
     public function renderBills(BillQuery $query, BillResolution $resolution): Response
     {
         return new JsonResponse([
-            'billing_reference' => $query->billingReference->value,
+            'billing_reference' => $query->billingReference?->value,
             'count' => $resolution->count(),
             'rejection' => $this->rejectionCode($resolution->rejection),
             'bills' => array_map(fn (PresentableBill $bill): array => [
                 'bill_reference' => $bill->billReference->value,
                 'purpose' => $bill->purpose->value,
-                'amount' => $this->amounts->format($bill->amountMinor, $bill->currencyCode, $this->capabilities()),
+                'principal' => $this->amounts->format($bill->principalMinor, $bill->currencyCode, $this->capabilities()),
+                'fee' => $this->amounts->format($bill->customerFeeMinor, $bill->currencyCode, $this->capabilities()),
+                'amount' => $this->amounts->format($bill->payableMinor(), $bill->currencyCode, $this->capabilities()),
                 'currency' => $bill->currencyCode,
                 'allows_partial' => $bill->allowsPartialPayment(),
                 'minimum' => $this->amounts->format($bill->minimumPayableMinor(), $bill->currencyCode, $this->capabilities()),

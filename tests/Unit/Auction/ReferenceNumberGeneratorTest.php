@@ -69,4 +69,47 @@ final class ReferenceNumberGeneratorTest extends TestCase
 
         (new ReferenceNumberGenerator)->generate(['length' => 10, 'charset' => 'hex', 'check_digit' => false]);
     }
+
+    public function test_a_reference_can_be_required_never_to_start_with_zero(): void
+    {
+        $shape = ['length' => 12, 'charset' => 'numeric', 'check_digit' => true, 'no_leading_zero' => true];
+        $generator = new ReferenceNumberGenerator;
+
+        for ($i = 0; $i < 500; $i++) {
+            $reference = $generator->generate($shape);
+
+            $this->assertMatchesRegularExpression('/^[1-9]\d{11}$/', $reference);
+            $this->assertTrue(ReferenceNumberGenerator::isValid($reference, $shape));
+        }
+    }
+
+    public function test_a_leading_zero_is_rejected_only_where_the_shape_forbids_it(): void
+    {
+        $forbidding = ['length' => 10, 'charset' => 'numeric', 'check_digit' => false, 'no_leading_zero' => true];
+        $permitting = ['length' => 10, 'charset' => 'numeric', 'check_digit' => false];
+
+        $this->assertFalse(ReferenceNumberGenerator::isValid('0123456789', $forbidding));
+        $this->assertTrue(ReferenceNumberGenerator::isValid('1234567890', $forbidding));
+        $this->assertTrue(ReferenceNumberGenerator::isValid('0123456789', $permitting));
+    }
+
+    public function test_a_reference_is_never_longer_than_the_protocol_ceiling(): void
+    {
+        $shape = ['length' => 80, 'charset' => 'numeric', 'check_digit' => true, 'no_leading_zero' => true];
+
+        $this->assertSame(
+            ReferenceNumberGenerator::MAX_LENGTH,
+            strlen((new ReferenceNumberGenerator)->generate($shape))
+        );
+    }
+
+    public function test_an_alphanumeric_reference_also_honours_the_leading_zero_rule(): void
+    {
+        $shape = ['length' => 8, 'charset' => 'alphanumeric', 'check_digit' => false, 'no_leading_zero' => true];
+        $generator = new ReferenceNumberGenerator;
+
+        for ($i = 0; $i < 200; $i++) {
+            $this->assertMatchesRegularExpression('/^[1-9A-Z][0-9A-Z]{7}$/', $generator->generate($shape));
+        }
+    }
 }

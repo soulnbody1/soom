@@ -23,4 +23,7 @@ enum BillRejectionReason: string
 
     /** The bill exists but its obligation is no longer owed. */
     case BillNotPayable = 'bill_not_payable';
+
+    /** The bill exists and has already been settled. */
+    case BillAlreadyPaid = 'bill_already_paid';
 }

@@ -27,6 +27,7 @@ final class PaymentTransaction extends Model
         'failure_code',
         'amount_minor',
         'currency_code',
+        'customer_fee_minor',
         'captured_amount_minor',
         'captured_currency_code',
         'provider',
@@ -50,6 +51,7 @@ final class PaymentTransaction extends Model
         'provider_payload' => 'array',
         'checkout_instruction' => 'array',
         'checkout_claimed_at' => 'immutable_datetime',
+        'customer_fee_minor' => 'integer',
         'provider_fee_minor' => 'integer',
         'captured_amount_minor' => 'integer',
         'processed_at' => 'immutable_datetime',
@@ -90,5 +92,18 @@ final class PaymentTransaction extends Model
     public function isOnline(): bool
     {
         return $this->provider !== 'manual';
+    }
+
+    /**
+     * What the payer is asked for, as opposed to what they owe.
+     *
+     * amount_minor stays the obligation: it is what a deposit holds, what a
+     * settlement pays down, and what a refund returns. A convenience fee a
+     * scheme passes on to the payer rides alongside it and is refunded to
+     * nobody, so the two are never summed into storage — only here.
+     */
+    public function payableAmountMinor(): int
+    {
+        return (int) $this->amount_minor + (int) $this->customer_fee_minor;
     }
 }

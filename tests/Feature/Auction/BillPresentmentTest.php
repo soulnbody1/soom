@@ -7,6 +7,7 @@ namespace Tests\Feature\Auction;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\BillRejectionReason;
 use App\Domain\Auction\Enums\PaymentPurpose;
+use App\Domain\Auction\Enums\PaymentTransactionStatus;
 use App\Domain\Auction\ValueObjects\BillingReference;
 use App\Domain\Auction\ValueObjects\BillReference;
 use App\Models\Auction\PaymentBillingReference;
@@ -72,11 +73,13 @@ final class BillPresentmentTest extends TestCase
 
         $bill = $this->resolve($this->billingReferenceOf($payer))->bills[0];
 
-        $this->assertSame(1_000, $bill->amountMinor);
+        $this->assertSame(1_000, $bill->principalMinor);
+        $this->assertSame(0, $bill->customerFeeMinor);
+        $this->assertSame(1_000, $bill->payableMinor());
         $this->assertSame('JOD', $bill->currencyCode);
         $this->assertFalse($bill->allowsPartialPayment());
-        $this->assertSame($bill->amountMinor, $bill->minimumPayableMinor());
-        $this->assertSame($bill->amountMinor, $bill->maximumPayableMinor());
+        $this->assertSame($bill->payableMinor(), $bill->minimumPayableMinor());
+        $this->assertSame($bill->payableMinor(), $bill->maximumPayableMinor());
         $this->assertSame($payer->name, $bill->payerDisplayName);
     }
 
@@ -234,6 +237,86 @@ final class BillPresentmentTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_a_claim_number_alone_resolves_the_payer_and_the_bill(): void
+    {
+        [$payer, $bills] = $this->payerWithTwoOpenBills();
+        $target = $bills[1];
+
+        // No billing reference is quoted at all: the claim number is the only
+        // identifier a one-off scheme has.
+        $resolution = $this->resolve(null, new BillReference((string) $target->provider_transaction_id));
+
+        $this->assertNull($resolution->rejection);
+        $this->assertSame(1, $resolution->count());
+
+        $bill = $resolution->sole();
+        $this->assertSame((string) $target->provider_transaction_id, $bill?->billReference->value);
+        $this->assertNull($bill?->billingReference);
+        $this->assertSame($payer->name, $bill?->payerDisplayName);
+    }
+
+    public function test_a_claim_only_lookup_never_reads_the_billing_reference_table(): void
+    {
+        [, $bills] = $this->payerWithTwoOpenBills();
+        PaymentBillingReference::query()->delete();
+
+        $resolution = $this->resolve(null, new BillReference((string) $bills[0]->provider_transaction_id));
+
+        $this->assertNull($resolution->rejection);
+        $this->assertSame(1, $resolution->count());
+    }
+
+    public function test_an_unknown_claim_number_alone_is_not_found_rather_than_unknown_payer(): void
+    {
+        $this->payerWithTwoOpenBills();
+
+        $this->assertSame(
+            BillRejectionReason::BillNotFound,
+            $this->resolve(null, new BillReference('999999999999'))->rejection
+        );
+    }
+
+    public function test_a_settled_claim_is_reported_as_paid_not_as_missing(): void
+    {
+        [$payer, $bills] = $this->payerWithTwoOpenBills();
+        $paid = $bills[0];
+        $paid->forceFill(['status' => PaymentTransactionStatus::Succeeded])->save();
+
+        $reference = new BillReference((string) $paid->provider_transaction_id);
+
+        $this->assertSame(
+            BillRejectionReason::BillAlreadyPaid,
+            $this->resolve($this->billingReferenceOf($payer), $reference)->rejection
+        );
+        $this->assertSame(
+            BillRejectionReason::BillAlreadyPaid,
+            $this->resolve(null, $reference)->rejection
+        );
+    }
+
+    public function test_a_query_carrying_no_reference_at_all_is_refused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new BillQuery(providerCode: FakeBillPaymentProvider::CODE);
+    }
+
+    public function test_the_endpoint_answers_a_claim_only_query(): void
+    {
+        [, $bills] = $this->payerWithTwoOpenBills();
+
+        $response = $this->postBillQuery([
+            'bill_reference' => (string) $bills[0]->provider_transaction_id,
+        ]);
+
+        $response->assertOk();
+        $this->assertSame(1, $response->json('count'));
+        $this->assertNull($response->json('billing_reference'));
+        $this->assertSame('1.000', $response->json('bills.0.principal'));
+        $this->assertSame('0.000', $response->json('bills.0.fee'));
+        $this->assertSame('1.000', $response->json('bills.0.amount'));
+    }
+
     /**
      * @return array{0: User, 1: array<int, PaymentTransaction>}
      */
@@ -261,7 +344,7 @@ final class BillPresentmentTest extends TestCase
     }
 
     private function resolve(
-        BillingReference $billingReference,
+        ?BillingReference $billingReference,
         ?BillReference $billReference = null,
         ?PaymentPurpose $purpose = null
     ) {
