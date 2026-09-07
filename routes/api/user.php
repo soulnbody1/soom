@@ -6,6 +6,7 @@ use App\Http\Controllers\Ad\FavoriteController;
 use App\Http\Controllers\Ad\MyAdController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\Message\ConversationController;
 use App\Http\Controllers\Message\MessageController;
 use App\Http\Controllers\Notification\NotificationController;
 use App\Http\Controllers\User\ProfileController;
@@ -34,12 +35,13 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
 
     // ============= الرسائل =============
     Route::prefix('messages')->group(function () {
-        Route::post('/', [MessageController::class, 'store']);
-        Route::get('/chat/{userId}', [MessageController::class, 'getConversation']);
-        Route::get('/conversations', [MessageController::class, 'getConversationsList']);
-        Route::post('/markAsRead', [MessageController::class, 'markAsRead']);
-        Route::delete('/delete', [MessageController::class, 'delete']);
-        Route::get('/search', [MessageController::class, 'searchConversations']);
+        Route::post('/', [MessageController::class, 'store'])->middleware('throttle:chat-send');
+        Route::get('/chat/{userId}', [ConversationController::class, 'show'])
+            ->whereNumber('userId')->middleware('throttle:chat-read');
+        Route::get('/conversations', [ConversationController::class, 'index'])->middleware('throttle:chat-read');
+        Route::post('/markAsRead', [ConversationController::class, 'markAsRead'])->middleware('throttle:chat-write');
+        Route::delete('/delete', [MessageController::class, 'delete'])->middleware('throttle:chat-write');
+        Route::get('/search', [ConversationController::class, 'search'])->middleware('throttle:chat-read');
     });
 
     Route::prefix('notifications')->group(function () {

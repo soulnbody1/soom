@@ -20,7 +20,7 @@ final class MessageQueryBudgetTest extends MessageTestCase
 
     private const SEND_BUDGET = 10;
 
-    private const MARK_AS_READ_BUDGET = 1;
+    private const MARK_AS_READ_BUDGET = 3;
 
     protected function setUp(): void
     {

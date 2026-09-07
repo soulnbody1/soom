@@ -7,34 +7,38 @@ namespace App\Services\Message\Actions;
 use App\Events\ConversationUpdatedAfterDelete;
 use App\Events\UnreadCountUpdated;
 use App\Models\Message;
+use App\Models\User;
+use App\Policies\MessagePolicy;
 use App\Repositories\Message\Queries\ConversationThreadsQuery;
 use App\Repositories\Message\Queries\UnreadConversationCounter;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 final class DeleteMessagesAction
 {
-    public const RECALL_WINDOW_SECONDS = 120;
+    public const RECALL_WINDOW_SECONDS = MessagePolicy::RECALL_WINDOW_SECONDS;
 
     public function __construct(
         private readonly ConversationThreadsQuery $threads,
         private readonly UnreadConversationCounter $unread,
     ) {}
 
-    public function execute(int $userId, int $partnerId, ?array $messageIds = null): void
+    public function execute(User $actor, int $partnerId, ?array $messageIds = null): void
     {
+        $userId = (int) $actor->id;
+
         $partnerIds = $messageIds === null || $messageIds === []
             ? $this->deleteThread($userId, $partnerId)
-            : $this->deleteMessages($userId, $messageIds);
+            : $this->deleteMessages($actor, $messageIds);
 
         $this->announce($userId, $partnerIds);
     }
 
-    private function deleteMessages(int $userId, array $messageIds): Collection
+    private function deleteMessages(User $actor, array $messageIds): Collection
     {
+        $userId = (int) $actor->id;
         $ids = array_values(array_unique(array_map('intval', $messageIds)));
 
         $messages = Message::query()
@@ -42,12 +46,10 @@ final class DeleteMessagesAction
             ->whereIn('id', $ids)
             ->get();
 
-        $this->assertOwnership($userId, $messages);
-
-        $cutoff = $this->cutoff();
+        $this->assertOwnership($actor, $messages);
 
         $recallable = $messages
-            ->filter(fn (Message $message): bool => $this->isRecallable($userId, $message, $cutoff))
+            ->filter(fn (Message $message): bool => Gate::forUser($actor)->allows('recall', $message))
             ->pluck('id')
             ->all();
 
@@ -72,7 +74,7 @@ final class DeleteMessagesAction
 
     private function deleteThread(int $userId, int $partnerId): Collection
     {
-        $cutoff = $this->cutoff();
+        $cutoff = now()->subSeconds(self::RECALL_WINDOW_SECONDS);
 
         DB::transaction(function () use ($userId, $partnerId, $cutoff): void {
             $this->thread($userId, $partnerId)
@@ -104,25 +106,11 @@ final class DeleteMessagesAction
         event(new UnreadCountUpdated($userId, $this->unread->forUser($userId)));
     }
 
-    private function assertOwnership(int $userId, Collection $messages): void
+    private function assertOwnership(User $actor, Collection $messages): void
     {
-        $foreign = $messages->first(
-            fn (Message $message): bool => $message->sender_id !== $userId && $message->receiver_id !== $userId
-        );
-
-        if ($foreign !== null) {
-            throw new AuthorizationException('لا يمكنك حذف رسائل لا تخصك.');
+        foreach ($messages as $message) {
+            Gate::forUser($actor)->authorize('delete', $message);
         }
-    }
-
-    private function isRecallable(int $userId, Message $message, Carbon $cutoff): bool
-    {
-        return $message->sender_id === $userId && $message->created_at->greaterThanOrEqualTo($cutoff);
-    }
-
-    private function cutoff(): Carbon
-    {
-        return now()->subSeconds(self::RECALL_WINDOW_SECONDS);
     }
 
     private function hide(int $userId, array $messageIds): void

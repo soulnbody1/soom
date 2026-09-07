@@ -13,10 +13,12 @@ use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
 use App\Models\Category;
 use App\Models\City;
+use App\Models\Message;
 use App\Models\Country;
 use App\Models\State;
 use App\Policies\AdPolicy;
 use App\Policies\AdReelPolicy;
+use App\Policies\MessagePolicy;
 use App\Policies\Auction\AuctionDashboardPolicy;
 use App\Policies\Auction\AuctionDepositPolicy;
 use App\Policies\Auction\AuctionDisputePolicy;
@@ -101,6 +103,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('auction.dashboard.view', [AuctionDashboardPolicy::class, 'view']);
         Gate::policy(Ad::class, AdPolicy::class);
         Gate::policy(AdReel::class, AdReelPolicy::class);
+        Gate::policy(Message::class, MessagePolicy::class);
 
         $this->invalidateAdLookupCaches();
 
@@ -110,6 +113,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureContentReviewRateLimiting();
         $this->configureAdRateLimiting();
         $this->configureAuthRateLimiting();
+        $this->configureChatRateLimiting();
     }
 
     private function invalidateAdLookupCaches(): void
@@ -149,6 +153,23 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth-refresh', fn (Request $request): Limit => Limit::perMinute(
             (int) config('otp.rate_limits.refresh_per_minute')
         )->by('auth-refresh:'.$request->ip()));
+    }
+
+    private function configureChatRateLimiting(): void
+    {
+        $byUser = fn (Request $request): string => (string) (int) ($request->user()?->id ?? 0);
+
+        RateLimiter::for('chat-send', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('chat.rate_limits.send_per_minute')
+        )->by('chat-send:user:'.$byUser($request)));
+
+        RateLimiter::for('chat-read', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('chat.rate_limits.read_per_minute')
+        )->by('chat-read:user:'.$byUser($request)));
+
+        RateLimiter::for('chat-write', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('chat.rate_limits.write_per_minute')
+        )->by('chat-write:user:'.$byUser($request)));
     }
 
     private function configureAdRateLimiting(): void

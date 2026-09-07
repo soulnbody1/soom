@@ -103,29 +103,6 @@ final class MessageKnownDefectsTest extends MessageTestCase
         $this->assertFalse($wrote);
     }
 
-    public function test_mark_as_read_validates_its_input(): void
-    {
-        $viewer = $this->chatUser();
-
-        try {
-            $status = $this->actingAs($viewer, 'sanctum')
-                ->postJson('/api/soom/messages/markAsRead', ['user_id' => 'not-an-id'])
-                ->status();
-        } catch (Throwable $exception) {
-            $status = $exception::class;
-        }
-
-        if ($status !== 422) {
-            $this->markTestIncomplete(
-                'Phase 4: markAsRead reads user_id straight off the request into a mass update with no '
-                .'FormRequest, no cast and no exists rule, so a non-numeric id reaches MySQL and the '
-                .'endpoint answers with '.$status.' instead of 422.'
-            );
-        }
-
-        $this->assertSame(422, $status);
-    }
-
     public function test_a_push_failure_does_not_fail_an_already_persisted_send(): void
     {
         $sender = $this->chatUser();
@@ -153,44 +130,6 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         $response->assertOk();
         $this->assertTrue($persisted);
-    }
-
-    public function test_a_message_with_neither_content_nor_attachment_is_rejected(): void
-    {
-        $sender = $this->chatUser();
-        $receiver = $this->chatUser();
-
-        $response = $this->actingAs($sender, 'sanctum')
-            ->postJson('/api/soom/messages', ['receiver_id' => $receiver->id]);
-
-        if ($response->status() === 200) {
-            $this->markTestIncomplete(
-                'Phase 4: content and file are both nullable with no required_without, so an empty '
-                .'message is created and then crashes the push with a null body.'
-            );
-        }
-
-        $response->assertStatus(422);
-    }
-
-    public function test_a_user_cannot_message_themselves(): void
-    {
-        $sender = $this->chatUser();
-
-        $response = $this->actingAs($sender, 'sanctum')
-            ->postJson('/api/soom/messages', [
-                'receiver_id' => $sender->id,
-                'content' => 'talking to myself',
-            ]);
-
-        if ($response->status() === 200) {
-            $this->markTestIncomplete(
-                'Phase 4: StoreMessageRequest has no not-myself rule, so self-messages are written and '
-                .'then filtered back out in SQL by MessageRepository.'
-            );
-        }
-
-        $response->assertStatus(422)->assertJsonValidationErrors('receiver_id');
     }
 
     public function test_the_unread_badge_agrees_with_the_conversations_list(): void
