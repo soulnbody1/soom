@@ -43,7 +43,7 @@ return [
 
     'firebase' => [
         'fcm' => [
-            'credentials' => env('FCM_CREDENTIALS_PATH'),
+            'credentials' => env('FCM_CREDENTIALS_PATH') ?: storage_path('app/firebase/credentials.json'),
         ],
     ],
 

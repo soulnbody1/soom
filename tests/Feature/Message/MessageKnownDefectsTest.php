@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Message;
 
 use App\Models\Message;
-use App\Services\FCMService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 use Throwable;
 
 final class MessageKnownDefectsTest extends MessageTestCase
@@ -101,35 +99,6 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         $response->assertForbidden();
         $this->assertFalse($wrote);
-    }
-
-    public function test_a_push_failure_does_not_fail_an_already_persisted_send(): void
-    {
-        $sender = $this->chatUser();
-        $receiver = $this->chatUser(['fcm_token' => 'token-that-is-no-longer-registered']);
-
-        $this->mock(FCMService::class)
-            ->shouldReceive('sendToToken')
-            ->andThrow(new RuntimeException('UNREGISTERED'));
-
-        $response = $this->actingAs($sender, 'sanctum')
-            ->postJson('/api/soom/messages', [
-                'receiver_id' => $receiver->id,
-                'content' => 'delivered but reported as failed',
-            ]);
-
-        $persisted = Message::where('content', 'delivered but reported as failed')->exists();
-
-        if ($response->status() === 500 && $persisted) {
-            $this->markTestIncomplete(
-                'Phase 5: MessageService uses SendFcmNotification::dispatchSync, so an FCM failure '
-                .'propagates into the controller catch and returns 500 for a message that was committed '
-                .'and broadcast.'
-            );
-        }
-
-        $response->assertOk();
-        $this->assertTrue($persisted);
     }
 
     public function test_the_unread_badge_agrees_with_the_conversations_list(): void

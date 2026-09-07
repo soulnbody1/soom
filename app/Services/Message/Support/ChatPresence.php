@@ -12,6 +12,10 @@ class ChatPresence
 {
     public function bothPresent(int $userId, int $partnerId): bool
     {
+        if (! config('chat.presence_enabled')) {
+            return false;
+        }
+
         $channel = 'presence-chat.'.min($userId, $partnerId).'.'.max($userId, $partnerId);
 
         try {
@@ -35,11 +39,14 @@ class ChatPresence
 
     private function client(): Pusher
     {
+        $options = (array) config('broadcasting.connections.pusher.options');
+        $options['timeout'] = (int) config('chat.presence_timeout_seconds');
+
         return new Pusher(
             (string) config('broadcasting.connections.pusher.key'),
             (string) config('broadcasting.connections.pusher.secret'),
             (string) config('broadcasting.connections.pusher.app_id'),
-            (array) config('broadcasting.connections.pusher.options')
+            $options
         );
     }
 }

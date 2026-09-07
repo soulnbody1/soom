@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Message\Actions;
 
-use App\Events\ConversationUpdatedAfterDelete;
-use App\Events\UnreadCountUpdated;
+use App\Events\ConversationUpdated;
+use App\Jobs\Message\BroadcastConversationUpdate;
 use App\Models\Message;
 use App\Models\User;
 use App\Policies\MessagePolicy;
-use App\Repositories\Message\Queries\ConversationThreadsQuery;
-use App\Repositories\Message\Queries\UnreadConversationCounter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -20,10 +18,7 @@ final class DeleteMessagesAction
 {
     public const RECALL_WINDOW_SECONDS = MessagePolicy::RECALL_WINDOW_SECONDS;
 
-    public function __construct(
-        private readonly ConversationThreadsQuery $threads,
-        private readonly UnreadConversationCounter $unread,
-    ) {}
+    public function __construct() {}
 
     public function execute(User $actor, int $partnerId, ?array $messageIds = null): void
     {
@@ -95,15 +90,14 @@ final class DeleteMessagesAction
 
     private function announce(int $userId, Collection $partnerIds): void
     {
-        foreach ($partnerIds as $partnerId) {
-            $conversation = $this->threads->forPartner($userId, (int) $partnerId);
-
-            if ($conversation) {
-                event(new ConversationUpdatedAfterDelete($conversation, $userId));
-            }
+        foreach ($partnerIds as $index => $partnerId) {
+            BroadcastConversationUpdate::dispatch(
+                $userId,
+                (int) $partnerId,
+                $index === 0,
+                ConversationUpdated::DELETED
+            );
         }
-
-        event(new UnreadCountUpdated($userId, $this->unread->forUser($userId)));
     }
 
     private function assertOwnership(User $actor, Collection $messages): void

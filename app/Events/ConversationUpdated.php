@@ -10,13 +10,19 @@ class ConversationUpdated implements ShouldBroadcastNow
 {
     use SerializesModels;
 
+    public const UPDATED = 'conversation.updated';
+
+    public const DELETED = 'Message.delete';
+
     public $conversation;
     public $userId;
+    public string $eventName;
 
-    public function __construct($conversation, $userId)
+    public function __construct($conversation, $userId, string $eventName = self::UPDATED)
     {
         $this->conversation = $conversation;
         $this->userId = $userId;
+        $this->eventName = $eventName;
     }
 
     public function broadcastOn()
@@ -26,7 +32,7 @@ class ConversationUpdated implements ShouldBroadcastNow
 
     public function broadcastAs()
     {
-        return 'conversation.updated';
+        return $this->eventName;
     }
 
     public function broadcastWith()
