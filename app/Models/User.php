@@ -100,13 +100,6 @@ class User extends Authenticatable
         return $this->hasMany(Message::class, 'receiver_id');
     }
 
-    public function chatUsers()
-    {
-        return $this->hasMany(Message::class, 'sender_id')
-            ->select('receiver_id')
-            ->distinct();
-    }
-
     public function getLogoAttribute($value)
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */

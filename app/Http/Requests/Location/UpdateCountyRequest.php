@@ -22,7 +22,7 @@ class UpdateCountyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255|unique:counties,name,' . $this->route('id'),
+            'name' => 'required|string|max:255|unique:counties,name,'.$this->route('id'),
             'city_id' => 'required|integer|exists:cities,id',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',

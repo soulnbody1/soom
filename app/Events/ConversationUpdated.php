@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
@@ -15,7 +17,9 @@ class ConversationUpdated implements ShouldBroadcastNow
     public const DELETED = 'Message.delete';
 
     public $conversation;
+
     public $userId;
+
     public string $eventName;
 
     public function __construct($conversation, $userId, string $eventName = self::UPDATED)
@@ -27,7 +31,7 @@ class ConversationUpdated implements ShouldBroadcastNow
 
     public function broadcastOn()
     {
-        return new PrivateChannel('conversations.' . $this->userId);
+        return new PrivateChannel('conversations.'.$this->userId);
     }
 
     public function broadcastAs()

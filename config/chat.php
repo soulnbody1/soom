@@ -9,6 +9,8 @@ return [
         'write_per_minute' => (int) env('CHAT_WRITE_RATE_LIMIT_PER_MINUTE', 60),
     ],
 
+    'recall_window_seconds' => (int) env('CHAT_RECALL_WINDOW_SECONDS', 120),
+
     'presence_timeout_seconds' => (int) env('CHAT_PRESENCE_TIMEOUT_SECONDS', 3),
 
     'presence_enabled' => (bool) env('CHAT_PRESENCE_ENABLED', true),

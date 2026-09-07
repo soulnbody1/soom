@@ -41,9 +41,6 @@ class DeleteMessageRequest extends FormRequest
         });
     }
 
-    /**
-     * @return list<int>
-     */
     public function messageIds(): array
     {
         $ids = $this->input('message_ids');

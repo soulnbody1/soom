@@ -14,9 +14,9 @@ class AnnouncementRequest extends FormRequest
     public function rules()
     {
         return [
-            'title'         => 'required|string|max:500',
-            'icon'          => 'required|image|mimes:jpeg,png,jpg,webp|max:2048', 
-            'is_active'     => 'required|boolean',
+            'title' => 'required|string|max:500',
+            'icon' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'is_active' => 'required|boolean',
             'display_order' => 'required|integer',
         ];
     }

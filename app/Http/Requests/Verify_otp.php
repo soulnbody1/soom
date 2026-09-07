@@ -24,7 +24,7 @@ class Verify_otp extends FormRequest
         return [
             'phone' => 'required|phone:EG,JO,SA,AE|exists:users,phone',
             'otp' => 'required|string|size:4',
-            'fcm_token' =>'nullable|string',
-            ];
+            'fcm_token' => 'nullable|string',
+        ];
     }
 }

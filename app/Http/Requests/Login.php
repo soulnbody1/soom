@@ -24,7 +24,7 @@ class Login extends FormRequest
         return [
             'phone' => 'required|phone:EG,JO,SA,AE',
             'password' => 'required',
-            'fcm_token' =>'nullable|string'
+            'fcm_token' => 'nullable|string',
         ];
     }
 }

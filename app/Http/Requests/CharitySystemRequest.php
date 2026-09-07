@@ -14,11 +14,11 @@ class CharitySystemRequest extends FormRequest
     public function rules()
     {
         return [
-            'image'         => 'required|image|mimes:jpeg,png,jpg,webp|max:2048', 
-            'link_url'      => 'nullable|string|max:500',
-            'is_active'     => 'nullable|boolean',
-            'start_date'    => 'nullable|date',
-            'end_date'      => 'nullable|date|after_or_equal:start_date',
+            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'link_url' => 'nullable|string|max:500',
+            'is_active' => 'nullable|boolean',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
             'display_order' => 'nullable|integer',
         ];
     }

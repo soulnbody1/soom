@@ -6,7 +6,6 @@ namespace Tests\Feature\Message;
 
 use App\Models\Message;
 use App\Models\User;
-use App\Services\Message\Actions\DeleteMessagesAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 
@@ -33,7 +32,7 @@ final class MessageDeletionTest extends MessageTestCase
 
     public function test_a_message_just_inside_the_window_is_still_recalled(): void
     {
-        [$sender, $receiver, $message] = $this->aged(DeleteMessagesAction::RECALL_WINDOW_SECONDS - 5);
+        [$sender, $receiver, $message] = $this->aged($this->recallWindow() - 5);
 
         $this->deleteAs($sender, $receiver, [$message->id])->assertOk();
 
@@ -42,7 +41,7 @@ final class MessageDeletionTest extends MessageTestCase
 
     public function test_a_message_past_the_window_is_hidden_from_the_sender_only(): void
     {
-        [$sender, $receiver, $message] = $this->aged(DeleteMessagesAction::RECALL_WINDOW_SECONDS + 1);
+        [$sender, $receiver, $message] = $this->aged($this->recallWindow() + 1);
 
         $this->deleteAs($sender, $receiver, [$message->id])->assertOk();
 
@@ -76,7 +75,7 @@ final class MessageDeletionTest extends MessageTestCase
         $old = $this->sendFixture($viewer, $partner);
         $inbound = $this->sendFixture($partner, $viewer);
 
-        $this->age($old, DeleteMessagesAction::RECALL_WINDOW_SECONDS + 60);
+        $this->age($old, $this->recallWindow() + 60);
         $this->age($inbound, 5);
 
         $this->deleteAs($viewer, $partner)->assertOk();
@@ -124,7 +123,7 @@ final class MessageDeletionTest extends MessageTestCase
 
     public function test_deleting_is_idempotent(): void
     {
-        [$sender, $receiver, $message] = $this->aged(DeleteMessagesAction::RECALL_WINDOW_SECONDS + 1);
+        [$sender, $receiver, $message] = $this->aged($this->recallWindow() + 1);
 
         $this->deleteAs($sender, $receiver, [$message->id])->assertOk();
         $this->deleteAs($sender, $receiver, [$message->id])->assertOk();
@@ -156,6 +155,24 @@ final class MessageDeletionTest extends MessageTestCase
             $largeCost,
             "Thread deletion cost grew from {$smallCost} to {$largeCost} between a 2-message and a 40-message thread."
         );
+    }
+
+    public function test_the_recall_window_is_driven_by_config(): void
+    {
+        config()->set('chat.recall_window_seconds', 30);
+
+        [$senderA, $receiverA, $inside] = $this->aged(20);
+        $this->deleteAs($senderA, $receiverA, [$inside->id])->assertOk();
+        $this->assertDatabaseMissing('messages', ['id' => $inside->id]);
+
+        [$senderB, $receiverB, $outside] = $this->aged(40);
+        $this->deleteAs($senderB, $receiverB, [$outside->id])->assertOk();
+        $this->assertDatabaseHas('messages', ['id' => $outside->id]);
+    }
+
+    private function recallWindow(): int
+    {
+        return (int) config('chat.recall_window_seconds');
     }
 
     private function aged(int $seconds): array

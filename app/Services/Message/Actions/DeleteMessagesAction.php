@@ -16,8 +16,6 @@ use Illuminate\Support\Facades\Gate;
 
 final class DeleteMessagesAction
 {
-    public const RECALL_WINDOW_SECONDS = MessagePolicy::RECALL_WINDOW_SECONDS;
-
     public function __construct() {}
 
     public function execute(User $actor, int $partnerId, ?array $messageIds = null): void
@@ -69,7 +67,7 @@ final class DeleteMessagesAction
 
     private function deleteThread(int $userId, int $partnerId): Collection
     {
-        $cutoff = now()->subSeconds(self::RECALL_WINDOW_SECONDS);
+        $cutoff = MessagePolicy::recallCutoff();
 
         DB::transaction(function () use ($userId, $partnerId, $cutoff): void {
             $this->thread($userId, $partnerId)

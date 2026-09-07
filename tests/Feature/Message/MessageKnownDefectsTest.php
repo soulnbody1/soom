@@ -7,7 +7,6 @@ namespace Tests\Feature\Message;
 use App\Models\Message;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 final class MessageKnownDefectsTest extends MessageTestCase
 {
@@ -37,9 +36,8 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         if (Message::whereKey($message->id)->doesntExist()) {
             $this->markTestIncomplete(
-                'Phase 3: Carbon 3 returns a signed diffInSeconds, so the 120-second hard-delete window '
-                .'in MessageService is always true and a sender can erase any message of any age from '
-                .'the recipient inbox.'
+                'Carbon 3 returns a signed diffInSeconds, so the legacy 120-second hard-delete window was '
+                .'always true and a sender could erase any message of any age from the recipient inbox.'
             );
         }
 
@@ -61,8 +59,8 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         if ($firstIds === $secondIds) {
             $this->markTestIncomplete(
-                'Phase 2: MessageRepository::getUserConversations builds a LengthAwarePaginator from the '
-                .'complete result set without slicing, so every page returns every conversation.'
+                'The legacy thread list built a LengthAwarePaginator from the complete result set without '
+                .'slicing, so every page returned every conversation.'
             );
         }
 
@@ -92,8 +90,8 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         if ($wrote) {
             $this->markTestIncomplete(
-                'Phase 3: deleteSpecificMessages never checks the message involves the caller, so any '
-                .'authenticated user can write message_deletions rows for arbitrary message ids.'
+                'The legacy delete path never checked the message involves the caller, so any authenticated '
+                .'user could write message_deletions rows for arbitrary message ids.'
             );
         }
 
@@ -119,9 +117,7 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         if ($listed !== $badge) {
             $this->markTestIncomplete(
-                'Phase 2: getUsers omits withTrashed so a conversation with a deactivated user vanishes '
-                ."from the list, while getTotalUnreadConversationsCount still counts it (list={$listed}, "
-                ."badge={$badge})."
+                "The thread list and the unread badge disagree (list={$listed}, badge={$badge})."
             );
         }
 
@@ -152,8 +148,7 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         if ($large > $small) {
             $this->markTestIncomplete(
-                'Phase 3: deleteSpecificMessages runs Message::find per id and one delete per row, so '
-                ."the cost scales with the batch ({$small} queries for 1 id, {$large} for 10)."
+                "Deletion cost scales with the batch ({$small} queries for 1 id, {$large} for 10)."
             );
         }
 
@@ -166,9 +161,9 @@ final class MessageKnownDefectsTest extends MessageTestCase
 
         if ($visibility === 'public') {
             $this->markTestIncomplete(
-                'Out of scope by decision: MessageRepository::storeAttachment writes chat_files/ to the '
-                .'public spaces disk, so private conversation attachments are readable by URL with no '
-                .'signed link and no access control.'
+                'Out of scope by decision: ChatAttachmentStorage writes chat_files/ to the public spaces '
+                .'disk, so private conversation attachments are readable by URL with no signed link '
+                .'and no access control.'
             );
         }
 

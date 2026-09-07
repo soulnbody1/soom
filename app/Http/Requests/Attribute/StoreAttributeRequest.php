@@ -20,7 +20,6 @@ class StoreAttributeRequest extends FormRequest
             'is_multiple' => 'boolean',
             'parent_attribute_id' => 'nullable|exists:attributes,id',
 
-
             'categories' => 'nullable|array',
             'categories.*.id' => 'required_with:categories|exists:categories,id',
             'categories.*.is_inheritable' => 'required_with:categories|boolean',

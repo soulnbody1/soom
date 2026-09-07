@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
@@ -11,6 +13,7 @@ class UnreadCountUpdated implements ShouldBroadcastNow
     use SerializesModels;
 
     public int $userId;
+
     public int $unreadCount;
 
     public function __construct(int $userId, int $unreadCount)
@@ -21,7 +24,7 @@ class UnreadCountUpdated implements ShouldBroadcastNow
 
     public function broadcastOn()
     {
-        return new PrivateChannel('conversations.' . $this->userId);
+        return new PrivateChannel('conversations.'.$this->userId);
     }
 
     public function broadcastAs()

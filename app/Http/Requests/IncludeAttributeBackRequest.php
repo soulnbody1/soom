@@ -14,8 +14,8 @@ class IncludeAttributeBackRequest extends FormRequest
     public function rules()
     {
         return [
-            'attribute_id' => 'required|exists:attributes,id', 
-            'category_id'  => 'required|exists:categories,id',
+            'attribute_id' => 'required|exists:attributes,id',
+            'category_id' => 'required|exists:categories,id',
         ];
     }
 }

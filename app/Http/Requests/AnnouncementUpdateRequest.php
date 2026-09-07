@@ -14,9 +14,9 @@ class AnnouncementUpdateRequest extends FormRequest
     public function rules()
     {
         return [
-            'title'         => 'nullable|string|max:500',
-            'icon'          => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048', 
-            'is_active'     => 'nullable|boolean',
+            'title' => 'nullable|string|max:500',
+            'icon' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'is_active' => 'nullable|boolean',
             'display_order' => 'nullable|integer',
         ];
     }
