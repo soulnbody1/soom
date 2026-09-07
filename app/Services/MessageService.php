@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Events\ConversationUpdated;
-use App\Events\ConversationUpdatedAfterDelete;
 use App\Events\MessageSent;
 use App\Events\UnreadCountUpdated;
 use App\Jobs\SendFcmNotification;
@@ -11,11 +10,11 @@ use App\Repositories\Message\Queries\ConversationMessagesQuery;
 use App\Repositories\Message\Queries\ConversationThreadsQuery;
 use App\Repositories\Message\Queries\UnreadConversationCounter;
 use App\Repositories\MessageRepository;
+use App\Services\Message\Actions\DeleteMessagesAction;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\UploadedFile;
 use App\Models\Message;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Pusher\Pusher;
 
@@ -26,6 +25,7 @@ class MessageService
         private readonly ConversationThreadsQuery $threads,
         private readonly ConversationMessagesQuery $messages,
         private readonly UnreadConversationCounter $unread,
+        private readonly DeleteMessagesAction $deleteMessages,
     ) {}
 
     public function sendMessage(array $data): Message
@@ -133,93 +133,13 @@ class MessageService
         return $this->threads->paginate((int) Auth::id(), $page, $perPage, $search);
     }
 
-    public function delete(array $data)
+    public function delete(array $data): bool
     {
-        $userId = Auth::id();
-
-        if (!isset($data['user_id'])) {
-            throw new \Exception('user_id مطلوب');
-        }
-
-        $otherUserId = $data['user_id'];
-
-        if (!empty($data['message_ids']) && is_array($data['message_ids'])) {
-            return $this->deleteSpecificMessages($userId, $data['message_ids']);
-        }
-
-        return $this->deleteConversation($userId, $otherUserId);
-    }
-
-    private function deleteSpecificMessages(int $userId, array $messageIds): bool
-    {
-        $insert = [];
-        $needToTrigger = [];
-
-        foreach ($messageIds as $messageId) {
-            $message = Message::find($messageId);
-            if (!$message) continue;
-
-            $otherUserId = $message->sender_id == $userId ? $message->receiver_id : $message->sender_id;
-
-            if ($message->sender_id === $userId && now()->diffInSeconds($message->created_at) <= 120) {
-                $message->delete();
-            } else {
-                $insert[] = [
-                    'user_id' => $userId,
-                    'message_id' => $messageId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-
-            $needToTrigger[] = $otherUserId;
-        }
-
-        if (!empty($insert)) {
-            DB::table('message_deletions')->upsert($insert, ['user_id', 'message_id']);
-        }
-
-        foreach (array_unique($needToTrigger) as $otherUserId) {
-            $conversation = $this->threads->forPartner($userId, $otherUserId);
-            if ($conversation) {
-                event(new ConversationUpdatedAfterDelete($conversation, $userId));
-            }
-        }
-
-        return true;
-    }
-
-    private function deleteConversation(int $userId, int $otherUserId): bool
-    {
-        $messages = Message::where(function ($q) use ($userId, $otherUserId) {
-            $q->where('sender_id', $userId)->where('receiver_id', $otherUserId);
-        })->orWhere(function ($q) use ($userId, $otherUserId) {
-            $q->where('sender_id', $otherUserId)->where('receiver_id', $userId);
-        })->get();
-
-        if ($messages->isEmpty()) return true;
-
-        $insert = [];
-
-        foreach ($messages as $message) {
-            if ($message->sender_id === $userId && now()->diffInSeconds($message->created_at) <= 120) {
-                $message->delete();
-            } else {
-                $insert[] = [
-                    'user_id' => $userId,
-                    'message_id' => $message->id,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-        }
-
-        if (!empty($insert)) {
-            DB::table('message_deletions')->upsert($insert, ['user_id', 'message_id']);
-        }
-
-        $unreadCount =  $this->getTotalUnreadConversationsCount($userId);
-        event(new UnreadCountUpdated($userId, $unreadCount));
+        $this->deleteMessages->execute(
+            (int) Auth::id(),
+            (int) $data['user_id'],
+            $data['message_ids'] ?? null
+        );
 
         return true;
     }

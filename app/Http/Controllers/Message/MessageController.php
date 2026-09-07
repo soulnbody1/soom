@@ -10,6 +10,7 @@ use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Message;
 use App\Services\MessageService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -87,11 +88,17 @@ class MessageController extends Controller
                 'status' => true,
                 'message' => 'تم الحذف بنجاح',
             ]);
+        } catch (AuthorizationException $e) {
+            throw $e;
         } catch (\Exception $e) {
+            Log::error('فشل في حذف الرسائل: '.$e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
             return response()->json([
                 'status' => false,
                 'message' => 'حدث خطأ أثناء الحذف',
-                'error' => $e->getMessage(),
             ], 500);
         }
     }
