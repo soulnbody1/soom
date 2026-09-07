@@ -65,6 +65,35 @@ final class MessageIndexTest extends MessageTestCase
         );
     }
 
+    public function test_the_thread_rollup_never_scans_the_messages_table(): void
+    {
+        $viewer = $this->chatUser();
+        $this->makeThreads($viewer, 5);
+
+        $sql = 'select partner_id, MAX(message_id) as last_message_id from ('
+            .'(select sender_id as partner_id, id as message_id from messages '
+            .'where receiver_id = ? and sender_id != receiver_id '
+            .'and not exists (select 1 from message_deletions where message_deletions.message_id = messages.id and message_deletions.user_id = ?))'
+            .' union all '
+            .'(select receiver_id as partner_id, id as message_id from messages '
+            .'where sender_id = ? and sender_id != receiver_id '
+            .'and not exists (select 1 from message_deletions where message_deletions.message_id = messages.id and message_deletions.user_id = ?))'
+            .') as threads group by partner_id order by last_message_id desc limit 20';
+
+        $plan = DB::select('EXPLAIN '.$sql, [$viewer->id, $viewer->id, $viewer->id, $viewer->id]);
+
+        foreach ($plan as $row) {
+            if ($row->table === 'messages') {
+                $this->assertNotSame(
+                    'ALL',
+                    $row->type,
+                    'The thread rollup must not table-scan messages, plan used: '.json_encode($row).'.'
+                );
+                $this->assertContains($row->key, ['idx_messages_thread', 'idx_messages_unread']);
+            }
+        }
+    }
+
     /**
      * @return array<string, list<string>>
      */

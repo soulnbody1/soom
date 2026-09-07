@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Message;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DeleteMessageRequest;
+use App\Http\Requests\Message\ConversationListRequest;
 use App\Http\Requests\StoreMessageRequest;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
@@ -52,11 +53,18 @@ class MessageController extends Controller
         return MessageResource::collection($messages)->additional(['status' => true]);
     }
 
-    public function getConversationsList()
+    public function getConversationsList(ConversationListRequest $request)
     {
-        $conversations = $this->messageService->getUserConversations();
-        $getTotalUnreadConversationsCount = $this->messageService->getTotalUnreadConversationsCount(Auth::id());
-        return ConversationResource::collection($conversations)->additional(['status' => true,'TotalUnreadConversationsCount' => $getTotalUnreadConversationsCount]);
+        $conversations = $this->messageService->getUserConversations(
+            $request->search(),
+            $request->page(),
+            $request->perPage()
+        );
+
+        return ConversationResource::collection($conversations)->additional([
+            'status' => true,
+            'TotalUnreadConversationsCount' => $this->messageService->getTotalUnreadConversationsCount((int) Auth::id()),
+        ]);
     }
 
     public function markAsRead(Request $request)
@@ -88,10 +96,14 @@ class MessageController extends Controller
         }
     }
 
-    public function searchConversations(Request $request)
+    public function searchConversations(ConversationListRequest $request)
     {
-        $search = $request->input('search');
-        $conversations = $this->messageService->getUserConversations($search);
+        $conversations = $this->messageService->getUserConversations(
+            $request->search(),
+            $request->page(),
+            $request->perPage()
+        );
+
         return ConversationResource::collection($conversations)->additional(['status' => true]);
     }
 }

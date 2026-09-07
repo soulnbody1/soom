@@ -7,6 +7,9 @@ use App\Events\ConversationUpdatedAfterDelete;
 use App\Events\MessageSent;
 use App\Events\UnreadCountUpdated;
 use App\Jobs\SendFcmNotification;
+use App\Repositories\Message\Queries\ConversationMessagesQuery;
+use App\Repositories\Message\Queries\ConversationThreadsQuery;
+use App\Repositories\Message\Queries\UnreadConversationCounter;
 use App\Repositories\MessageRepository;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\UploadedFile;
@@ -18,12 +21,12 @@ use Pusher\Pusher;
 
 class MessageService
 {
-    protected MessageRepository $messageRepo;
-
-    public function __construct(MessageRepository $messageRepo)
-    {
-        $this->messageRepo = $messageRepo;
-    }
+    public function __construct(
+        private readonly MessageRepository $messageRepo,
+        private readonly ConversationThreadsQuery $threads,
+        private readonly ConversationMessagesQuery $messages,
+        private readonly UnreadConversationCounter $unread,
+    ) {}
 
     public function sendMessage(array $data): Message
     {
@@ -85,11 +88,8 @@ class MessageService
     {
         event(new MessageSent($message->load('ad.images'), $temporaryCode, $is_read));
 
-        $conversation = $this->messageRepo->getUserConversations($receiverId)->first();
-        event(new ConversationUpdated($conversation, $receiverId));
-
-        $conversation = $this->messageRepo->getUserConversations($senderId)->first();
-        event(new ConversationUpdated($conversation, $senderId));
+        event(new ConversationUpdated($this->threads->forPartner($receiverId, $senderId), $receiverId));
+        event(new ConversationUpdated($this->threads->forPartner($senderId, $receiverId), $senderId));
 
         $unreadCount =  $this->getTotalUnreadConversationsCount($receiverId);
         event(new UnreadCountUpdated($receiverId, $unreadCount));
@@ -116,19 +116,21 @@ class MessageService
 
     public function getConversationWith(int $userId)
     {
-        $unreadCount = $this->getTotalUnreadConversationsCount(Auth::id());
-        event(new UnreadCountUpdated(Auth::id(), $unreadCount));
-        return $this->messageRepo->getConversation(Auth::id(), $userId);
+        $viewerId = (int) Auth::id();
+
+        event(new UnreadCountUpdated($viewerId, $this->getTotalUnreadConversationsCount($viewerId)));
+
+        return $this->messages->paginate($viewerId, $userId);
     }
 
-    public function getTotalUnreadConversationsCount($userId)
+    public function getTotalUnreadConversationsCount(int $userId): int
     {
-        return $this->messageRepo->getTotalUnreadConversationsCount($userId);
+        return $this->unread->forUser($userId);
     }
 
-    public function getUserConversations($search = null)
+    public function getUserConversations(?string $search = null, int $page = 1, int $perPage = ConversationThreadsQuery::PER_PAGE)
     {
-        return $this->messageRepo->getUserConversations(Auth::id(), 20, $search);
+        return $this->threads->paginate((int) Auth::id(), $page, $perPage, $search);
     }
 
     public function delete(array $data)
@@ -178,12 +180,9 @@ class MessageService
         }
 
         foreach (array_unique($needToTrigger) as $otherUserId) {
-            $lastVisibleMessage = $this->messageRepo->getLastVisibleMessage($userId, $otherUserId);
-            if ($lastVisibleMessage) {
-                $conversation = $this->messageRepo->getConversationObject($userId, $otherUserId);
-                if ($conversation) {
-                    event(new ConversationUpdatedAfterDelete($conversation, $userId));
-                }
+            $conversation = $this->threads->forPartner($userId, $otherUserId);
+            if ($conversation) {
+                event(new ConversationUpdatedAfterDelete($conversation, $userId));
             }
         }
 

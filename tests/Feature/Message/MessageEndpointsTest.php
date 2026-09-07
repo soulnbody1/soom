@@ -120,6 +120,21 @@ final class MessageEndpointsTest extends MessageTestCase
         );
     }
 
+    public function test_conversation_hides_outbound_messages_the_viewer_deleted(): void
+    {
+        $viewer = $this->chatUser();
+        $partner = $this->chatUser();
+
+        $kept = $this->sendFixture($viewer, $partner, ['content' => 'kept']);
+        $hidden = $this->sendFixture($viewer, $partner, ['content' => 'hidden']);
+        $this->hideFromUser($viewer, $hidden);
+
+        $response = $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/soom/messages/chat/'.$partner->id);
+
+        $this->assertSame([$kept->id], array_column($response->json('data'), 'id'));
+    }
+
     public function test_conversation_with_a_stranger_is_empty(): void
     {
         $viewer = $this->chatUser();

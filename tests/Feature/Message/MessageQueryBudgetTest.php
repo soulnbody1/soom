@@ -12,11 +12,11 @@ final class MessageQueryBudgetTest extends MessageTestCase
 {
     use RefreshDatabase;
 
-    private const CONVERSATIONS_BUDGET = 4;
+    private const CONVERSATIONS_BUDGET = 5;
 
     private const CHAT_BUDGET = 3;
 
-    private const SEARCH_BUDGET = 3;
+    private const SEARCH_BUDGET = 4;
 
     private const SEND_BUDGET = 10;
 
@@ -130,6 +130,57 @@ final class MessageQueryBudgetTest extends MessageTestCase
         $this->assertNoWriteQueries(fn () => $this->actingAs($viewer, 'sanctum')
             ->getJson('/api/soom/messages/conversations')
             ->assertOk());
+    }
+
+    public function test_the_conversations_list_is_paginated_and_hydrated_inside_the_database(): void
+    {
+        $viewer = $this->chatUser();
+        $this->makeThreads($viewer, 45);
+
+        $response = $this->countQueries(fn () => $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/soom/messages/conversations')
+            ->assertOk());
+
+        $this->assertCount(20, $response->json('data'));
+        $this->assertSame(45, $response->json('meta.total'));
+        $this->assertSame(3, $response->json('meta.last_page'));
+
+        $rollup = $this->matchQuery('group by');
+        $this->assertStringContainsString('limit', $rollup, "The thread rollup must page in SQL: {$rollup}");
+
+        foreach ($this->recordedQueries() as $sql) {
+            if (str_starts_with($sql, 'select * from `users`')) {
+                $this->fail('Partner hydration must select explicit columns, got: '.$sql);
+            }
+        }
+    }
+
+    public function test_per_page_is_honoured_and_capped(): void
+    {
+        $viewer = $this->chatUser();
+        $this->makeThreads($viewer, 8);
+
+        $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/soom/messages/conversations?per_page=5')
+            ->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.per_page', 5);
+
+        $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/soom/messages/conversations?per_page=1000')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('per_page');
+    }
+
+    private function matchQuery(string $needle): string
+    {
+        foreach ($this->recordedQueries() as $sql) {
+            if (str_contains($sql, $needle)) {
+                return $sql;
+            }
+        }
+
+        $this->fail("No recorded query contained [{$needle}].");
     }
 
     private function measure(User $viewer, string $uri): int
