@@ -8,16 +8,20 @@ use App\Models\User;
 use App\Services\Support\FulltextQuerySanitizer;
 use Illuminate\Database\Eloquent\Builder;
 
-final class UserSearchQuery
+final class UserDirectoryQuery
 {
     public function __construct(private readonly FulltextQuerySanitizer $sanitizer) {}
 
-    public function apply(?string $keyword): Builder
+    public function scope(): Builder
     {
-        $query = User::withTrashed()
+        return User::withTrashed()->where('role', '!=', 'admin');
+    }
+
+    public function listing(?string $keyword = null): Builder
+    {
+        $query = $this->scope()
             ->withCount('ads')
-            ->with(['country:id,name', 'state:id,name', 'city:id,name'])
-            ->where('role', '!=', 'admin');
+            ->with(['country:id,name', 'state:id,name', 'city:id,name']);
 
         $keyword = trim((string) $keyword);
 
@@ -36,6 +40,16 @@ final class UserSearchQuery
             $group->orWhere('name', 'LIKE', $contains)
                 ->orWhere('phone', 'LIKE', $contains);
         });
+    }
+
+    public function countWithAds(): int
+    {
+        return $this->scope()->whereHas('ads')->count();
+    }
+
+    public function countWithoutAds(): int
+    {
+        return $this->scope()->whereDoesntHave('ads')->count();
     }
 
     private function supportsFullText(): bool

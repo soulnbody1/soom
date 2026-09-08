@@ -164,7 +164,7 @@ return new class extends Migration
     }
 
     /**
-     * App\Repositories\User\Queries\UserSearchQuery matches on (name, phone).
+     * App\Repositories\User\Queries\UserDirectoryQuery matches on (name, phone).
      */
     private function indexUsers(): void
     {

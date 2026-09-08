@@ -103,10 +103,50 @@ final class AdminUsersCharacterizationTest extends UserTestCase
             ->json();
 
         $this->assertSame(
-            User::withTrashed()->count(),
+            User::withTrashed()->where('role', '!=', 'admin')->count(),
             $analytics['countUsersHasAds'] + $analytics['countUsersNotHasAds']
         );
         $this->assertSame(1, $analytics['countUsersHasAds']);
+    }
+
+    public function test_analytics_excludes_admins(): void
+    {
+        $admin = $this->admin();
+        $this->admin();
+        $member = $this->member();
+
+        $analytics = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/users/analytics')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(1, $analytics['countUsersHasAds'] + $analytics['countUsersNotHasAds']);
+        $this->assertSame(0, $analytics['countUsersHasAds']);
+        $this->assertNotNull($member->id);
+    }
+
+    public function test_analytics_matches_the_listing_scope(): void
+    {
+        $admin = $this->admin();
+        $this->ad($this->member());
+        $this->member();
+        $blocked = $this->member();
+        $blocked->delete();
+
+        $analytics = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/users/analytics')
+            ->assertOk()
+            ->json();
+
+        $listed = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/users')
+            ->assertOk()
+            ->json('meta.total');
+
+        $this->assertSame(
+            (int) $listed,
+            $analytics['countUsersHasAds'] + $analytics['countUsersNotHasAds']
+        );
     }
 
     public function test_toggle_block_soft_deletes_then_restores_a_user(): void

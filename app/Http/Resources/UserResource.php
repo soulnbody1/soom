@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
@@ -17,9 +19,9 @@ class UserResource extends JsonResource
             'birth_date' => $this->birth_date,
             'gender' => $this->gender,
             'address' => implode(',', array_filter([
-                optional($this->country)->name,
-                optional($this->state)->name,
-                optional($this->city)->name,
+                $this->country?->name,
+                $this->state?->name,
+                $this->city?->name,
             ])),
             'country_id' => $this->country_id,
             'state_id' => $this->state_id,

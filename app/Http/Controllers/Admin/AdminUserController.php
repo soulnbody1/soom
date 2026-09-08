@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminUserSearchRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
-use App\Repositories\User\Queries\UserSearchQuery;
+use App\Repositories\User\Queries\UserDirectoryQuery;
 use App\Services\User\Actions\DeleteUserAccountAction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,18 +17,18 @@ use Illuminate\Support\Facades\Gate;
 final class AdminUserController extends Controller
 {
     public function __construct(
-        private readonly UserSearchQuery $users,
+        private readonly UserDirectoryQuery $users,
         private readonly DeleteUserAccountAction $deleteAccount,
     ) {}
 
     public function index(): AnonymousResourceCollection
     {
-        return UserResource::collection($this->users->apply(null)->paginate(20));
+        return UserResource::collection($this->users->listing()->paginate(20));
     }
 
     public function search(AdminUserSearchRequest $request): JsonResponse
     {
-        $users = $this->users->apply($request->keyword())->latest()->paginate(10);
+        $users = $this->users->listing($request->keyword())->latest()->paginate(10);
 
         if ($users->total() === 0) {
             return response()->json([
@@ -51,8 +51,8 @@ final class AdminUserController extends Controller
     public function analytics(): JsonResponse
     {
         return response()->json([
-            'countUsersHasAds' => User::withTrashed()->whereHas('ads')->count(),
-            'countUsersNotHasAds' => User::withTrashed()->whereDoesntHave('ads')->count(),
+            'countUsersHasAds' => $this->users->countWithAds(),
+            'countUsersNotHasAds' => $this->users->countWithoutAds(),
         ], 200);
     }
 

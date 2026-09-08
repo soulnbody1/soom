@@ -53,7 +53,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
     // ============= المستخدم =============
     Route::prefix('profile')->group(function () {
         Route::get('/', [ProfileController::class, 'show']);
-        Route::post('/', [ProfileController::class, 'update']);
+        Route::post('/', [ProfileController::class, 'update'])->middleware('throttle:profile-write');
         Route::delete('/', [ProfileController::class, 'destroy']);
     });
 

@@ -114,6 +114,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureAdRateLimiting();
         $this->configureAuthRateLimiting();
         $this->configureChatRateLimiting();
+        $this->configureProfileRateLimiting();
     }
 
     private function invalidateAdLookupCaches(): void
@@ -170,6 +171,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('chat-write', fn (Request $request): Limit => Limit::perMinute(
             (int) config('chat.rate_limits.write_per_minute')
         )->by('chat-write:user:'.$byUser($request)));
+    }
+
+    private function configureProfileRateLimiting(): void
+    {
+        RateLimiter::for('profile-write', fn (Request $request): Limit => Limit::perHour(
+            (int) config('users.rate_limits.profile_update_per_hour')
+        )->by('profile-write:user:'.(int) ($request->user()?->id ?? 0)));
     }
 
     private function configureAdRateLimiting(): void

@@ -101,6 +101,41 @@ final class ProfileCharacterizationTest extends UserTestCase
         $this->assertDatabaseMissing('ads', ['id' => $ad->id]);
     }
 
+    public function test_update_is_rate_limited_per_user(): void
+    {
+        config(['users.rate_limits.profile_update_per_hour' => 2]);
+
+        $user = $this->member();
+        $other = $this->member();
+
+        foreach (range(1, 2) as $ignored) {
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/soom/profile', ['name' => 'اسم'])
+                ->assertOk();
+        }
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/soom/profile', ['name' => 'اسم'])
+            ->assertStatus(429);
+
+        $this->actingAs($other, 'sanctum')
+            ->postJson('/api/soom/profile', ['name' => 'اسم'])
+            ->assertOk();
+    }
+
+    public function test_show_never_exposes_the_push_token(): void
+    {
+        $user = $this->member();
+        $user->forceFill(['fcm_token' => 'secret-device-token'])->save();
+
+        $payload = $this->actingAs($user->fresh(), 'sanctum')
+            ->getJson('/api/soom/profile')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertArrayNotHasKey('fcm_token', $payload);
+    }
+
     public function test_destroy_revokes_access_tokens(): void
     {
         $user = $this->member();
