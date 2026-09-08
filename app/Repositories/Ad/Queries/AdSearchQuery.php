@@ -8,7 +8,7 @@ use App\DTO\Ad\AdSearchDTO;
 use App\Models\Ad;
 use App\Models\Category;
 use App\Services\Ad\Support\CategoryTreeResolver;
-use App\Services\Ad\Support\FulltextQuerySanitizer;
+use App\Services\Support\FulltextQuerySanitizer;
 use App\Services\Ad\Support\GeoNameResolver;
 use Illuminate\Database\Eloquent\Builder;
 

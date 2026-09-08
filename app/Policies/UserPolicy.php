@@ -26,4 +26,14 @@ final class UserPolicy
     {
         return $this->viewAdminProfile($actor, $target);
     }
+
+    public function block(User $actor, User $target): bool
+    {
+        return $this->viewAdminProfile($actor, $target) && $target->role !== 'admin';
+    }
+
+    public function forceDelete(User $actor, User $target): bool
+    {
+        return $this->block($actor, $target);
+    }
 }

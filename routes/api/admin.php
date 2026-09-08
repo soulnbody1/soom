@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\Ad\AdminAdController;
 use App\Http\Controllers\Admin\AdminUserAuctionsController;
+use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminUserConversationController;
 use App\Http\Controllers\Admin\AdminUserFinanceController;
 use App\Http\Controllers\Admin\AdminUserProfileController;
@@ -14,7 +15,6 @@ use App\Http\Controllers\CharitySystemController;
 use App\Http\Controllers\Location\CityController;
 use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Location\StateController;
-use App\Http\Controllers\User\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
@@ -34,11 +34,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     });
 
     Route::prefix('users')->group(function () {
-        Route::get('/', [ProfileController::class, 'users']);
-        Route::get('/analytics', [ProfileController::class, 'analytics']);
-        Route::get('/search', [ProfileController::class, 'search']);
-        Route::delete('/force-delete/{id}', [ProfileController::class, 'destroybyadmin']);
-        Route::put('/toggle-block/{id}', [ProfileController::class, 'toggleBlock']);
+        Route::get('/', [AdminUserController::class, 'index']);
+        Route::get('/analytics', [AdminUserController::class, 'analytics']);
+        Route::get('/search', [AdminUserController::class, 'search']);
+        Route::delete('/force-delete/{id}', [AdminUserController::class, 'forceDelete'])->whereNumber('id');
+        Route::put('/toggle-block/{id}', [AdminUserController::class, 'toggleBlock'])->whereNumber('id');
 
         Route::prefix('{user}')->group(function () {
             $routes = [

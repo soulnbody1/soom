@@ -4,6 +4,7 @@ use App\Domain\Auction\Exceptions\AuctionErrorCodeCatalog;
 use App\Domain\Auction\Exceptions\AuctionException;
 use App\Domain\ContentReview\Exceptions\ContentReviewErrorCodeCatalog;
 use App\Domain\ContentReview\Exceptions\ContentReviewException;
+use App\Exceptions\User\AccountDeletionBlockedException;
 use App\Http\Middleware\ApiMaintenanceMode;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Responses\ApiErrorResponse;
@@ -62,6 +63,14 @@ return Application::configure(basePath: dirname(__DIR__))
                 ?? 'content_review_error';
 
             return ApiErrorResponse::make($exception->getMessage(), $code, $exception->getStatusCode());
+        });
+
+        $exceptions->render(function (AccountDeletionBlockedException $exception, $request) use ($wantsJson) {
+            if (! $wantsJson($request)) {
+                return null;
+            }
+
+            return ApiErrorResponse::make($exception->getMessage(), 'account_deletion_blocked', 409);
         });
 
         $exceptions->render(function (ValidationException $exception, $request) use ($wantsJson) {
