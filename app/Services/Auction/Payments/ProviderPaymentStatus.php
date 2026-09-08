@@ -18,6 +18,7 @@ final readonly class ProviderPaymentStatus
         public ?int $providerFeeMinor = null,
         public ?string $settlementReference = null,
         public ?CarbonImmutable $settledAt = null,
+        public ?string $providerEventId = null,
         public ?string $merchantReference = null,
         public array $payload = [],
     ) {}

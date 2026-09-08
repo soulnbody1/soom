@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Enums\CustomerFeeBasis;
 use App\Domain\Auction\Enums\PaymentChannel;
 use App\Domain\Auction\Enums\PaymentCountry;
 use App\Domain\Auction\Enums\PaymentPurpose;
@@ -65,6 +66,7 @@ final class PaymentProviderController extends Controller
                 PaymentCountry::cases()
             ),
             'currencies' => Currency::supportedCodes(),
+            'fee_bases' => array_column(CustomerFeeBasis::cases(), 'value'),
         ], __('auction.messages.payment_method_options_fetched'));
     }
 

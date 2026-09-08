@@ -79,6 +79,12 @@ return [
         'webhook_secret' => env('AUCTION_PAYMENTS_FAKE_BILL_WEBHOOK_SECRET'),
     ],
 
+    'efawateercom' => [
+        'biller_code' => env('AUCTION_PAYMENTS_EFAWATEERCOM_BILLER_CODE'),
+        'username' => env('AUCTION_PAYMENTS_EFAWATEERCOM_USERNAME'),
+        'password' => env('AUCTION_PAYMENTS_EFAWATEERCOM_PASSWORD'),
+    ],
+
     'ngenius' => [
         'api_key' => env('NGENIUS_API_KEY'),
         'outlet_reference' => env('NGENIUS_OUTLET_REFERENCE'),

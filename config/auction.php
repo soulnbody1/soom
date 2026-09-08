@@ -54,6 +54,34 @@ return [
                 'bill_reference' => ['length' => 12, 'charset' => 'numeric', 'check_digit' => true, 'no_leading_zero' => true],
             ],
 
+            'efawateercom' => [
+                'class' => App\Services\Auction\Payments\Providers\EFawateercomPaymentProvider::class,
+                'required_credentials' => ['biller_code', 'username', 'password'],
+                'bill_ttl_seconds' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_BILL_TTL_SECONDS', 86400),
+                'bill_reference' => [
+                    'length' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_REFERENCE_LENGTH', 12),
+                    'charset' => 'numeric',
+                    'check_digit' => true,
+                    'no_leading_zero' => true,
+                ],
+                'bill_status' => env('AUCTION_PAYMENTS_EFAWATEERCOM_BILL_STATUS', 'BillNew'),
+                'bill_type' => env('AUCTION_PAYMENTS_EFAWATEERCOM_BILL_TYPE', 'OneOff'),
+                'bill_error_codes' => [
+                    'bill_already_paid' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_ALREADY_PAID', 324),
+                    'bill_not_found' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_NOT_FOUND', 404),
+                    'bill_not_payable' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_NOT_PAYABLE', 404),
+                    'no_payable_bills' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_NO_BILLS', 404),
+                    'unknown_billing_reference' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_NOT_FOUND', 404),
+                    'default' => 404,
+                ],
+                'request_error_codes' => [
+                    'unauthenticated' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_UNAUTHENTICATED', 401),
+                    'invalid_request' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_INVALID', 400),
+                    'unmatched' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_CODE_UNMATCHED', 404),
+                    'default' => 400,
+                ],
+            ],
+
             'ngenius' => [
                 'class' => App\Services\Auction\Payments\Providers\NGeniusPaymentProvider::class,
                 'required_credentials' => ['api_key', 'outlet_reference', 'base_url', 'webhook_secret'],

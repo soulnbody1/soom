@@ -44,6 +44,9 @@ final class PaymentMethod extends Model
         'currency_codes',
         'min_amount_minor',
         'max_amount_minor',
+        'fee_basis',
+        'fee_tiers',
+        'provider_purpose_codes',
     ];
 
     protected $casts = [
@@ -58,6 +61,8 @@ final class PaymentMethod extends Model
         'currency_codes' => 'array',
         'min_amount_minor' => 'integer',
         'max_amount_minor' => 'integer',
+        'fee_tiers' => 'array',
+        'provider_purpose_codes' => 'array',
     ];
 
     public function isOnline(): bool

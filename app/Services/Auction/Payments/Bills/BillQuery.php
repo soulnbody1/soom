@@ -28,6 +28,7 @@ final readonly class BillQuery
         public ?BillReference $billReference = null,
         public ?PaymentPurpose $purpose = null,
         public ?CarbonImmutable $receivedAt = null,
+        public ?string $requestId = null,
     ) {
         if ($billingReference === null && $billReference === null) {
             throw new InvalidArgumentException('A bill query must carry a billing reference, a bill reference, or both.');

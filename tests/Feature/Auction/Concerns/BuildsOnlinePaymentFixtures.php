@@ -21,6 +21,7 @@ use App\Models\Auction\PaymentMethod;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\User;
+use App\Services\Auction\Payments\Providers\EFawateercomPaymentProvider;
 use App\Services\Auction\Payments\Providers\FakeBillPaymentProvider;
 use App\Services\Auction\Payments\Providers\FakePaymentProvider;
 use Illuminate\Support\Carbon;
@@ -102,6 +103,38 @@ trait BuildsOnlinePaymentFixtures
         ]);
 
         return $participant;
+    }
+
+    protected function enableEfawateercom(array $overrides = []): PaymentMethod
+    {
+        config(array_replace([
+            'auction.payments.disabled_providers' => [],
+            'services.efawateercom.biller_code' => '1000',
+            'services.efawateercom.username' => 'ctm-user',
+            'services.efawateercom.password' => 'ctm-secret',
+        ], $overrides));
+
+        return $this->efawateercomPaymentMethod();
+    }
+
+    protected function efawateercomPaymentMethod(array $overrides = []): PaymentMethod
+    {
+        return PaymentMethod::create(array_replace([
+            'name' => 'eFAWATEERcom',
+            'code' => 'efawateercom-'.Str::ulid(),
+            'channel' => PaymentChannel::Online,
+            'rail' => PaymentRail::Bill,
+            'provider_code' => EFawateercomPaymentProvider::CODE,
+            'is_sandbox' => true,
+            'requires_manual_review' => false,
+            'is_active' => true,
+            'display_order' => 3,
+            'provider_purpose_codes' => [
+                'bidder_deposit' => 'SOOMBID',
+                'seller_deposit' => 'SOOMSELL',
+                'winner_settlement' => 'SOOMWIN',
+            ],
+        ], $overrides));
     }
 
     protected function manualPaymentMethod(): PaymentMethod

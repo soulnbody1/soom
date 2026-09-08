@@ -17,5 +17,11 @@ final readonly class PaymentIntent
         public array $metadata = [],
         public ?int $payerId = null,
         public ?CarbonImmutable $payableUntil = null,
+        public int $customerFeeMinor = 0,
     ) {}
+
+    public function payableAmountMinor(): int
+    {
+        return $this->amountMinor + $this->customerFeeMinor;
+    }
 }

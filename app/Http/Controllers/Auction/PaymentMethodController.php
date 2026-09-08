@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auction;
 
+use App\Domain\Auction\Enums\CustomerFeeBasis;
 use App\Domain\Auction\Enums\PaymentChannel;
 use App\Domain\Auction\Enums\PaymentCountry;
 use App\Domain\Auction\Enums\PaymentPurpose;
@@ -14,6 +15,7 @@ use App\Http\Resources\Auction\PaymentMethodResource;
 use App\Models\Auction\Auction;
 use App\Models\Auction\PaymentMethod;
 use App\Repositories\Auction\Queries\PaymentMethodQuery;
+use App\Rules\Auction\ValidCustomerFeeSchedule;
 use App\Services\Auction\Actions\CreatePaymentMethodAction;
 use App\Services\Auction\Actions\DescribePaymentProvidersAction;
 use App\Services\Auction\Actions\ListPaymentMethodsAction;
@@ -138,6 +140,13 @@ final class PaymentMethodController extends Controller
             'currency_codes.*' => ['string', Rule::in(Currency::supportedCodes())],
             'min_amount_minor' => ['nullable', 'integer', 'min:0'],
             'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
+            'fee_basis' => ['nullable', Rule::in(array_column(CustomerFeeBasis::cases(), 'value'))],
+            'fee_tiers' => ['nullable', 'array', 'required_with:fee_basis', new ValidCustomerFeeSchedule($request->input('fee_basis'))],
+            'fee_tiers.*.from_minor' => ['required', 'integer', 'min:0'],
+            'fee_tiers.*.to_minor' => ['nullable', 'integer', 'min:0'],
+            'fee_tiers.*.fee_minor' => ['required', 'integer', 'min:0'],
+            'provider_purpose_codes' => ['nullable', 'array'],
+            'provider_purpose_codes.*' => ['nullable', 'string', 'max:25'],
             'recipient_name' => ['nullable', 'string', 'max:120'],
             'identifier_type' => ['nullable', 'string', Rule::in(PaymentMethod::IDENTIFIER_TYPES), 'required_with:identifier_value'],
             'identifier_value' => ['nullable', 'string', 'max:190', 'required_with:identifier_type'],
@@ -196,6 +205,13 @@ final class PaymentMethodController extends Controller
             'currency_codes.*' => ['string', Rule::in(Currency::supportedCodes())],
             'min_amount_minor' => ['nullable', 'integer', 'min:0'],
             'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
+            'fee_basis' => ['nullable', Rule::in(array_column(CustomerFeeBasis::cases(), 'value'))],
+            'fee_tiers' => ['nullable', 'array', 'required_with:fee_basis', new ValidCustomerFeeSchedule($request->input('fee_basis'))],
+            'fee_tiers.*.from_minor' => ['required', 'integer', 'min:0'],
+            'fee_tiers.*.to_minor' => ['nullable', 'integer', 'min:0'],
+            'fee_tiers.*.fee_minor' => ['required', 'integer', 'min:0'],
+            'provider_purpose_codes' => ['nullable', 'array'],
+            'provider_purpose_codes.*' => ['nullable', 'string', 'max:25'],
             'recipient_name' => ['nullable', 'string', 'max:120'],
             'identifier_type' => ['nullable', 'string', Rule::in(PaymentMethod::IDENTIFIER_TYPES), 'required_with:identifier_value'],
             'identifier_value' => ['nullable', 'string', 'max:190', 'required_with:identifier_type'],

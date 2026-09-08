@@ -80,6 +80,9 @@ final class PaymentMethodResource extends JsonResource
             'currency_codes' => $this->currency_codes ?? [],
             'min_amount_minor' => $this->min_amount_minor,
             'max_amount_minor' => $this->max_amount_minor,
+            'fee_basis' => $this->fee_basis,
+            'fee_tiers' => $this->fee_tiers ?? [],
+            'provider_purpose_codes' => $this->provider_purpose_codes ?? [],
             'provider' => $status,
         ];
     }

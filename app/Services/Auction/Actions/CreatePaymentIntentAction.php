@@ -12,6 +12,7 @@ use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRepository;
+use App\Services\Auction\Payments\Fees\CustomerFeePolicy;
 use App\Services\Auction\Payments\PaymentIntent;
 use App\Services\Auction\Payments\PaymentProviderFactory;
 use App\Services\Auction\Support\AuctionAudit;
@@ -33,6 +34,7 @@ final class CreatePaymentIntentAction
         private readonly PaymentObligationResolver $obligations,
         private readonly PaymentProviderFactory $providers,
         private readonly OnlinePaymentMethodRule $methodRule,
+        private readonly CustomerFeePolicy $fees,
     ) {}
 
     public function execute(
@@ -73,6 +75,7 @@ final class CreatePaymentIntentAction
             }
 
             $attempt = $this->payments->onlineAttemptCount($obligationKey, $providerCode) + 1;
+            $customerFeeMinor = $this->fees->feeFor($method, $obligation->amountMinor);
 
             $created = $this->payments->firstOrCreateTransaction(
                 [
@@ -87,6 +90,7 @@ final class CreatePaymentIntentAction
                     'status' => PaymentTransactionStatus::Pending,
                     'amount_minor' => $obligation->amountMinor,
                     'currency_code' => $obligation->currencyCode,
+                    'customer_fee_minor' => $customerFeeMinor,
                     'provider' => $providerCode,
                     'expires_at' => $this->cappedExpiry($this->intentTtlSeconds(), $payableUntil),
                     'checkout_claimed_at' => Carbon::now(),
@@ -128,6 +132,7 @@ final class CreatePaymentIntentAction
                 ],
                 payerId: (int) $transaction->user_id,
                 payableUntil: $payableUntil,
+                customerFeeMinor: (int) $transaction->customer_fee_minor,
             ));
         } catch (Throwable $exception) {
             $this->markCheckoutFailed($transaction, $exception);

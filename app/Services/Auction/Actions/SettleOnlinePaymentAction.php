@@ -66,6 +66,7 @@ final class SettleOnlinePaymentAction
             'status' => PaymentTransactionStatus::Succeeded,
             'provider_payload' => $this->redactor->redact($status->payload),
             'provider_fee_minor' => $status->providerFeeMinor,
+            'provider_event_id' => $status->providerEventId,
             'settlement_reference' => $status->settlementReference,
             'settled_at' => $status->settledAt,
             'processed_at' => Carbon::now(),
@@ -110,17 +111,20 @@ final class SettleOnlinePaymentAction
         ProviderPaymentStatus $status,
         string $mismatch
     ): PaymentTransaction {
+        $customerFee = (int) $transaction->customer_fee_minor;
         $expectedAmount = (int) $transaction->amount_minor;
+        $expectedPayable = $transaction->payableAmountMinor();
         $expectedCurrency = (string) $transaction->currency_code;
-        $capturedAmount = $status->amountMinor ?? $expectedAmount;
+        $capturedAmount = $status->amountMinor ?? $expectedPayable;
         $capturedCurrency = $status->currencyCode === null ? $expectedCurrency : strtoupper($status->currencyCode);
-        $representable = $capturedAmount > 0 && $this->isRepresentableCurrency($capturedCurrency);
+        $capturedPrincipal = max(0, $capturedAmount - $customerFee);
+        $representable = $capturedPrincipal > 0 && $this->isRepresentableCurrency($capturedCurrency);
 
         $transaction->forceFill([
             'failure_code' => $mismatch,
             'captured_amount_minor' => $capturedAmount,
             'captured_currency_code' => $capturedCurrency,
-            'amount_minor' => $representable ? $capturedAmount : $expectedAmount,
+            'amount_minor' => $representable ? $capturedPrincipal : $expectedAmount,
             'currency_code' => $representable ? $capturedCurrency : $expectedCurrency,
         ]);
         $this->payments->saveTransaction($transaction);
@@ -130,6 +134,8 @@ final class SettleOnlinePaymentAction
             'provider' => $transaction->provider,
             'mismatch' => $mismatch,
             'expected_amount_minor' => $expectedAmount,
+            'expected_payable_minor' => $expectedPayable,
+            'customer_fee_minor' => $customerFee,
             'expected_currency_code' => $expectedCurrency,
             'provider_amount_minor' => $status->amountMinor,
             'provider_currency_code' => $status->currencyCode,
@@ -206,7 +212,7 @@ final class SettleOnlinePaymentAction
                 : 'provider_currency_unsupported';
         }
 
-        if ($status->amountMinor !== null && $status->amountMinor !== (int) $transaction->amount_minor) {
+        if ($status->amountMinor !== null && $status->amountMinor !== $transaction->payableAmountMinor()) {
             return 'provider_amount_mismatch';
         }
 
