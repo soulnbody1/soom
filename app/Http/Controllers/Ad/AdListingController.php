@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Ad;
 use App\DTO\Ad\AdFilterDTO;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdResource;
+use App\Http\Resources\HomeAdResource;
 use App\Repositories\Ad\Queries\AdListingQuery;
 use App\Repositories\Ad\Queries\CategoryFeedQuery;
 use App\Repositories\Ad\Queries\HomeFeedQuery;
@@ -28,9 +29,17 @@ class AdListingController extends Controller
         );
     }
 
-    public function home(HomeFeedQuery $feed): JsonResponse
+    public function home(Request $request, HomeFeedQuery $feed): JsonResponse
     {
-        return $this->sendResponse($feed->build($this->viewer()), 'تم جلب الإعلانات بنجاح.');
+        $groups = array_map(
+            static fn (array $group): array => [
+                'category' => $group['category'],
+                'ads' => HomeAdResource::collection($group['ads'])->resolve($request),
+            ],
+            $feed->build($this->viewer())
+        );
+
+        return $this->sendResponse($groups, 'تم جلب الإعلانات بنجاح.');
     }
 
     public function byCategory(int $categoryId, CategoryFeedQuery $feed): JsonResponse

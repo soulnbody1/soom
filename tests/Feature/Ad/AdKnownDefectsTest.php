@@ -265,7 +265,7 @@ final class AdKnownDefectsTest extends AdTestCase
 
         $this->getJson('/api/soom/home')->assertOk();
 
-        $cacheKey = 'ads:home:v'.app(AdCacheVersion::class)->current();
+        $cacheKey = 'ads:home:cards-v2:v'.app(AdCacheVersion::class)->current();
         $this->assertTrue(Cache::has($cacheKey));
 
         $this->actingAs($this->adUser(), 'sanctum')

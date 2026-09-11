@@ -245,14 +245,25 @@ final class AdPublicEndpointsTest extends AdTestCase
         $this->assertCount(2, $groups['phones']['ads']);
     }
 
-    public function test_home_ad_rows_carry_a_single_image_field(): void
+    public function test_home_ad_rows_carry_complete_card_metadata(): void
     {
         $category = $this->category(null, 'furniture');
         $ad = $this->makeAd(['category_id' => $category->id]);
         AdImage::factory()->count(3)->create(['ad_id' => $ad->id]);
+        AdView::factory()->count(2)->create(['ad_id' => $ad->id]);
 
         $row = $this->getJson('/api/soom/home')->json('data.0.ads.0');
 
+        $this->assertSame([
+            'id', 'title', 'description', 'price', 'category', 'location',
+            'user', 'image', 'views_count', 'is_favorite', 'is_featured',
+        ], array_keys($row));
+        $this->assertSame($ad->user->name, $row['user']['name']);
+        $this->assertSame(
+            implode(', ', [$this->country()->name, $this->state()->name, $this->city()->name]),
+            $row['location']
+        );
+        $this->assertSame(2, $row['views_count']);
         $this->assertArrayHasKey('image', $row);
         $this->assertArrayNotHasKey('images', $row);
         $this->assertNotNull($row['image']);

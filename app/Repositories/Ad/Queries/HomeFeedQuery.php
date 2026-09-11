@@ -9,11 +9,22 @@ use App\Models\AdImage;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use App\Services\Ad\Support\FavoriteFlagHydrator;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Cache;
 
 final class HomeFeedQuery
 {
     private const ADS_PER_CATEGORY = 4;
+
+    private const CACHE_PREFIX = 'ads:home:cards-v2:v';
+
+    private const CARD_RELATIONS = [
+        'user:id,name',
+        'category:id,name',
+        'country:id,name',
+        'state:id,name',
+        'city:id,name',
+    ];
 
     private const TTL_SECONDS = 600;
 
@@ -26,7 +37,7 @@ final class HomeFeedQuery
     public function build(?object $viewer): array
     {
         $groups = Cache::remember(
-            'ads:home:v'.$this->version->current(),
+            self::CACHE_PREFIX.$this->version->current(),
             self::TTL_SECONDS,
             fn (): array => $this->buildGroups()
         );
@@ -54,8 +65,20 @@ final class HomeFeedQuery
         }
 
         $this->attachCoverImages($ads);
+        $this->loadCardMetadata($ads);
 
         return $groups;
+    }
+
+    private function loadCardMetadata(array $ads): void
+    {
+        if ($ads === []) {
+            return;
+        }
+
+        $collection = new EloquentCollection($ads);
+        $collection->loadMissing(self::CARD_RELATIONS);
+        $collection->loadCount('views');
     }
 
     private function attachCoverImages(array $ads): void
