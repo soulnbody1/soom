@@ -46,7 +46,7 @@ class StoreAdRequest extends FormRequest
             'attributes.*.value' => 'required',
             'attributes.*.value.*' => 'string|max:255',
             'images' => 'nullable|array|max:'.self::MAX_IMAGES,
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:4096',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:4096',
             'reel_video' => 'nullable|file|mimes:mp4,mov,avi,webm|max:30000',
         ];
     }
@@ -84,7 +84,7 @@ class StoreAdRequest extends FormRequest
             'reel_video.max' => '⚠️ لا يمكن رفع فيديو يتجاوز حجمه 30 ميغابايت.',
             'reel_video.mimes' => '⚠️ صيغة الفيديو غير مدعومة. الصيغ المقبولة: mp4, mov, avi, webm.',
             'images.*.max' => '⚠️ حجم الصورة يجب ألا يتجاوز 4 ميغابايت.',
-            'images.*.mimes' => '⚠️ الصيغ المسموح بها للصور: jpeg, png, jpg, gif.',
+            'images.*.mimes' => '⚠️ الصيغ المسموح بها للصور: jpeg, png, jpg, gif, webp.',
         ];
     }
 

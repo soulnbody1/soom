@@ -18,6 +18,10 @@ class MessageResource extends JsonResource
             'is_read' => $this->is_read,
             'attachment_url' => $this->attachmentUrl(),
             'attachment_type' => $this->attachment_type,
+            // Exposed separately so a client can tell "no ad was referenced" apart
+            // from "the referenced ad is gone": a soft-deleted ad resolves the
+            // relation to null while the foreign key remains on the row.
+            'ad_id' => $this->ad_id !== null ? (int) $this->ad_id : null,
             'ad' => $this->ad ? [
                 'id' => $this->ad->id,
                 'title' => $this->ad->title,

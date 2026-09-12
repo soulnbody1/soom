@@ -255,9 +255,13 @@ final class AdPublicEndpointsTest extends AdTestCase
         $row = $this->getJson('/api/soom/home')->json('data.0.ads.0');
 
         $this->assertSame([
-            'id', 'title', 'description', 'price', 'category', 'location',
-            'user', 'image', 'views_count', 'is_favorite', 'is_featured',
+            'id', 'title', 'description', 'price', 'category', 'category_id', 'location',
+            'user', 'image', 'images_count', 'created_at', 'views_count', 'is_favorite',
+            'is_featured',
         ], array_keys($row));
+        $this->assertSame($category->id, $row['category_id']);
+        $this->assertSame(3, $row['images_count']);
+        $this->assertNotNull($row['created_at']);
         $this->assertSame($ad->user->name, $row['user']['name']);
         $this->assertSame(
             implode(', ', [$this->country()->name, $this->state()->name, $this->city()->name]),
@@ -267,6 +271,73 @@ final class AdPublicEndpointsTest extends AdTestCase
         $this->assertArrayHasKey('image', $row);
         $this->assertArrayNotHasKey('images', $row);
         $this->assertNotNull($row['image']);
+    }
+
+    public function test_home_groups_expose_their_root_category_id(): void
+    {
+        $root = $this->category(null, 'vehicles');
+        $this->makeAd(['category_id' => $root->id]);
+
+        $group = collect($this->getJson('/api/soom/home')->json('data'))
+            ->firstWhere('category', 'vehicles');
+
+        $this->assertSame($root->id, $group['category_id']);
+    }
+
+    public function test_listing_sorts_by_the_requested_whitelisted_key(): void
+    {
+        $category = $this->category();
+        $cheap = $this->makeAd(['category_id' => $category->id, 'price' => 100]);
+        $expensive = $this->makeAd(['category_id' => $category->id, 'price' => 900]);
+
+        $ascending = $this->getJson('/api/soom/ads?sort=price_asc')->json('data.*.id');
+        $descending = $this->getJson('/api/soom/ads?sort=price_desc')->json('data.*.id');
+
+        $this->assertSame($cheap->id, $ascending[0]);
+        $this->assertSame($expensive->id, $descending[0]);
+    }
+
+    public function test_listing_orders_by_authoritative_view_totals(): void
+    {
+        $category = $this->category();
+        $quiet = $this->makeAd(['category_id' => $category->id]);
+        $popular = $this->makeAd(['category_id' => $category->id]);
+        AdView::factory()->count(5)->create(['ad_id' => $popular->id]);
+        AdView::factory()->create(['ad_id' => $quiet->id]);
+
+        $rows = $this->getJson('/api/soom/ads?sort=most_viewed')->json('data');
+
+        $this->assertSame($popular->id, $rows[0]['id']);
+        $this->assertSame(5, $rows[0]['views_count']);
+        $this->assertSame(1, $rows[1]['views_count']);
+    }
+
+    public function test_listing_honours_a_bounded_page_size_and_rejects_invalid_input(): void
+    {
+        $category = $this->category();
+        $this->makeAd(['category_id' => $category->id]);
+        $this->makeAd(['category_id' => $category->id]);
+        $this->makeAd(['category_id' => $category->id]);
+
+        $response = $this->getJson('/api/soom/ads?per_page=2');
+
+        $this->assertSame(2, $response->json('per_page'));
+        $this->assertCount(2, $response->json('data'));
+        $this->getJson('/api/soom/ads?per_page=500')->assertStatus(422);
+        $this->getJson('/api/soom/ads?sort=bogus')->assertStatus(422);
+    }
+
+    public function test_listing_and_detail_expose_category_and_location_identifiers(): void
+    {
+        $category = $this->category();
+        $ad = $this->makeAd(['category_id' => $category->id]);
+
+        foreach ([$this->getJson('/api/soom/ads')->json('data.0'), $this->getJson('/api/soom/ads/'.$ad->id)->json('data')] as $row) {
+            $this->assertSame($category->id, $row['category_id']);
+            $this->assertSame($ad->country_id, $row['country_id']);
+            $this->assertSame($ad->state_id, $row['state_id']);
+            $this->assertSame($ad->city_id, $row['city_id']);
+        }
     }
 
     public function test_home_omits_ads_for_root_categories_that_have_none(): void

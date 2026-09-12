@@ -17,6 +17,7 @@ final class HomeAdResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'category' => $this->category?->name,
+            'category_id' => $this->category_id,
             'location' => implode(', ', array_filter([
                 $this->country?->name,
                 $this->state?->name,
@@ -27,6 +28,8 @@ final class HomeAdResource extends JsonResource
                 'name' => $this->user?->name,
             ],
             'image' => $this->image,
+            'images_count' => (int) ($this->images_count ?? 0),
+            'created_at' => $this->created_at?->toDateTimeString(),
             'views_count' => (int) ($this->views_count ?? 0),
             'is_favorite' => (bool) ($this->is_favorite ?? false),
             'is_featured' => (bool) $this->is_featured,

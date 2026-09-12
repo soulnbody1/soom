@@ -106,10 +106,14 @@ class Ad extends Model
                 },
             ]);
         } else {
-            $query->addSelect([
-                '*',
-                DB::raw('false as is_favorite'),
-            ]);
+            // Only seed the column list when nothing has been selected yet. Appending a
+            // bare `*` after an existing select (for example one added by withCount) is
+            // invalid SQL.
+            if ($query->getQuery()->columns === null) {
+                $query->addSelect($query->getQuery()->from.'.*');
+            }
+
+            $query->addSelect(DB::raw('false as is_favorite'));
         }
 
         return $query;

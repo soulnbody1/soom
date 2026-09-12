@@ -12,6 +12,7 @@ final class AdDetailQuery
     {
         return Ad::query()
             ->with(Ad::$defaultRelations)
+            ->withCount('views')
             ->withIsFavorite($viewer)
             ->findOrFail($adId);
     }

@@ -7,8 +7,8 @@ namespace App\Repositories\Ad\Queries;
 use App\DTO\Ad\AdSearchDTO;
 use App\Models\Ad;
 use App\Models\Category;
+use App\Services\Ad\Support\AdKeywordFilter;
 use App\Services\Ad\Support\CategoryTreeResolver;
-use App\Services\Ad\Support\GeoNameResolver;
 use App\Services\Support\FulltextQuerySanitizer;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -16,7 +16,7 @@ final class AdSearchQuery
 {
     public function __construct(
         private readonly CategoryTreeResolver $categories,
-        private readonly GeoNameResolver $locations,
+        private readonly AdKeywordFilter $keywords,
         private readonly FulltextQuerySanitizer $sanitizer,
     ) {}
 
@@ -66,23 +66,6 @@ final class AdSearchQuery
 
     private function filterByKeyword(Builder $query, string $keyword): void
     {
-        $expression = $this->sanitizer->toBooleanMode($keyword);
-        $locations = $this->locations->matchingIds($keyword);
-
-        $query->where(function (Builder $group) use ($expression, $keyword, $locations): void {
-            if ($expression !== null) {
-                $group->whereRaw('MATCH(title, description) AGAINST(? IN BOOLEAN MODE)', [$expression]);
-            } else {
-                $prefix = $this->sanitizer->toLikePrefix($keyword);
-                $group->where('title', 'LIKE', $prefix)
-                    ->orWhere('description', 'LIKE', $prefix);
-            }
-
-            foreach (['country_ids' => 'country_id', 'state_ids' => 'state_id', 'city_ids' => 'city_id'] as $key => $column) {
-                if ($locations[$key] !== []) {
-                    $group->orWhereIn($column, $locations[$key]);
-                }
-            }
-        });
+        $this->keywords->apply($query, $keyword);
     }
 }

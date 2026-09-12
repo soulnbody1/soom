@@ -7,23 +7,40 @@ namespace App\Repositories\Ad\Queries;
 use App\DTO\Ad\AdFilterDTO;
 use App\Models\Ad;
 use App\Models\AttributeValue;
+use App\Services\Ad\Support\AdKeywordFilter;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 final class AdListingQuery
 {
-    private const PER_PAGE = 20;
-
-    public function __construct(private readonly CategoryTreeResolver $categories) {}
+    public function __construct(
+        private readonly CategoryTreeResolver $categories,
+        private readonly AdKeywordFilter $keywords,
+    ) {}
 
     public function paginate(AdFilterDTO $filters, ?object $viewer): LengthAwarePaginator
     {
-        return $this->apply(Ad::query(), $filters)
-            ->latest()
+        $query = $this->apply(Ad::query(), $filters)
             ->with(Ad::$defaultRelations)
-            ->withIsFavorite($viewer)
-            ->paginate(self::PER_PAGE);
+            ->withCount('views')
+            ->withIsFavorite($viewer);
+
+        return $this->applySort($query, $filters->sort)->paginate($filters->perPage);
+    }
+
+    /**
+     * Sort keys are validated upstream; an unknown key falls back to newest first.
+     * `most_viewed` relies on the `views_count` aggregate already selected above.
+     */
+    private function applySort(Builder $query, string $sort): Builder
+    {
+        return match ($sort) {
+            'price_asc' => $query->orderBy('price')->orderByDesc('id'),
+            'price_desc' => $query->orderByDesc('price')->orderByDesc('id'),
+            'most_viewed' => $query->orderByDesc('views_count')->orderByDesc('id'),
+            default => $query->latest(),
+        };
     }
 
     public function apply(Builder $query, AdFilterDTO $filters): Builder
@@ -59,6 +76,10 @@ final class AdListingQuery
             ->when(
                 $filters->attributes !== [],
                 fn (Builder $q): Builder => $this->whereMatchesEveryAttribute($q, $filters->attributes)
+            )
+            ->when(
+                $filters->keyword !== null && $filters->keyword !== '',
+                fn (Builder $q): Builder => $this->keywords->apply($q, (string) $filters->keyword)
             );
     }
 

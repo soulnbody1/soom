@@ -27,6 +27,25 @@ final class AdSearchEndpointsTest extends AdTestCase
         $this->requireMysql('search uses MATCH ... AGAINST');
     }
 
+    public function test_listing_combines_a_keyword_with_the_structured_filters(): void
+    {
+        $wanted = $this->category();
+        $other = $this->category();
+
+        $this->makeAd(['category_id' => $wanted->id, 'price' => 100, 'title' => 'Mountain bicycle']);
+        $this->makeAd(['category_id' => $wanted->id, 'price' => 900, 'title' => 'Electric bicycle']);
+        $this->makeAd(['category_id' => $other->id, 'price' => 900, 'title' => 'Road bicycle']);
+        $this->makeAd(['category_id' => $wanted->id, 'price' => 900, 'title' => 'Office chair']);
+
+        $this->assertSame(3, $this->getJson('/api/soom/ads?title=bicycle')->json('total'));
+        $this->assertSame(
+            1,
+            $this->getJson('/api/soom/ads?title=bicycle&category_id='.$wanted->id.'&price_min=500')
+                ->json('total')
+        );
+        $this->getJson('/api/soom/ads?title='.str_repeat('a', 81))->assertStatus(422);
+    }
+
     public function test_search_by_title_returns_the_standard_paginated_envelope(): void
     {
         $this->makeAd(['title' => 'Vintage bicycle', 'description' => 'A classic ride']);

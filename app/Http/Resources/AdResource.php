@@ -14,11 +14,15 @@ class AdResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'category' => $this->category?->name,
+            'category_id' => $this->category_id,
             'location' => implode(', ', array_filter([
                 $this->country?->name,
                 $this->state?->name,
                 $this->city?->name,
             ])),
+            'country_id' => $this->country_id,
+            'state_id' => $this->state_id,
+            'city_id' => $this->city_id,
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
             'attributes' => $this->attributeValues

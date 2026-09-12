@@ -37,7 +37,7 @@ abstract class MessageTestCase extends TestCase
     {
         return [
             'id', 'sender_id', 'receiver_id', 'content', 'is_read',
-            'attachment_url', 'attachment_type', 'ad', 'created_at',
+            'attachment_url', 'attachment_type', 'ad_id', 'ad', 'created_at',
         ];
     }
 

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Ad;
 
 use App\DTO\Ad\AdFilterDTO;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Ad\AdIndexRequest;
 use App\Http\Resources\AdResource;
 use App\Http\Resources\HomeAdResource;
 use App\Repositories\Ad\Queries\AdListingQuery;
@@ -19,7 +20,7 @@ class AdListingController extends Controller
 {
     use ApiResponseTrait;
 
-    public function index(Request $request, AdListingQuery $listing): JsonResponse
+    public function index(AdIndexRequest $request, AdListingQuery $listing): JsonResponse
     {
         $ads = $listing->paginate(AdFilterDTO::fromRequest($request), $this->viewer());
 
@@ -34,6 +35,7 @@ class AdListingController extends Controller
         $groups = array_map(
             static fn (array $group): array => [
                 'category' => $group['category'],
+                'category_id' => $group['category_id'] ?? null,
                 'ads' => HomeAdResource::collection($group['ads'])->resolve($request),
             ],
             $feed->build($this->viewer())

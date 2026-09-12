@@ -16,7 +16,7 @@ final class HomeFeedQuery
 {
     private const ADS_PER_CATEGORY = 4;
 
-    private const CACHE_PREFIX = 'ads:home:cards-v2:v';
+    private const CACHE_PREFIX = 'ads:home:cards-v3:v';
 
     private const CARD_RELATIONS = [
         'user:id,name',
@@ -61,7 +61,11 @@ final class HomeFeedQuery
                 $ads[] = $ad;
             }
 
-            $groups[] = ['category' => $root['name'], 'ads' => $categoryAds];
+            $groups[] = [
+                'category' => $root['name'],
+                'category_id' => (int) $root['id'],
+                'ads' => $categoryAds,
+            ];
         }
 
         $this->attachCoverImages($ads);
@@ -78,7 +82,7 @@ final class HomeFeedQuery
 
         $collection = new EloquentCollection($ads);
         $collection->loadMissing(self::CARD_RELATIONS);
-        $collection->loadCount('views');
+        $collection->loadCount(['views', 'images']);
     }
 
     private function attachCoverImages(array $ads): void
