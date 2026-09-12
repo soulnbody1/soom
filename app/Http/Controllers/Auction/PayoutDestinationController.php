@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auction;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\PayoutDestinationRequest;
+use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PayoutDestination;
 use App\Repositories\Auction\PayoutDestinationRepository;
 use App\Services\Auction\Actions\ArchivePayoutDestinationAction;
@@ -34,7 +35,15 @@ final class PayoutDestinationController extends Controller
             ->map(fn (PayoutDestination $destination) => $this->payload($destination))
             ->values();
 
-        return $this->sendResponse($items, __('auction.messages.payout_destinations_fetched'));
+        // The accepted identifier types travel with the list so a client renders
+        // exactly what the store and update rules will accept, instead of keeping
+        // its own copy that can drift out of step with PaymentMethod.
+        return $this->sendResponse(
+            $items,
+            __('auction.messages.payout_destinations_fetched'),
+            200,
+            ['identifier_types' => PaymentMethod::IDENTIFIER_TYPES]
+        );
     }
 
     #[Endpoint(

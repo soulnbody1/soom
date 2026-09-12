@@ -202,6 +202,71 @@ final class MyAdsEndpointsTest extends AdTestCase
         $this->assertSame(1, $response->json('total_views'));
     }
 
+    public function test_my_ads_counts_live_and_deleted_listings_separately(): void
+    {
+        $owner = $this->adUser();
+        $ads = $this->makeAds(4, ['user_id' => $owner->id]);
+        $ads->first()->delete();
+        // Another seller's listings must not reach these totals.
+        $this->makeAds(2);
+
+        $response = $this->actingAs($owner, 'sanctum')->getJson('/api/soom/ads/my?page=1');
+
+        $response->assertOk();
+        $this->assertSame(4, $response->json('total'), 'the page total counts deleted listings too');
+        $this->assertSame(3, $response->json('active_count'));
+        $this->assertSame(1, $response->json('deleted_count'));
+    }
+
+    public function test_my_ads_status_counts_span_every_page_not_only_the_one_returned(): void
+    {
+        $owner = $this->adUser();
+        // The page size is 20, so a 25-ad owner proves the counts are aggregates.
+        $ads = $this->makeAds(25, ['user_id' => $owner->id]);
+        $ads->take(5)->each(fn ($ad) => $ad->delete());
+
+        $response = $this->actingAs($owner, 'sanctum')->getJson('/api/soom/ads/my?page=2');
+
+        $response->assertOk();
+        $this->assertCount(5, $response->json('data'), 'the second page holds the remainder');
+        $this->assertSame(25, $response->json('total'));
+        $this->assertSame(20, $response->json('active_count'));
+        $this->assertSame(5, $response->json('deleted_count'));
+    }
+
+    public function test_my_ads_total_views_counts_every_owned_listing_including_deleted(): void
+    {
+        $owner = $this->adUser();
+        $ads = $this->makeAds(2, ['user_id' => $owner->id]);
+        $stranger = $this->makeAd();
+
+        \App\Models\AdView::factory()->count(3)->create(['ad_id' => $ads->first()->id]);
+        \App\Models\AdView::factory()->count(2)->create(['ad_id' => $ads->last()->id]);
+        \App\Models\AdView::factory()->count(7)->create(['ad_id' => $stranger->id]);
+
+        $ads->last()->delete();
+
+        $response = $this->actingAs($owner, 'sanctum')->getJson('/api/soom/ads/my?page=1');
+
+        $response->assertOk();
+        // A deleted listing keeps the views it earned; another seller's do not count.
+        $this->assertSame(5, $response->json('total_views'));
+    }
+
+    public function test_my_ads_status_counts_are_zero_for_a_seller_with_no_listings(): void
+    {
+        $owner = $this->adUser();
+        $this->makeAds(2);
+
+        $response = $this->actingAs($owner, 'sanctum')->getJson('/api/soom/ads/my?page=1');
+
+        $response->assertOk();
+        $this->assertSame(0, $response->json('total'));
+        $this->assertSame(0, $response->json('active_count'));
+        $this->assertSame(0, $response->json('deleted_count'));
+        $this->assertSame(0, $response->json('total_views'));
+    }
+
     public function test_my_ads_includes_soft_deleted_ads(): void
     {
         $owner = $this->adUser();

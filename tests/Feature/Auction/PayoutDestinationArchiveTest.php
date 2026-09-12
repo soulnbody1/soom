@@ -15,6 +15,7 @@ use App\Models\Auction\AuctionParticipant;
 use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\AuctionTermsVersion;
+use App\Models\Auction\PaymentMethod;
 use App\Models\Auction\PayoutDestination;
 use App\Models\Category;
 use App\Models\Country;
@@ -115,6 +116,69 @@ final class PayoutDestinationArchiveTest extends TestCase
             ->assertJsonPath('code', 'payout_destination_not_found');
 
         $this->assertNull($destination->fresh()->deleted_at);
+    }
+
+    public function test_listing_publishes_the_identifier_types_the_write_rules_accept(): void
+    {
+        $user = $this->user();
+
+        $types = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/soom/my/payout-destinations')
+            ->assertOk()
+            ->json('identifier_types');
+
+        // A client that renders these can never offer a value the request rejects.
+        $this->assertSame(PaymentMethod::IDENTIFIER_TYPES, $types);
+        $this->assertNotEmpty($types);
+    }
+
+    public function test_every_published_identifier_type_is_accepted_on_create(): void
+    {
+        $user = $this->user();
+
+        foreach (PaymentMethod::IDENTIFIER_TYPES as $index => $type) {
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/soom/my/payout-destinations', [
+                    'recipient_name' => 'Recipient '.$index,
+                    'identifier_type' => $type,
+                    'identifier_value' => 'VALUE-'.$index,
+                    'is_default' => false,
+                ])
+                ->assertCreated();
+        }
+
+        $this->assertSame(
+            count(PaymentMethod::IDENTIFIER_TYPES),
+            PayoutDestination::where('user_id', $user->id)->count()
+        );
+    }
+
+    public function test_an_identifier_type_outside_the_published_list_is_rejected(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/soom/my/payout-destinations', [
+                'recipient_name' => 'Recipient',
+                'identifier_type' => 'carrier pigeon',
+                'identifier_value' => 'JO94CBJO1234567',
+                'is_default' => false,
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_listing_returns_only_the_callers_own_destinations(): void
+    {
+        $owner = $this->user();
+        $this->destination($owner, isDefault: true);
+        $this->destination($this->user(), isDefault: true);
+
+        $rows = $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/soom/my/payout-destinations')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(1, $rows);
     }
 
     private function destination(User $user, bool $isDefault): PayoutDestination

@@ -32,11 +32,17 @@ class MyAdController extends Controller
             ? MyAdResource::collection($myAds->paginate($ownerId))
             : MyAdResource::collection($myAds->get($ownerId))->resolve();
 
+        $statusCounts = $myAds->statusCounts($ownerId);
+
         return $this->sendResponse(
             $data,
             'تم جلب الإعلانات بنجاح.',
             200,
-            ['total_views' => $myAds->totalViews($ownerId)]
+            [
+                'total_views' => $myAds->totalViews($ownerId),
+                'active_count' => $statusCounts['active'],
+                'deleted_count' => $statusCounts['deleted'],
+            ]
         );
     }
 
