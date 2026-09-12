@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
-use App\Jobs\SendFcmNotification;
 use App\Models\Auction\Auction;
 use App\Models\User;
 use App\Services\Auction\Support\AuctionNotificationCatalog;
+use App\Services\Notification\PushDispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 
 final class SendAuctionAnnouncementJob implements ShouldQueue
 {
@@ -22,7 +24,7 @@ final class SendAuctionAnnouncementJob implements ShouldQueue
         private readonly string $body,
     ) {}
 
-    public function handle(): void
+    public function handle(PushDispatcher $push): void
     {
         $auction = Auction::with('media')->find($this->auctionId);
 
@@ -41,14 +43,20 @@ final class SendAuctionAnnouncementJob implements ShouldQueue
         ];
 
         User::query()
+            ->select('id')
             ->where('allow_ad_notifications', true)
-            ->whereNotNull('fcm_token')
-            ->where('fcm_token', '!=', '')
             ->where('id', '!=', $auction->seller_id)
-            ->chunkById(100, function ($users) use ($data): void {
-                foreach ($users as $user) {
-                    SendFcmNotification::dispatch($user->fcm_token, $this->title, $this->body, $data);
-                }
+            ->whereExists(fn (Builder $query) => $query
+                ->select(DB::raw(1))
+                ->from('device_tokens')
+                ->whereColumn('device_tokens.user_id', 'users.id'))
+            ->chunkById(100, function ($users) use ($push, $data): void {
+                $push->toUsers(
+                    $users->pluck('id')->map(static fn ($id): int => (int) $id)->all(),
+                    $this->title,
+                    $this->body,
+                    $data
+                );
             });
     }
 }

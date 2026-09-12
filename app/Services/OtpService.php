@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Mail\OtpMail;
 use App\Services\Auth\OtpManager;
-use Illuminate\Support\Facades\Mail;
 
 class OtpService
 {
@@ -14,20 +12,6 @@ class OtpService
         private readonly OtpManager $otp,
         private readonly TwilioWhatsappService $twilio,
     ) {}
-
-    public function sendOtpToEmail(string $email): bool|string
-    {
-        $otp = $this->otp->generate();
-        $this->otp->issue($email, $otp);
-
-        try {
-            Mail::to($email)->queue(new OtpMail($otp));
-
-            return true;
-        } catch (\Exception $e) {
-            return $e->getMessage();
-        }
-    }
 
     public function sendOtpToWhatsApp(string $phoneNumber): bool|string
     {

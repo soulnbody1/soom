@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services\Auction\Notifications;
 
-use App\Jobs\SendFcmNotification;
 use App\Models\Auction\Auction;
 use App\Models\Auction\OutboxMessage;
 use App\Models\User;
 use App\Notifications\AuctionOutboxNotification;
+use App\Services\Notification\PushDispatcher;
 
 final class PersonalNotificationSender
 {
     public function __construct(
         private readonly PersonalDeliveryResolver $deliveries,
         private readonly NotificationValueFormatter $format,
+        private readonly PushDispatcher $push,
     ) {}
 
     public function send(OutboxMessage $message, Auction $auction): void
@@ -49,13 +50,11 @@ final class PersonalNotificationSender
             ],
         ));
 
-        if ($user->fcm_token) {
-            SendFcmNotification::dispatch($user->fcm_token, $title, $body, [
-                'event_type' => $message->event_type,
-                'auction_id' => $auction->public_id,
-                'screen' => $delivery['screen'],
-            ]);
-        }
+        $this->push->toUser((int) $user->id, $title, $body, [
+            'event_type' => $message->event_type,
+            'auction_id' => $auction->public_id,
+            'screen' => $delivery['screen'],
+        ]);
     }
 
     private function alreadyNotified(User $user, string $eventId): bool

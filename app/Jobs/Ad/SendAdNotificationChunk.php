@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Jobs\Ad;
 
-use App\Jobs\SendFcmNotification;
 use App\Models\Ad;
 use App\Models\User;
 use App\Notifications\NewAdNotification;
-use App\Services\Notification\DeviceTokenRegistry;
+use App\Services\Notification\PushDispatcher;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -36,9 +35,9 @@ final class SendAdNotificationChunk implements ShouldQueue
         $this->onQueue(config('notifications.queue'));
     }
 
-    public function handle(DeviceTokenRegistry $devices): void
+    public function handle(PushDispatcher $push): void
     {
-        $ad = Ad::find($this->adId);
+        $ad = Ad::query()->find($this->adId, ['id', 'title', 'category_id']);
 
         if ($ad === null || $this->userIds === []) {
             return;
@@ -56,9 +55,19 @@ final class SendAdNotificationChunk implements ShouldQueue
             return;
         }
 
-        Notification::send($recipients, new NewAdNotification($ad));
+        $recipientIds = $recipients->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
-        $this->push($ad, $devices->tokensForMany($recipients->pluck('id')->all()));
+        Notification::send($recipients, new NewAdNotification(
+            (int) $ad->id,
+            (string) $ad->title,
+            (int) $ad->category_id,
+            $this->unreadCountsAfterDelivery($recipientIds)
+        ));
+
+        $push->toUsers($recipientIds, '📢 إعلان جديد', (string) $ad->title, [
+            'ad_id' => $ad->id,
+            'category_id' => $ad->category_id,
+        ]);
     }
 
     public function failed(Throwable $exception): void
@@ -69,9 +78,6 @@ final class SendAdNotificationChunk implements ShouldQueue
         ]);
     }
 
-    /**
-     * @return list<int>
-     */
     private function alreadyNotified(): array
     {
         return DatabaseNotification::query()
@@ -84,20 +90,22 @@ final class SendAdNotificationChunk implements ShouldQueue
             ->all();
     }
 
-    /**
-     * @param  array<int, list<string>>  $tokensByUser
-     */
-    private function push(Ad $ad, array $tokensByUser): void
+    private function unreadCountsAfterDelivery(array $recipientIds): array
     {
-        foreach ($tokensByUser as $tokens) {
-            foreach ($tokens as $token) {
-                SendFcmNotification::dispatch(
-                    $token,
-                    '📢 إعلان جديد',
-                    $ad->title,
-                    ['ad_id' => $ad->id, 'category_id' => $ad->category_id],
-                );
-            }
+        $existing = DatabaseNotification::query()
+            ->where('notifiable_type', User::class)
+            ->whereIn('notifiable_id', $recipientIds)
+            ->whereNull('read_at')
+            ->selectRaw('notifiable_id, COUNT(*) as aggregate')
+            ->groupBy('notifiable_id')
+            ->pluck('aggregate', 'notifiable_id');
+
+        $counts = [];
+
+        foreach ($recipientIds as $id) {
+            $counts[$id] = (int) ($existing[$id] ?? 0) + 1;
         }
+
+        return $counts;
     }
 }

@@ -65,7 +65,7 @@ class SessionController extends Controller
     {
         $request->validate(['refresh_token' => 'required|string']);
 
-        $tokenRecord = $this->tokenService->validateRefreshToken($request->refresh_token);
+        $tokenRecord = $this->tokenService->consumeRefreshToken($request->refresh_token);
 
         if (! $tokenRecord) {
             return response()->json(['message' => 'رمز التحديث غير صالح أو منتهي الصلاحية'], 431);
@@ -77,7 +77,6 @@ class SessionController extends Controller
             return response()->json(['message' => 'لم يتم العثور على المستخدم'], 404);
         }
 
-        $this->tokenService->revokeRefreshToken($user->id);
         $tokens = $this->sessions->issue($user);
 
         return response()->json([

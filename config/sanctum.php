@@ -23,7 +23,7 @@ return [
     */
 
     'guard' => ['web'],
-    'expiration' => null,
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 10080),
 
     /*
     |--------------------------------------------------------------------------

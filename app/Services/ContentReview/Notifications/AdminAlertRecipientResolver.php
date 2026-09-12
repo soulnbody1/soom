@@ -20,7 +20,7 @@ final class AdminAlertRecipientResolver
 
         User::query()
             ->where('role', 'admin')
-            ->select(['id', 'name', 'role', 'fcm_token'])
+            ->select(['id', 'name', 'role'])
             ->chunkById(self::CHUNK, function (Collection $users) use (&$recipients): void {
                 $recipients = $recipients->concat($users);
             });

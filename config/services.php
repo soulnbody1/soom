@@ -51,6 +51,7 @@ return [
         'sid' => env('TWILIO_SID'),
         'token' => env('TWILIO_TOKEN'),
         'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
+        'otp_content_sid' => env('TWILIO_OTP_CONTENT_SID', 'HX07984b9e78214399c34d1f344f7bb3c9'),
     ],
 
     'anthropic' => [

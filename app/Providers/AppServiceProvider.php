@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\Ad;
 use App\Models\AdReel;
+use App\Models\Attribute;
+use App\Models\AttributeOption;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\AuctionDispute;
@@ -11,8 +13,6 @@ use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
-use App\Models\Attribute;
-use App\Models\AttributeOption;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\Country;
@@ -32,7 +32,6 @@ use App\Policies\MessagePolicy;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use App\Services\Ad\Support\GeoNameResolver;
-use App\Services\Catalog\CatalogCacheVersion;
 use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\Auction\Payments\PaymentProviderFactory;
@@ -40,6 +39,7 @@ use App\Services\Auction\Payments\Providers\FakeBillPaymentProvider;
 use App\Services\Auction\Payments\Providers\FakePaymentProvider;
 use App\Services\Auction\Refunds\AuctionRefundProcessorInterface;
 use App\Services\Auction\Refunds\ManualReviewRefundProcessor;
+use App\Services\Catalog\CatalogCacheVersion;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
 use App\Services\ContentReview\Contracts\ContentReviewProvider;
 use App\Services\ContentReview\Providers\ContentReviewProviderFactory;
@@ -47,6 +47,7 @@ use App\Services\ContentReview\Providers\FakeContentReviewProvider;
 use App\Services\ContentReview\Support\ProviderModelCatalog;
 use App\Services\ContentReview\Support\ProviderSelectionResolver;
 use App\Services\ContentReview\Support\ReviewSubjectRegistry;
+use App\Services\Location\LocationCache;
 use App\Services\Outbox\OutboxContentReviewEventPublisher;
 use App\Services\Outbox\OutboxTopicRouter;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -62,6 +63,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->registerTelescope();
+
+        $this->app->singleton(CategoryTreeResolver::class);
+        $this->app->singleton(GeoNameResolver::class);
 
         $this->app->singleton(FakeContentReviewProvider::class);
 
@@ -123,6 +128,20 @@ class AppServiceProvider extends ServiceProvider
         $this->configureProfileRateLimiting();
     }
 
+    private function registerTelescope(): void
+    {
+        if ($this->app->environment('production') || ! config('telescope.enabled')) {
+            return;
+        }
+
+        if (! class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
+            return;
+        }
+
+        $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
+        $this->app->register(TelescopeServiceProvider::class);
+    }
+
     private function invalidateAdLookupCaches(): void
     {
         foreach (['saved', 'deleted'] as $event) {
@@ -137,7 +156,10 @@ class AppServiceProvider extends ServiceProvider
             }
 
             foreach ([Country::class, State::class, City::class] as $model) {
-                $model::{$event}(fn () => app(GeoNameResolver::class)->forget());
+                $model::{$event}(function (): void {
+                    app(GeoNameResolver::class)->forget();
+                    app(LocationCache::class)->bump();
+                });
             }
         }
     }

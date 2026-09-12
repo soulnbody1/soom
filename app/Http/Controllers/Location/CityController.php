@@ -3,19 +3,24 @@
 namespace App\Http\Controllers\Location;
 
 use App\Http\Controllers\Controller;
-use App\Models\City;
 use App\Http\Requests\Location\StoreCityRequest;
 use App\Http\Requests\Location\UpdateCityRequest;
 use App\Http\Resources\Location\CityResource;
+use App\Models\City;
+use App\Services\Location\GeographyDeletionGuard;
+use App\Services\Location\LocationCache;
 
 class CityController extends Controller
 {
-    public function index()
+    public function index(LocationCache $cache)
     {
-        $cities = City::all();
-        return CityResource::collection($cities);
+        return response()->json([
+            'data' => $cache->remember(
+                'cities:all',
+                fn (): array => CityResource::collection(City::all())->resolve(request())
+            ),
+        ]);
     }
-
 
     public function store(StoreCityRequest $request)
     {
@@ -23,16 +28,15 @@ class CityController extends Controller
 
         return response()->json([
             'message' => 'City created successfully.',
-            'data' => new CityResource($city)
+            'data' => new CityResource($city),
         ], 201);
     }
-
 
     public function update(UpdateCityRequest $request, $id)
     {
         $city = City::find($id);
 
-        if (!$city) {
+        if (! $city) {
             return response()->json(['data' => [], 'message' => 'City not found.'], 404);
         }
 
@@ -40,7 +44,7 @@ class CityController extends Controller
 
         return response()->json([
             'message' => 'City updated successfully.',
-            'data' => new CityResource($city)
+            'data' => new CityResource($city),
         ]);
     }
 
@@ -48,9 +52,11 @@ class CityController extends Controller
     {
         $city = City::find($id);
 
-        if (!$city) {
+        if (! $city) {
             return response()->json(['data' => [], 'message' => 'City not found.'], 404);
         }
+
+        app(GeographyDeletionGuard::class)->assertCityDeletable((int) $city->id);
 
         $city->delete();
 

@@ -27,6 +27,10 @@ class ProcessAdReel implements ShouldQueue
 
     public array $backoff = [30, 120, 600];
 
+    public int $timeout = 900;
+
+    public int $maxExceptions = 2;
+
     public function __construct(
         public readonly Ad $ad,
         public readonly string $videoPath
@@ -34,6 +38,12 @@ class ProcessAdReel implements ShouldQueue
 
     public function handle(): void
     {
+        if ($this->ad->reel()->exists()) {
+            $this->discardSource();
+
+            return;
+        }
+
         if (! Storage::disk(self::TEMP_DISK)->exists($this->videoPath)) {
             Log::error('Ad reel source missing', ['ad_id' => $this->ad->id, 'path' => $this->videoPath]);
 
@@ -46,7 +56,7 @@ class ProcessAdReel implements ShouldQueue
             $localPath = $this->copyToLocalTemp();
             $upload = $this->uploadToCloudinary($localPath);
 
-            $this->ad->reel()->create([
+            $this->ad->reel()->updateOrCreate([], [
                 'video_path' => $upload['secure_url'] ?? null,
                 'thumbnail_path' => $this->thumbnailUrl($upload),
                 'duration' => $upload['duration'] ?? null,

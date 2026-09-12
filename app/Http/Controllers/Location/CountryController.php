@@ -8,13 +8,19 @@ use App\Http\Requests\Location\UpdateCountryRequest;
 use App\Http\Resources\Location\CountryResource;
 use App\Http\Resources\Location\StateResource;
 use App\Models\Country;
+use App\Services\Location\GeographyDeletionGuard;
+use App\Services\Location\LocationCache;
 
 class CountryController extends Controller
 {
-    public function index()
+    public function index(LocationCache $cache)
     {
-        $countries = Country::all();
-        return CountryResource::collection($countries);
+        return response()->json([
+            'data' => $cache->remember(
+                'countries:all',
+                fn (): array => CountryResource::collection(Country::all())->resolve(request())
+            ),
+        ]);
     }
 
     public function store(StoreCountryRequest $request)
@@ -23,25 +29,29 @@ class CountryController extends Controller
 
         return response()->json([
             'message' => 'Country created successfully.',
-            'data' => new CountryResource($country)
+            'data' => new CountryResource($country),
         ], 201);
     }
 
-    public function show($id)
+    public function show($id, LocationCache $cache)
     {
-        $country = Country::with('states')->find($id);
-        if (!$country) {
+        $country = Country::find($id);
+        if (! $country) {
             return response()->json(['data' => [], 'message' => 'Country not found.'], 404);
         }
+
         return response()->json([
-            'data' => StateResource::collection($country->states)
+            'data' => $cache->remember(
+                'country:'.$country->id.':states',
+                fn (): array => StateResource::collection($country->states()->get())->resolve(request())
+            ),
         ]);
     }
 
     public function update(UpdateCountryRequest $request, $id)
     {
         $country = Country::find($id);
-        if (!$country) {
+        if (! $country) {
             return response()->json(['data' => [], 'message' => 'Country not found.'], 404);
         }
 
@@ -49,16 +59,18 @@ class CountryController extends Controller
 
         return response()->json([
             'message' => 'Country updated successfully.',
-            'data' => new CountryResource($country)
+            'data' => new CountryResource($country),
         ]);
     }
 
     public function destroy($id)
     {
         $country = Country::find($id);
-        if (!$country) {
+        if (! $country) {
             return response()->json(['data' => [], 'message' => 'Country not found.'], 404);
         }
+
+        app(GeographyDeletionGuard::class)->assertCountryDeletable((int) $country->id);
 
         $country->delete();
 

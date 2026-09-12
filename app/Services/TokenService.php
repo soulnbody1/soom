@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\User;
-use Illuminate\Support\Str;
 use App\Repositories\RefreshTokenRepository;
+use Illuminate\Support\Str;
 
 class TokenService
 {
@@ -32,7 +32,13 @@ class TokenService
     public function validateRefreshToken(string $token)
     {
         $hashedToken = hash('sha256', $token);
+
         return $this->tokenRepo->findValidToken($hashedToken);
+    }
+
+    public function consumeRefreshToken(string $token)
+    {
+        return $this->tokenRepo->consumeValidToken(hash('sha256', $token));
     }
 
     public function revokeRefreshToken(int $userId): void

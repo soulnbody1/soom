@@ -32,29 +32,29 @@ Route::prefix('soom')->group(function () {
         });
     });
 
-    Route::prefix('countries')->group(function () {
+    Route::prefix('countries')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [CountryController::class, 'index']);
         Route::get('{id}', [CountryController::class, 'show']);
     });
 
-    Route::prefix('states')->group(function () {
+    Route::prefix('states')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [StateController::class, 'index']);
         Route::get('{id}', [StateController::class, 'show']);
     });
 
-    Route::prefix('citys')->group(function () {
+    Route::prefix('citys')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [CityController::class, 'index']);
     });
 
-    Route::prefix('banners')->group(function () {
+    Route::prefix('banners')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [BannerController::class, 'index']);
     });
 
-    Route::prefix('charity_system')->group(function () {
+    Route::prefix('charity_system')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [CharitySystemController::class, 'index']);
     });
 
-    Route::prefix('announcements')->group(function () {
+    Route::prefix('announcements')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [AnnouncementController::class, 'index']);
     });
 

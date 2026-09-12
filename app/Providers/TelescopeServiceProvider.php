@@ -10,13 +10,8 @@ use Laravel\Telescope\TelescopeApplicationServiceProvider;
 
 class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
-        // Telescope::night();
-
         $this->hideSensitiveRequestDetails();
 
         $isLocal = $this->app->environment('local');
@@ -31,35 +26,43 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
         });
     }
 
-    /**
-     * Prevent sensitive request details from being logged by Telescope.
-     */
     protected function hideSensitiveRequestDetails(): void
     {
-        if ($this->app->environment('local')) {
-            return;
-        }
-
-        Telescope::hideRequestParameters(['_token']);
+        Telescope::hideRequestParameters([
+            '_token',
+            'password',
+            'password_confirmation',
+            'old_password',
+            'otp',
+            'token',
+            'refresh_token',
+            'fcm_token',
+        ]);
 
         Telescope::hideRequestHeaders([
+            'authorization',
             'cookie',
             'x-csrf-token',
             'x-xsrf-token',
         ]);
     }
 
-    /**
-     * Register the Telescope gate.
-     *
-     * This gate determines who can access Telescope in non-local environments.
-     */
     protected function gate(): void
     {
-        Gate::define('viewTelescope', function (User $user) {
-            return in_array($user->email, [
-                //
-            ]);
+        Gate::define('viewTelescope', function (User $user): bool {
+            if ($this->app->environment('production')) {
+                return false;
+            }
+
+            return in_array((string) $user->email, self::allowedEmails(), true);
         });
+    }
+
+    private static function allowedEmails(): array
+    {
+        return array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) config('telescope.allowed_emails'))
+        )));
     }
 }

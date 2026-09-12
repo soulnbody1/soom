@@ -1,19 +1,26 @@
 <?php
+
 namespace App\Http\Controllers\Location;
 
 use App\Http\Controllers\Controller;
-use App\Models\State;
 use App\Http\Requests\Location\StoreStateRequest;
 use App\Http\Requests\Location\UpdateStateRequest;
 use App\Http\Resources\Location\CityResource;
 use App\Http\Resources\Location\StateResource;
+use App\Models\State;
+use App\Services\Location\GeographyDeletionGuard;
+use App\Services\Location\LocationCache;
 
 class StateController extends Controller
 {
-    public function index()
+    public function index(LocationCache $cache)
     {
-        $states = State::all();
-        return StateResource::collection($states);
+        return response()->json([
+            'data' => $cache->remember(
+                'states:all',
+                fn (): array => StateResource::collection(State::all())->resolve(request())
+            ),
+        ]);
     }
 
     public function store(StoreStateRequest $request)
@@ -22,20 +29,23 @@ class StateController extends Controller
 
         return response()->json([
             'message' => 'State created successfully.',
-            'data' => new StateResource($state)
+            'data' => new StateResource($state),
         ], 201);
     }
 
-    public function show($id)
+    public function show($id, LocationCache $cache)
     {
-        $state = State::with('cities')->find($id);
+        $state = State::find($id);
 
-        if (!$state) {
+        if (! $state) {
             return response()->json(['data' => [], 'message' => 'State not found.'], 404);
         }
 
         return response()->json([
-            'data' => CityResource::collection($state->cities)
+            'data' => $cache->remember(
+                'state:'.$state->id.':cities',
+                fn (): array => CityResource::collection($state->cities()->get())->resolve(request())
+            ),
         ]);
     }
 
@@ -43,7 +53,7 @@ class StateController extends Controller
     {
         $state = State::find($id);
 
-        if (!$state) {
+        if (! $state) {
             return response()->json(['data' => [], 'message' => 'State not found.'], 404);
         }
 
@@ -51,7 +61,7 @@ class StateController extends Controller
 
         return response()->json([
             'message' => 'State updated successfully.',
-            'data' => new StateResource($state)
+            'data' => new StateResource($state),
         ]);
     }
 
@@ -59,9 +69,11 @@ class StateController extends Controller
     {
         $state = State::find($id);
 
-        if (!$state) {
+        if (! $state) {
             return response()->json(['data' => [], 'message' => 'State not found.'], 404);
         }
+
+        app(GeographyDeletionGuard::class)->assertStateDeletable((int) $state->id);
 
         $state->delete();
 

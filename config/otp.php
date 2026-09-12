@@ -9,6 +9,11 @@ return [
 
     'max_verification_attempts' => (int) env('OTP_MAX_VERIFICATION_ATTEMPTS', 5),
 
+    'whatsapp' => [
+        'timeout_seconds' => (int) env('OTP_WHATSAPP_TIMEOUT_SECONDS', 10),
+        'connect_timeout_seconds' => (int) env('OTP_WHATSAPP_CONNECT_TIMEOUT_SECONDS', 5),
+    ],
+
     'send' => [
         'cooldown_seconds' => (int) env('OTP_SEND_COOLDOWN_SECONDS', 120),
         'max_per_window' => (int) env('OTP_SEND_MAX_PER_WINDOW', 4),

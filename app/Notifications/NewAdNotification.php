@@ -2,22 +2,20 @@
 
 namespace App\Notifications;
 
-use App\Models\Ad;
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
-
+use Illuminate\Notifications\Notification;
 
 class NewAdNotification extends Notification
 {
     use Queueable;
 
-    protected $ad;
-
-    public function __construct(Ad $ad)
-    {
-        $this->ad = $ad;
-    }
+    public function __construct(
+        protected int $adId,
+        protected string $adTitle,
+        protected int $categoryId,
+        protected array $unreadCounts = [],
+    ) {}
 
     public function via($notifiable)
     {
@@ -27,25 +25,25 @@ class NewAdNotification extends Notification
     public function toArray($notifiable)
     {
         return [
-            'ad_id' => $this->ad->id,
-            'title' => $this->ad->title,
-            'category_id' => $this->ad->category_id,
+            'ad_id' => $this->adId,
+            'title' => $this->adTitle,
+            'category_id' => $this->categoryId,
             'message' => '📢 إعلان جديد تم إضافته في الفئة التي تهتم بها',
             'created_at' => now()->toDateTimeString(),
         ];
     }
 
-
     public function toBroadcast($notifiable)
     {
-        $unreadCount = $notifiable->unreadNotifications()->count();
         return new BroadcastMessage([
-            'ad_id' => $this->ad->id,
-            'title' => $this->ad->title,
-            'category_id' => $this->ad->category_id,
-            'message' => '📢 إعلان جديد تم إضافته في الفئة التي تهتم بها',
-            'created_at' => now()->toDateTimeString(),
-            'unread_count' => $unreadCount,
+            ...$this->toArray($notifiable),
+            'unread_count' => $this->unreadCountFor($notifiable),
         ]);
+    }
+
+    private function unreadCountFor($notifiable): int
+    {
+        return $this->unreadCounts[(int) $notifiable->id]
+            ?? $notifiable->unreadNotifications()->count();
     }
 }

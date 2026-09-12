@@ -10,9 +10,9 @@ use App\Jobs\SendAdNotification;
 use App\Models\City;
 use App\Models\State;
 use App\Models\User;
-use App\Services\Notification\DeviceTokenRegistry;
 use App\Models\UserAdInteraction;
 use App\Notifications\NewAdNotification;
+use App\Services\Notification\PushDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Notification;
@@ -129,7 +129,7 @@ final class AdNotificationFanOutTest extends AdTestCase
         $ad = $this->makeAd();
         $recipients = collect(range(1, 3))->map(fn () => $this->adUser());
 
-        (new SendAdNotificationChunk($ad->id, $recipients->pluck('id')->all()))->handle(app(DeviceTokenRegistry::class));
+        (new SendAdNotificationChunk($ad->id, $recipients->pluck('id')->all()))->handle(app(PushDispatcher::class));
 
         Notification::assertSentTimes(NewAdNotification::class, 3);
     }
@@ -142,7 +142,7 @@ final class AdNotificationFanOutTest extends AdTestCase
         $recipient = $this->adUser();
         $ad->forceDelete();
 
-        (new SendAdNotificationChunk($ad->id, [$recipient->id]))->handle(app(DeviceTokenRegistry::class));
+        (new SendAdNotificationChunk($ad->id, [$recipient->id]))->handle(app(PushDispatcher::class));
 
         Notification::assertNothingSent();
     }

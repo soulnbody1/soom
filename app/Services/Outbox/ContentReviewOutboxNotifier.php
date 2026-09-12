@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Outbox;
 
-use App\Jobs\SendFcmNotification;
 use App\Models\Auction\OutboxMessage;
 use App\Models\ContentReview\ContentReview;
 use App\Models\User;
@@ -12,11 +11,15 @@ use App\Notifications\ContentReviewAdminNotification;
 use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\ContentReview\Notifications\AdminAlertRecipientResolver;
 use App\Services\ContentReview\Notifications\ContentReviewNotificationCatalog;
+use App\Services\Notification\PushDispatcher;
 use RuntimeException;
 
 final class ContentReviewOutboxNotifier implements OutboxNotifier
 {
-    public function __construct(private readonly AdminAlertRecipientResolver $recipients) {}
+    public function __construct(
+        private readonly AdminAlertRecipientResolver $recipients,
+        private readonly PushDispatcher $push,
+    ) {}
 
     public function notify(OutboxMessage $message): void
     {
@@ -71,12 +74,10 @@ final class ContentReviewOutboxNotifier implements OutboxNotifier
 
         $user->notify(new ContentReviewAdminNotification($eventId, $message->event_type, $data));
 
-        if ($user->fcm_token) {
-            SendFcmNotification::dispatch($user->fcm_token, $title, $body, [
-                'event_type' => $message->event_type,
-                'screen' => $data['screen'],
-            ]);
-        }
+        $this->push->toUser((int) $user->id, $title, $body, [
+            'event_type' => $message->event_type,
+            'screen' => $data['screen'],
+        ]);
     }
 
     private function alreadyNotified(User $user, string $eventId): bool

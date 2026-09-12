@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Notification;
 
+use App\Jobs\Ad\SendAdNotificationChunk;
 use App\Models\Ad;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\User;
-use App\Jobs\Ad\SendAdNotificationChunk;
 use App\Notifications\NewAdNotification;
-use App\Services\Notification\DeviceTokenRegistry;
+use App\Services\Notification\PushDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\DatabaseNotification;
 
@@ -125,7 +125,7 @@ final class NotificationKnownDefectsTest extends NotificationTestCase
         $ad = $this->makeAd();
 
         $chunk = new SendAdNotificationChunk($ad->id, [$user->id]);
-        $registry = app(DeviceTokenRegistry::class);
+        $registry = app(PushDispatcher::class);
 
         $chunk->handle($registry);
         $chunk->handle($registry);
@@ -175,7 +175,7 @@ final class NotificationKnownDefectsTest extends NotificationTestCase
         $this->seedNotifications($user, 2);
         $ad = $this->makeAd();
 
-        $payload = (new NewAdNotification($ad))->toBroadcast($user->fresh())->data;
+        $payload = (new NewAdNotification((int) $ad->id, (string) $ad->title, (int) $ad->category_id))->toBroadcast($user->fresh())->data;
         $actual = $user->unreadNotifications()->count();
 
         if ($payload['unread_count'] !== $actual) {
