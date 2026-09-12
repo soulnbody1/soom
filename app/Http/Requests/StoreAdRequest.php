@@ -7,6 +7,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Services\Catalog\AdAttributeValidator;
 use Illuminate\Validation\Rule;
 
 class StoreAdRequest extends FormRequest
@@ -90,6 +91,8 @@ class StoreAdRequest extends FormRequest
     public function withValidator($validator)
     {
         $validator->after(function ($validator): void {
+            $this->validateCategoryAttributes($validator);
+
             $images = $this->file('images');
 
             if (! is_array($images) || $images === []) {
@@ -104,5 +107,27 @@ class StoreAdRequest extends FormRequest
                 $validator->errors()->add('images', 'إجمالي حجم الصور يجب ألا يتجاوز 100 ميجا بايت.');
             }
         });
+    }
+
+    private function validateCategoryAttributes($validator): void
+    {
+        if ($validator->errors()->has('category_id') || $validator->errors()->hasAny(['attributes'])) {
+            return;
+        }
+
+        $categoryId = $this->input('category_id');
+        $submitted = $this->input('attributes');
+
+        if (! is_numeric($categoryId) || ! is_array($submitted)) {
+            return;
+        }
+
+        $errors = app(AdAttributeValidator::class)->validate((int) $categoryId, $submitted);
+
+        foreach ($errors->getMessages() as $key => $messages) {
+            foreach ($messages as $message) {
+                $validator->errors()->add($key, $message);
+            }
+        }
     }
 }

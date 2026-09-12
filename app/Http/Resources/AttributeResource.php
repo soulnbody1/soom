@@ -8,7 +8,9 @@ class AttributeResource extends JsonResource
 {
     public function toArray($request)
     {
-        $options = AttributeOptionResource::collection($this->options);
+        $options = $this->options
+            ->map(fn ($option): array => (new AttributeOptionResource($option))->toArray($request))
+            ->all();
 
         return [
             'id' => $this->id,
@@ -55,7 +57,9 @@ class AttributeResource extends JsonResource
             $start = $values[0] ?? null;
             $end = $values[1] ?? null;
 
-            if (! is_null($start) && ! is_null($end) && $start <= $end) {
+            $limit = (int) config('catalog.between_range_limit');
+
+            if (! is_null($start) && ! is_null($end) && $start <= $end && ($end - $start) < $limit) {
                 $range = range($start, $end);
 
                 $result[] = [

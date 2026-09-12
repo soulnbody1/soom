@@ -27,13 +27,15 @@ final class MyAdsEndpointsTest extends AdTestCase
         Queue::fake();
 
         $owner = $this->adUser();
+        $category = $this->category();
         $attribute = Attribute::factory()->create(['name' => 'colour']);
+        $category->attributes()->attach($attribute->id, ['is_inheritable' => true]);
 
         $response = $this->actingAs($owner, 'sanctum')->postJson('/api/soom/ads', [
             'title' => 'A bicycle',
             'description' => 'Barely used',
             'price' => 250.5,
-            'category_id' => $this->category()->id,
+            'category_id' => $category->id,
             'country_id' => $this->country()->id,
             'state_id' => $this->state()->id,
             'city_id' => $this->city()->id,
@@ -61,13 +63,15 @@ final class MyAdsEndpointsTest extends AdTestCase
     {
         Queue::fake();
 
-        $attribute = Attribute::factory()->create(['name' => 'features']);
+        $category = $this->category();
+        $attribute = Attribute::factory()->create(['name' => 'features', 'is_multiple' => true]);
+        $category->attributes()->attach($attribute->id, ['is_inheritable' => true]);
 
         $this->actingAs($this->adUser(), 'sanctum')->postJson('/api/soom/ads', [
             'title' => 'A car',
             'description' => 'Loaded',
             'price' => 1000,
-            'category_id' => $this->category()->id,
+            'category_id' => $category->id,
             'country_id' => $this->country()->id,
             'state_id' => $this->state()->id,
             'city_id' => $this->city()->id,
@@ -132,6 +136,7 @@ final class MyAdsEndpointsTest extends AdTestCase
         AdImage::factory()->create(['ad_id' => $ad->id]);
 
         $attribute = Attribute::factory()->create(['name' => 'size']);
+        $ad->category->attributes()->attach($attribute->id, ['is_inheritable' => true]);
         AttributeValue::factory()->create([
             'ad_id' => $ad->id,
             'attribute_id' => $attribute->id,

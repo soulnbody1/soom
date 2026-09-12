@@ -75,7 +75,9 @@
         "test:ads": "@php artisan test tests/Feature/Ad",
         "test:ads:mysql": "@php artisan test --configuration=phpunit.ads-mysql.xml",
         "test:messages": "@php artisan test tests/Feature/Message",
-        "test:messages:mysql": "@php artisan test --configuration=phpunit.messages-mysql.xml"
+        "test:messages:mysql": "@php artisan test --configuration=phpunit.messages-mysql.xml",
+        "test:catalog": "@php artisan test tests/Feature/Catalog",
+        "test:catalog:mysql": "@php artisan test --configuration=phpunit.catalog-mysql.xml"
     },
     "extra": {
         "laravel": {

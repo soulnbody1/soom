@@ -19,7 +19,7 @@ class Category extends Model
 
     public function children()
     {
-        return $this->hasMany(Category::class, 'parent_id')->with('children');
+        return $this->hasMany(Category::class, 'parent_id');
     }
 
     public function ads()
@@ -32,27 +32,6 @@ class Category extends Model
         return $this->belongsToMany(Attribute::class, 'attribute_category')
             ->withPivot('is_inheritable')
             ->withTimestamps();
-    }
-
-    public function getAllAttributesWithInheritance()
-    {
-        $attributes = $this->attributes()
-            ->with('options')
-            ->get();
-
-        $parent = $this->parent;
-
-        while ($parent) {
-            $inherited = $parent->attributes()
-                ->wherePivot('is_inheritable', true)
-                ->with('options')
-                ->get();
-
-            $attributes = $attributes->merge($inherited);
-            $parent = $parent->parent;
-        }
-
-        return $attributes->unique('id');
     }
 
     public function getImageAttribute($value)

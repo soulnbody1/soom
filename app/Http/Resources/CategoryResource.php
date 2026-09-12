@@ -17,7 +17,9 @@ class CategoryResource extends JsonResource
         ];
 
         if ($this->relationLoaded('children')) {
-            $data['children'] = CategoryResource::collection($this->children);
+            $data['children'] = $this->children
+                ->map(fn ($child): array => (new CategoryResource($child))->toArray($request))
+                ->all();
         }
 
         return $data;

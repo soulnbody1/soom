@@ -15,7 +15,7 @@ class UpdateAttributeRequest extends FormRequest
     {
         return [
             'name' => 'sometimes|required|string|max:255',
-            'type' => 'sometimes|required|string|in:text,number,select,checkbox,radio,textarea,between',
+            'type' => 'sometimes|required|string|in:text,number,boolean,select,checkbox,radio,textarea,between',
             'is_required' => 'sometimes|boolean',
             'is_multiple' => 'sometimes|boolean',
             'parent_attribute_id' => 'nullable|exists:attributes,id',

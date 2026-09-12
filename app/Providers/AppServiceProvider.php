@@ -11,6 +11,8 @@ use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\AuctionSettlement;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
+use App\Models\Attribute;
+use App\Models\AttributeOption;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\Country;
@@ -30,6 +32,7 @@ use App\Policies\MessagePolicy;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use App\Services\Ad\Support\GeoNameResolver;
+use App\Services\Catalog\CatalogCacheVersion;
 use App\Services\Auction\ContentReview\AuctionReviewSubjectAdapter;
 use App\Services\Auction\Notifications\OutboxNotifier;
 use App\Services\Auction\Payments\PaymentProviderFactory;
@@ -112,6 +115,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureParticipationRateLimiting();
         $this->configureContentReviewRateLimiting();
         $this->configureAdRateLimiting();
+        $this->configureCatalogRateLimiting();
         $this->configureAuthRateLimiting();
         $this->configureChatRateLimiting();
         $this->configureProfileRateLimiting();
@@ -123,7 +127,12 @@ class AppServiceProvider extends ServiceProvider
             Category::{$event}(function (): void {
                 app(CategoryTreeResolver::class)->forget();
                 app(AdCacheVersion::class)->bump();
+                app(CatalogCacheVersion::class)->bump();
             });
+
+            foreach ([Attribute::class, AttributeOption::class] as $model) {
+                $model::{$event}(fn () => app(CatalogCacheVersion::class)->bump());
+            }
 
             foreach ([Country::class, State::class, City::class] as $model) {
                 $model::{$event}(fn () => app(GeoNameResolver::class)->forget());
@@ -178,6 +187,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('profile-write', fn (Request $request): Limit => Limit::perHour(
             (int) config('users.rate_limits.profile_update_per_hour')
         )->by('profile-write:user:'.(int) ($request->user()?->id ?? 0)));
+    }
+
+    private function configureCatalogRateLimiting(): void
+    {
+        RateLimiter::for('catalog-public', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('catalog.rate_limits.public_per_minute')
+        )->by('catalog-public:'.$request->ip()));
     }
 
     private function configureAdRateLimiting(): void

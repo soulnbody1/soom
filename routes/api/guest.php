@@ -15,9 +15,9 @@ use App\Http\Controllers\Location\StateController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('soom')->group(function () {
-    Route::prefix('categories')->group(function () {
+    Route::prefix('categories')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/', [CategoryController::class, 'index']);
-        Route::get('{category}', [CategoryController::class, 'show']);
+        Route::get('{category}', [CategoryController::class, 'show'])->whereNumber('category');
     });
 
     Route::prefix('ads')->group(function () {
@@ -58,7 +58,7 @@ Route::prefix('soom')->group(function () {
         Route::get('/', [AnnouncementController::class, 'index']);
     });
 
-    Route::prefix('attributes')->group(function () {
+    Route::prefix('attributes')->middleware('throttle:catalog-public')->group(function () {
         Route::get('/by-category', [AttributeController::class, 'getAttributesByCategory']);
     });
 

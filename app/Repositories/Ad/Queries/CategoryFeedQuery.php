@@ -56,10 +56,38 @@ final class CategoryFeedQuery
 
     private function subcategories(int $categoryId): Collection
     {
-        return Category::query()
+        $children = Category::query()
             ->select('id', 'name', 'image')
             ->where('parent_id', $categoryId)
-            ->withCount('ads')
             ->get();
+
+        if ($children->isEmpty()) {
+            return $children;
+        }
+
+        $owner = [];
+
+        foreach ($children as $child) {
+            foreach ($this->categories->subtreeIds((int) $child->id) as $descendantId) {
+                $owner[$descendantId] = (int) $child->id;
+            }
+        }
+
+        $counts = Ad::query()
+            ->whereIn('category_id', array_keys($owner))
+            ->groupBy('category_id')
+            ->selectRaw('category_id, COUNT(*) as aggregate')
+            ->pluck('aggregate', 'category_id');
+
+        $totals = [];
+
+        foreach ($counts as $categoryKey => $total) {
+            $childId = $owner[(int) $categoryKey];
+            $totals[$childId] = ($totals[$childId] ?? 0) + (int) $total;
+        }
+
+        return $children->each(
+            static fn (Category $child) => $child->setAttribute('ads_count', $totals[(int) $child->id] ?? 0)
+        );
     }
 }

@@ -3,23 +3,26 @@
 namespace App\Http\Controllers\Attribute;
 
 use App\Http\Controllers\Controller;
-use App\Models\Attribute;
-use Illuminate\Http\Request;
-use App\Http\Resources\AttributeResource;
 use App\Http\Requests\Attribute\StoreAttributeRequest;
 use App\Http\Requests\Attribute\UpdateAttributeRequest;
 use App\Http\Requests\ExcludeAttributeFromCategoryRequest;
 use App\Http\Requests\IncludeAttributeBackRequest;
 use App\Http\Resources\AttributeOptionResource;
+use App\Http\Resources\AttributeResource;
+use App\Models\Attribute;
 use App\Models\AttributeCategoryException;
 use App\Models\Category;
-use App\Traits\CachableAttribute;
+use App\Services\Catalog\CatalogCacheVersion;
+use App\Services\Catalog\CategoryAttributeCache;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
 
 class AttributeController extends Controller
 {
-    use CachableAttribute;
+    public function __construct(
+        protected CategoryAttributeCache $attributes,
+        protected CatalogCacheVersion $version,
+    ) {}
 
     public function getAttributesByCategory(Request $request)
     {
@@ -27,77 +30,74 @@ class AttributeController extends Controller
             'category_id' => 'required|exists:categories,id',
         ]);
 
-        $data = $this->cacheAttributes($request->category_id);
-
         return response()->json([
             'success' => true,
-            'data' => $data,
+            'data' => $this->attributes->forCategory((int) $request->input('category_id')),
         ]);
     }
 
     public function store(StoreAttributeRequest $request)
     {
-        $attribute = Attribute::create($request->validated());
+        $attribute = DB::transaction(function () use ($request): Attribute {
+            $attribute = Attribute::create($request->validated());
 
-        if ($request->filled('categories')) {
-            $syncData = collect($request->categories)
-                ->mapWithKeys(fn($cat) => [$cat['id'] => ['is_inheritable' => $cat['is_inheritable']]])
-                ->toArray();
-
-            $attribute->categories()->sync($syncData);
-
-            foreach (array_keys($syncData) as $categoryId) {
-                $this->clearAttributeCache($categoryId);
+            if ($request->filled('categories')) {
+                $attribute->categories()->sync($this->pivotPayload($request->input('categories')));
             }
-        }
+
+            return $attribute;
+        });
+
+        $this->version->bump();
 
         return response()->json([
             'success' => true,
-            'data' => new AttributeResource($attribute->load('categories')),
+            'data' => new AttributeResource($attribute->load('categories', 'options')),
         ]);
     }
 
     public function update(UpdateAttributeRequest $request, $id)
     {
-        $attribute = Attribute::findOrFail($id);
-        $attribute->update($request->validated());
-        if ($request->filled('categories')) {
-            $syncData = collect($request->categories)
-                ->mapWithKeys(fn($cat) => [$cat['id'] => ['is_inheritable' => $cat['is_inheritable']]])
-                ->toArray();
+        $attribute = DB::transaction(function () use ($request, $id): Attribute {
+            $attribute = Attribute::query()->lockForUpdate()->findOrFail($id);
+            $attribute->update($request->validated());
 
-            $attribute->categories()->sync($syncData);
-
-            foreach (array_keys($syncData) as $categoryId) {
-                $this->clearAttributeCache($categoryId);
+            if ($request->filled('categories')) {
+                $attribute->categories()->sync($this->pivotPayload($request->input('categories')));
             }
-        }
+
+            return $attribute;
+        });
+
+        $this->version->bump();
+
         return response()->json([
             'success' => true,
-            'data' => new AttributeResource($attribute->load('categories')),
+            'data' => new AttributeResource($attribute->load('categories', 'options')),
         ]);
     }
 
     public function destroy($id)
     {
-        $attribute = Attribute::findOrFail($id);//
-        $this->clearAllAttributesCache();
+        $attribute = Attribute::findOrFail($id);
         $attribute->delete();
+
+        $this->version->bump();
+
         return response()->json([
             'success' => true,
             'message' => 'Attribute deleted successfully.',
         ]);
     }
-    
-    
+
     public function getOptionsByAttributeId($id)
     {
         $attribute = Attribute::with('options')->findOrFail($id);
-        $options = AttributeOptionResource::collection($attribute->options);
+
         return response()->json([
             'success' => true,
-            'parent-name' =>$attribute->name,
-            'data' => $options,
+            'parent-name' => $attribute->name,
+            'data' => AttributeOptionResource::collection($attribute->options),
         ]);
     }
 
@@ -109,55 +109,57 @@ class AttributeController extends Controller
             'attributes.*.id' => 'required|exists:attributes,id',
             'attributes.*.is_inheritable' => 'required|boolean',
         ]);
-        $category = Category::findOrFail($request->category_id);
-        $syncData = collect($request->input('attributes'))
-            ->mapWithKeys(fn($attr) => [$attr['id'] => ['is_inheritable' => $attr['is_inheritable']]])
-            ->toArray();
-        $category->attributes()->sync($syncData);
-        $this->clearAttributeCache($category->id);
+
+        $category = Category::findOrFail($request->input('category_id'));
+
+        DB::transaction(fn () => $category->attributes()->sync(
+            $this->pivotPayload($request->input('attributes'))
+        ));
+
+        $this->version->bump();
+
         return response()->json([
             'success' => true,
             'message' => 'Attributes synced to category successfully.',
         ]);
     }
-    
-        //------
+
     public function excludeAttributeFromCategory(ExcludeAttributeFromCategoryRequest $request)
     {
-        $attached = DB::table('attribute_category')
-            ->where('attribute_id', $request->attribute_id)
-            ->where('category_id', $request->category_id)
-            ->exists();
+        AttributeCategoryException::firstOrCreate([
+            'attribute_id' => $request->input('attribute_id'),
+            'category_id' => $request->input('category_id'),
+        ]);
 
-        if ($attached) {
-            DB::table('attribute_category')
-                ->where('attribute_id', $request->attribute_id)
-                ->where('category_id', $request->category_id)
-                ->delete();
-        } else {
-            AttributeCategoryException::updateOrInsert(
-                [
-                    'attribute_id' => $request->attribute_id,
-                    'category_id' => $request->category_id,
-                ],
-                ['updated_at' => now(), 'created_at' => now()]
-            );
-        }
+        $this->version->bump();
 
-        $this->clearAttributeCache($request->category_id);
         return response()->json([
             'success' => true,
-            'message' => 'تم الحذف بنجاح '
+            'message' => 'تم الحذف بنجاح ',
         ]);
     }
 
     public function includeAttributeBack(IncludeAttributeBackRequest $request)
     {
-        AttributeCategoryException::where('attribute_id', $request->attribute_id)->where('category_id', $request->category_id)->delete();
-        $this->clearAttributeCache($request->category_id);
+        AttributeCategoryException::query()
+            ->where('attribute_id', $request->input('attribute_id'))
+            ->where('category_id', $request->input('category_id'))
+            ->delete();
+
+        $this->version->bump();
+
         return response()->json([
             'success' => true,
-            'message' => 'تم إعادة السماح بوراثة الـ attribute لهذه الفئة.'
+            'message' => 'تم إعادة السماح بوراثة الـ attribute لهذه الفئة.',
         ]);
+    }
+
+    private function pivotPayload(array $rows): array
+    {
+        return collect($rows)
+            ->mapWithKeys(fn (array $row): array => [
+                $row['id'] => ['is_inheritable' => $row['is_inheritable']],
+            ])
+            ->all();
     }
 }

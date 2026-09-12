@@ -25,9 +25,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
 
     Route::prefix('attributes')->group(function () {
         Route::post('/', [AttributeController::class, 'store']);
-        Route::put('/{id}', [AttributeController::class, 'update']);
-        Route::delete('/{id}', [AttributeController::class, 'destroy']);
-        Route::get('/{id}', [AttributeController::class, 'getOptionsByAttributeId']);
+        Route::put('/{id}', [AttributeController::class, 'update'])->whereNumber('id');
+        Route::delete('/{id}', [AttributeController::class, 'destroy'])->whereNumber('id');
+        Route::get('/{id}', [AttributeController::class, 'getOptionsByAttributeId'])->whereNumber('id');
         Route::post('/sync-attributes', [AttributeController::class, 'syncAttributesToCategory']);
         Route::post('/exclude', [AttributeController::class, 'excludeAttributeFromCategory']);
         Route::post('/include', [AttributeController::class, 'includeAttributeBack']);
@@ -99,7 +99,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
 
     Route::prefix('attribute-options')->group(function () {
         Route::post('/', [AttributeOptionController::class, 'store']);
-        Route::put('/{id}', [AttributeOptionController::class, 'update']);
-        Route::delete('/{id}', [AttributeOptionController::class, 'destroy']);
+        Route::put('/{id}', [AttributeOptionController::class, 'update'])->whereNumber('id');
+        Route::delete('/{id}', [AttributeOptionController::class, 'destroy'])->whereNumber('id');
     });
 });

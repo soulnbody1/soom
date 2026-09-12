@@ -13,8 +13,6 @@ final class CategoryTreeResolver
 
     private const TTL_SECONDS = 604800;
 
-    private ?array $tree = null;
-
     public function subtreeIds(int $categoryId): array
     {
         $children = $this->tree()['children'];
@@ -54,17 +52,29 @@ final class CategoryTreeResolver
 
     public function forget(): void
     {
-        $this->tree = null;
         Cache::forget(self::CACHE_KEY);
     }
 
     private function tree(): array
     {
-        return $this->tree ??= Cache::remember(
-            self::CACHE_KEY,
-            self::TTL_SECONDS,
-            static fn (): array => self::build()
-        );
+        $cached = Cache::get(self::CACHE_KEY);
+
+        if (self::isWellFormed($cached)) {
+            return $cached;
+        }
+
+        $tree = self::build();
+        Cache::put(self::CACHE_KEY, $tree, self::TTL_SECONDS);
+
+        return $tree;
+    }
+
+    private static function isWellFormed(mixed $tree): bool
+    {
+        return is_array($tree)
+            && array_key_exists('children', $tree)
+            && array_key_exists('parents', $tree)
+            && array_key_exists('roots', $tree);
     }
 
     private static function build(): array
