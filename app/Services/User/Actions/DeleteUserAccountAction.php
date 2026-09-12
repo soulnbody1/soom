@@ -25,6 +25,7 @@ final class DeleteUserAccountAction
 
                 AdImage::whereIn('ad_id', $adIds)->delete();
                 $user->ads()->withTrashed()->forceDelete();
+                $user->notifications()->delete();
                 $user->tokens()->delete();
                 $user->forceDelete();
             });

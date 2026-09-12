@@ -11,6 +11,7 @@ use App\Models\Message;
 use App\Models\User;
 use App\Services\Message\Support\ChatAttachmentStorage;
 use App\Services\Message\Support\ChatPresence;
+use App\Services\Notification\DeviceTokenRegistry;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -21,6 +22,7 @@ final class SendMessageAction
     public function __construct(
         private readonly ChatAttachmentStorage $attachments,
         private readonly ChatPresence $presence,
+        private readonly DeviceTokenRegistry $devices,
     ) {}
 
     public function execute(User $sender, User $receiver, array $data): Message
@@ -95,26 +97,30 @@ final class SendMessageAction
 
     private function notify(User $sender, User $receiver, Message $message): void
     {
-        if (! $receiver->fcm_token) {
+        $tokens = $this->devices->tokensFor((int) $receiver->id);
+
+        if ($tokens === []) {
             return;
         }
 
         try {
-            SendFcmNotification::dispatch(
-                $receiver->fcm_token,
-                '📢 رسالة جديدة من '.$sender->name,
-                (string) $message->content,
-                [
-                    'id' => $message->id,
-                    'name' => $sender->name,
-                    'sender_id' => $message->sender_id,
-                    'receiver_id' => $message->receiver_id,
-                    'content' => $message->content,
-                    'attachment_url' => $message->attachmentUrl(),
-                    'attachment_type' => $message->attachment_type,
-                    'created_at' => $message->created_at->toDateTimeString(),
-                ]
-            );
+            foreach ($tokens as $token) {
+                SendFcmNotification::dispatch(
+                    $token,
+                    '📢 رسالة جديدة من '.$sender->name,
+                    (string) $message->content,
+                    [
+                        'id' => $message->id,
+                        'name' => $sender->name,
+                        'sender_id' => $message->sender_id,
+                        'receiver_id' => $message->receiver_id,
+                        'content' => $message->content,
+                        'attachment_url' => $message->attachmentUrl(),
+                        'attachment_type' => $message->attachment_type,
+                        'created_at' => $message->created_at->toDateTimeString(),
+                    ]
+                );
+            }
         } catch (Throwable $exception) {
             Log::warning('Chat push notification was not queued: '.$exception->getMessage(), [
                 'message_id' => $message->id,

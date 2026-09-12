@@ -77,7 +77,9 @@
         "test:messages": "@php artisan test tests/Feature/Message",
         "test:messages:mysql": "@php artisan test --configuration=phpunit.messages-mysql.xml",
         "test:catalog": "@php artisan test tests/Feature/Catalog",
-        "test:catalog:mysql": "@php artisan test --configuration=phpunit.catalog-mysql.xml"
+        "test:catalog:mysql": "@php artisan test --configuration=phpunit.catalog-mysql.xml",
+        "test:notifications": "@php artisan test tests/Feature/Notification",
+        "test:notifications:mysql": "@php artisan test --configuration=phpunit.notifications-mysql.xml"
     },
     "extra": {
         "laravel": {

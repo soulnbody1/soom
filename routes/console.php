@@ -9,6 +9,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 app(Schedule::class)->command('reels:cleanup')->hourly();
+app(Schedule::class)->command('notifications:prune')->dailyAt('03:15')->withoutOverlapping();
 app(Schedule::class)->command('auction:run-operations')->everyMinute()->withoutOverlapping();
 app(Schedule::class)->command('auction:run-deadlines')->everyMinute()->withoutOverlapping();
 app(Schedule::class)->job(new DispatchAuctionOutboxJob)->everyMinute()->withoutOverlapping();

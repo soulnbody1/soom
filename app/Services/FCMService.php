@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use Google\Client;
+use Google\Service\Exception as GoogleServiceException;
 use Google\Service\FirebaseCloudMessaging;
 use Google\Service\FirebaseCloudMessaging\Message;
 use Google\Service\FirebaseCloudMessaging\Notification;
@@ -13,12 +14,16 @@ use RuntimeException;
 
 class FCMService
 {
+    private const DEAD_TOKEN_STATUSES = ['UNREGISTERED', 'INVALID_ARGUMENT', 'NOT_FOUND'];
+
     private ?FirebaseCloudMessaging $messaging = null;
 
     private ?string $projectId = null;
 
     public function sendToToken(string $token, string $title, string $body, array $data = []): void
     {
+        $messaging = $this->messaging();
+
         $request = new SendMessageRequest([
             'message' => new Message([
                 'token' => $token,
@@ -27,7 +32,33 @@ class FCMService
             ]),
         ]);
 
-        $this->messaging()->projects_messages->send('projects/'.$this->projectId, $request);
+        $messaging->projects_messages->send('projects/'.$this->projectId, $request);
+    }
+
+    public function isDeadTokenFailure(\Throwable $exception): bool
+    {
+        if (! $exception instanceof GoogleServiceException) {
+            return false;
+        }
+
+        if (in_array($exception->getCode(), [400, 404], true)) {
+            return true;
+        }
+
+        $message = strtoupper($exception->getMessage());
+
+        foreach (self::DEAD_TOKEN_STATUSES as $status) {
+            if (str_contains($message, $status)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function isConfigured(): bool
+    {
+        return is_readable($this->credentialsPath());
     }
 
     private function messaging(): FirebaseCloudMessaging
@@ -36,7 +67,7 @@ class FCMService
             return $this->messaging;
         }
 
-        $credentialsPath = (string) config('services.firebase.fcm.credentials');
+        $credentialsPath = $this->credentialsPath();
 
         if (! is_readable($credentialsPath)) {
             throw new RuntimeException('FCM credentials are not readable at '.$credentialsPath.'.');
@@ -55,5 +86,20 @@ class FCMService
         $this->projectId = (string) $credentials['project_id'];
 
         return $this->messaging = new FirebaseCloudMessaging($client);
+    }
+
+    private function credentialsPath(): string
+    {
+        $configured = (string) config('services.firebase.fcm.credentials');
+
+        if ($configured === '') {
+            return storage_path('app/firebase/credentials.json');
+        }
+
+        if (preg_match('#^(?:[A-Za-z]:[\\/]|[\\/])#', $configured) === 1) {
+            return $configured;
+        }
+
+        return base_path($configured);
     }
 }

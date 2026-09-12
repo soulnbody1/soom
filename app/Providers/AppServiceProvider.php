@@ -79,6 +79,7 @@ class AppServiceProvider extends ServiceProvider
             fn ($app): ContentReviewProvider => $app->make(ContentReviewProviderFactory::class)->make()
         );
 
+        $this->app->singleton(\App\Services\FCMService::class);
         $this->app->bind(OutboxNotifier::class, OutboxTopicRouter::class);
 
         $this->app->bind(ContentReviewEventPublisher::class, OutboxContentReviewEventPublisher::class);
@@ -116,6 +117,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureContentReviewRateLimiting();
         $this->configureAdRateLimiting();
         $this->configureCatalogRateLimiting();
+        $this->configureNotificationRateLimiting();
         $this->configureAuthRateLimiting();
         $this->configureChatRateLimiting();
         $this->configureProfileRateLimiting();
@@ -187,6 +189,17 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('profile-write', fn (Request $request): Limit => Limit::perHour(
             (int) config('users.rate_limits.profile_update_per_hour')
         )->by('profile-write:user:'.(int) ($request->user()?->id ?? 0)));
+    }
+
+    private function configureNotificationRateLimiting(): void
+    {
+        RateLimiter::for('notifications-read', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('notifications.rate_limits.read_per_minute')
+        )->by('notifications-read:user:'.(int) ($request->user()?->id ?? 0)));
+
+        RateLimiter::for('notifications-write', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('notifications.rate_limits.write_per_minute')
+        )->by('notifications-write:user:'.(int) ($request->user()?->id ?? 0)));
     }
 
     private function configureCatalogRateLimiting(): void

@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Message\ConversationController;
 use App\Http\Controllers\Message\MessageController;
+use App\Http\Controllers\Notification\DeviceTokenController;
 use App\Http\Controllers\Notification\NotificationController;
 use App\Http\Controllers\User\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -45,9 +46,17 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
     });
 
     Route::prefix('notifications')->group(function () {
-        Route::get('/', [NotificationController::class, 'index']);
-        Route::post('/mark-all-as-read', [NotificationController::class, 'markAsRead']);
-        Route::put('/{id}/read', [NotificationController::class, 'markSingleAsRead']);
+        Route::get('/', [NotificationController::class, 'index'])
+            ->middleware('throttle:notifications-read');
+        Route::post('/mark-all-as-read', [NotificationController::class, 'markAsRead'])
+            ->middleware('throttle:notifications-write');
+        Route::put('/{id}/read', [NotificationController::class, 'markSingleAsRead'])
+            ->whereUuid('id')->middleware('throttle:notifications-write');
+
+        Route::post('/device-token', [DeviceTokenController::class, 'store'])
+            ->middleware('throttle:notifications-write');
+        Route::delete('/device-token', [DeviceTokenController::class, 'destroy'])
+            ->middleware('throttle:notifications-write');
     });
 
     // ============= المستخدم =============

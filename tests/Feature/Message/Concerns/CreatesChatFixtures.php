@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Message\Concerns;
 
+use App\Models\DeviceToken;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -13,7 +14,17 @@ trait CreatesChatFixtures
 {
     protected function chatUser(array $overrides = []): User
     {
-        return User::factory()->create($overrides);
+        $user = User::factory()->create($overrides);
+
+        if (! empty($overrides['fcm_token'])) {
+            DeviceToken::query()->create([
+                'user_id' => $user->id,
+                'token' => $overrides['fcm_token'],
+                'last_used_at' => now(),
+            ]);
+        }
+
+        return $user;
     }
 
     protected function sendFixture(User $sender, User $receiver, array $overrides = []): Message

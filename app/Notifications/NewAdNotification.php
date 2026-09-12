@@ -26,22 +26,19 @@ class NewAdNotification extends Notification
 
     public function toArray($notifiable)
     {
-        $unreadCount = $notifiable->unreadNotifications()->count() + 1;
         return [
             'ad_id' => $this->ad->id,
             'title' => $this->ad->title,
             'category_id' => $this->ad->category_id,
             'message' => '📢 إعلان جديد تم إضافته في الفئة التي تهتم بها',
             'created_at' => now()->toDateTimeString(),
-            'unread_count' => $unreadCount,
-
         ];
     }
 
 
     public function toBroadcast($notifiable)
     {
-        $unreadCount = $notifiable->unreadNotifications()->count() + 1;
+        $unreadCount = $notifiable->unreadNotifications()->count();
         return new BroadcastMessage([
             'ad_id' => $this->ad->id,
             'title' => $this->ad->title,

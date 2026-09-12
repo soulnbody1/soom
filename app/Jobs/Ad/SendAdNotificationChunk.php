@@ -8,12 +8,16 @@ use App\Jobs\SendFcmNotification;
 use App\Models\Ad;
 use App\Models\User;
 use App\Notifications\NewAdNotification;
+use App\Services\Notification\DeviceTokenRegistry;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 final class SendAdNotificationChunk implements ShouldQueue
 {
@@ -23,12 +27,16 @@ final class SendAdNotificationChunk implements ShouldQueue
 
     public array $backoff = [10, 60, 300];
 
+    public int $timeout = 60;
+
     public function __construct(
         public readonly int $adId,
         public readonly array $userIds,
-    ) {}
+    ) {
+        $this->onQueue(config('notifications.queue'));
+    }
 
-    public function handle(): void
+    public function handle(DeviceTokenRegistry $devices): void
     {
         $ad = Ad::find($this->adId);
 
@@ -36,10 +44,13 @@ final class SendAdNotificationChunk implements ShouldQueue
             return;
         }
 
-        $recipients = User::query()
-            ->select('id', 'fcm_token')
-            ->whereIn('id', $this->userIds)
-            ->get();
+        $pending = array_values(array_diff($this->userIds, $this->alreadyNotified()));
+
+        if ($pending === []) {
+            return;
+        }
+
+        $recipients = User::query()->whereKey($pending)->get(['id']);
 
         if ($recipients->isEmpty()) {
             return;
@@ -47,17 +58,46 @@ final class SendAdNotificationChunk implements ShouldQueue
 
         Notification::send($recipients, new NewAdNotification($ad));
 
-        foreach ($recipients as $recipient) {
-            if (! $recipient->fcm_token) {
-                continue;
-            }
+        $this->push($ad, $devices->tokensForMany($recipients->pluck('id')->all()));
+    }
 
-            SendFcmNotification::dispatch(
-                $recipient->fcm_token,
-                '📢 إعلان جديد',
-                $ad->title,
-                ['ad_id' => $ad->id, 'category_id' => $ad->category_id],
-            );
+    public function failed(Throwable $exception): void
+    {
+        Log::warning('Ad notification chunk failed: '.$exception->getMessage(), [
+            'ad_id' => $this->adId,
+            'recipients' => count($this->userIds),
+        ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function alreadyNotified(): array
+    {
+        return DatabaseNotification::query()
+            ->where('notifiable_type', User::class)
+            ->whereIn('notifiable_id', $this->userIds)
+            ->where('type', NewAdNotification::class)
+            ->where('data->ad_id', $this->adId)
+            ->pluck('notifiable_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  array<int, list<string>>  $tokensByUser
+     */
+    private function push(Ad $ad, array $tokensByUser): void
+    {
+        foreach ($tokensByUser as $tokens) {
+            foreach ($tokens as $token) {
+                SendFcmNotification::dispatch(
+                    $token,
+                    '📢 إعلان جديد',
+                    $ad->title,
+                    ['ad_id' => $ad->id, 'category_id' => $ad->category_id],
+                );
+            }
         }
     }
 }

@@ -24,7 +24,12 @@ class SendAdNotification implements ShouldQueue
 
     public array $backoff = [10, 60, 300];
 
-    public function __construct(public Ad $ad) {}
+    public int $timeout = 60;
+
+    public function __construct(public Ad $ad)
+    {
+        $this->onQueue(config('notifications.queue'));
+    }
 
     public function handle(
         CategoryTreeResolver $categories,

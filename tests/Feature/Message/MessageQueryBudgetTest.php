@@ -18,7 +18,7 @@ final class MessageQueryBudgetTest extends MessageTestCase
 
     private const SEARCH_BUDGET = 4;
 
-    private const SEND_BUDGET = 10;
+    private const SEND_BUDGET = 11;
 
     private const MARK_AS_READ_BUDGET = 3;
 
