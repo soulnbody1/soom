@@ -17,6 +17,7 @@ use App\Models\Category;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\Message;
+use App\Models\Support\SupportTicket;
 use App\Models\State;
 use App\Policies\AdPolicy;
 use App\Policies\AdReelPolicy;
@@ -29,6 +30,7 @@ use App\Policies\Auction\AuctionSettlementPolicy;
 use App\Policies\Auction\PaymentSubmissionPolicy;
 use App\Policies\Auction\SellerPayoutPolicy;
 use App\Policies\MessagePolicy;
+use App\Policies\Support\SupportTicketPolicy;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use App\Services\Ad\Support\GeoNameResolver;
@@ -113,6 +115,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Ad::class, AdPolicy::class);
         Gate::policy(AdReel::class, AdReelPolicy::class);
         Gate::policy(Message::class, MessagePolicy::class);
+        Gate::policy(SupportTicket::class, SupportTicketPolicy::class);
 
         $this->invalidateAdLookupCaches();
 
@@ -127,6 +130,28 @@ class AppServiceProvider extends ServiceProvider
         $this->configureChatRateLimiting();
         $this->configureProfileRateLimiting();
         $this->configureSellerRatingRateLimiting();
+        $this->configureSupportRateLimiting();
+    }
+
+    private function configureSupportRateLimiting(): void
+    {
+        $userKey = fn (Request $request): string => (string) (int) ($request->user()?->id ?? 0);
+
+        RateLimiter::for('support-read', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('support_chat.rate_limits.read_per_minute')
+        )->by('support-read:user:'.$userKey($request)));
+
+        RateLimiter::for('support-create', fn (Request $request): Limit => Limit::perHour(
+            (int) config('support_chat.rate_limits.create_per_hour')
+        )->by('support-create:user:'.$userKey($request)));
+
+        RateLimiter::for('support-message', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('support_chat.rate_limits.message_per_minute')
+        )->by('support-message:user:'.$userKey($request)));
+
+        RateLimiter::for('support-admin-write', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('support_chat.rate_limits.admin_write_per_minute')
+        )->by('support-admin-write:user:'.$userKey($request)));
     }
 
     private function registerTelescope(): void

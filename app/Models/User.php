@@ -142,4 +142,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(SellerRating::class, 'reviewer_id');
     }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(\App\Models\Support\SupportTicket::class, 'requester_id');
+    }
+
+    public function assignedSupportTickets(): HasMany
+    {
+        return $this->hasMany(\App\Models\Support\SupportTicket::class, 'assigned_to');
+    }
 }

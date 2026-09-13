@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Models\Support\SupportTicket;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function (User $user, int $id) {
@@ -20,3 +21,13 @@ Broadcast::channel('presence.online-users', function (User $user) {
 Broadcast::channel('conversations.{userId}', function ($user, $userId) {
     return (int) $user->id === (int) $userId;
 });
+
+Broadcast::channel('support.ticket.{publicId}', function (User $user, string $publicId) {
+    if ($user->role === 'admin') {
+        return true;
+    }
+
+    return SupportTicket::query()->where('public_id', $publicId)->where('requester_id', $user->id)->exists();
+});
+
+Broadcast::channel('support.queue', fn (User $user): bool => $user->role === 'admin');
