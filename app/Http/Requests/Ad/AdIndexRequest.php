@@ -17,6 +17,7 @@ use Illuminate\Validation\Rule;
 #[QueryParameter('state_id', description: 'تصفية الإعلانات بمعرّف المحافظة.')]
 #[QueryParameter('city_id', description: 'تصفية الإعلانات بمعرّف المدينة.')]
 #[QueryParameter('category_id', description: 'تصفية الإعلانات بمعرّف التصنيف، ويشمل تصنيفاته الفرعية.')]
+#[QueryParameter('user_id', description: 'تصفية الإعلانات بمعرّف البائع، لعرض إعلانات بائع واحد في صفحته العامة.')]
 #[QueryParameter('attributes', description: 'تصفية الإعلانات بالخصائص، بالشكل attributes[معرّف الخاصية]=قيمة أو قيم مفصولة بفاصلة.')]
 #[QueryParameter('title', description: 'كلمة البحث في عنوان الإعلان ووصفه وأسماء المواقع، ويمكن دمجها مع باقي الفلاتر.')]
 final class AdIndexRequest extends FormRequest
@@ -39,6 +40,7 @@ final class AdIndexRequest extends FormRequest
             'state_id' => ['nullable', 'integer', 'min:1'],
             'city_id' => ['nullable', 'integer', 'min:1'],
             'category_id' => ['nullable', 'integer', 'min:1'],
+            'user_id' => ['nullable', 'integer', 'min:1'],
             'attributes' => ['nullable', 'array'],
             'title' => ['nullable', 'string', 'max:80'],
         ];

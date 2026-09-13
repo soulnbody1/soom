@@ -10,7 +10,7 @@ use App\Http\Controllers\Support\SupportReadController;
 use App\Http\Controllers\Support\SupportTicketController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'role:user', 'throttle:support-read'])->prefix('soom/support')->group(function () {
+Route::middleware(['auth:sanctum', 'role:admin,user', 'throttle:support-read'])->prefix('soom/support')->group(function () {
     Route::get('/categories', SupportCategoryController::class);
     Route::get('/tickets', [SupportTicketController::class, 'index']);
     Route::post('/tickets', [SupportTicketController::class, 'store'])->middleware('throttle:support-create');

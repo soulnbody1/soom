@@ -74,6 +74,10 @@ final class AdListingQuery
                 )
             )
             ->when(
+                $filters->userId !== null,
+                fn (Builder $q): Builder => $q->where('user_id', $filters->userId)
+            )
+            ->when(
                 $filters->attributes !== [],
                 fn (Builder $q): Builder => $this->whereMatchesEveryAttribute($q, $filters->attributes)
             )
