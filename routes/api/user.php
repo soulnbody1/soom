@@ -10,10 +10,13 @@ use App\Http\Controllers\Message\ConversationController;
 use App\Http\Controllers\Message\MessageController;
 use App\Http\Controllers\Notification\DeviceTokenController;
 use App\Http\Controllers\Notification\NotificationController;
+use App\Http\Controllers\User\AccountShellController;
 use App\Http\Controllers\User\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(function () {
+
+    Route::get('/account/shell', AccountShellController::class);
 
     // ============= الاعلانات =============
     Route::prefix('ads')->group(function () {

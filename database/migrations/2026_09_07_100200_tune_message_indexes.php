@@ -18,10 +18,10 @@ return new class extends Migration
         Schema::table('messages', function (Blueprint $table): void {
             $table->dropIndex('idx_messages_sender_thread');
             $table->dropIndex('idx_messages_receiver_thread');
-            $table->dropIndex('sender_id');
-            $table->dropIndex('receiver_id');
-            $table->dropIndex('is_read');
-            $table->dropIndex('created_at');
+            $table->dropIndex('messages_sender_id_index');
+            $table->dropIndex('messages_receiver_id_index');
+            $table->dropIndex('messages_is_read_index');
+            $table->dropIndex('messages_created_at_index');
         });
 
         Schema::table('message_deletions', function (Blueprint $table): void {
@@ -45,10 +45,10 @@ return new class extends Migration
                 'idx_messages_receiver_thread'
             );
 
-            $table->index('sender_id', 'sender_id');
-            $table->index('receiver_id', 'receiver_id');
-            $table->index('is_read', 'is_read');
-            $table->index('created_at', 'created_at');
+            $table->index('sender_id');
+            $table->index('receiver_id');
+            $table->index('is_read');
+            $table->index('created_at');
         });
 
         Schema::table('messages', function (Blueprint $table): void {
