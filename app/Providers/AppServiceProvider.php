@@ -126,6 +126,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureAuthRateLimiting();
         $this->configureChatRateLimiting();
         $this->configureProfileRateLimiting();
+        $this->configureSellerRatingRateLimiting();
     }
 
     private function registerTelescope(): void
@@ -211,6 +212,17 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('profile-write', fn (Request $request): Limit => Limit::perHour(
             (int) config('users.rate_limits.profile_update_per_hour')
         )->by('profile-write:user:'.(int) ($request->user()?->id ?? 0)));
+    }
+
+    private function configureSellerRatingRateLimiting(): void
+    {
+        RateLimiter::for('seller-rating-read', fn (Request $request): Limit => Limit::perMinute(
+            (int) config('seller_ratings.rate_limits.read_per_minute')
+        )->by('seller-rating-read:'.$request->ip()));
+
+        RateLimiter::for('seller-rating-write', fn (Request $request): Limit => Limit::perHour(
+            (int) config('seller_ratings.rate_limits.write_per_hour')
+        )->by('seller-rating-write:user:'.(int) ($request->user()?->id ?? 0)));
     }
 
     private function configureNotificationRateLimiting(): void

@@ -132,4 +132,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(\App\Models\Auction\AuctionParticipant::class, 'user_id');
     }
+
+    public function receivedSellerRatings(): HasMany
+    {
+        return $this->hasMany(SellerRating::class, 'seller_id');
+    }
+
+    public function givenSellerRatings(): HasMany
+    {
+        return $this->hasMany(SellerRating::class, 'reviewer_id');
+    }
 }
