@@ -28,6 +28,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'logo',
+        'cover',
         'birth_date',
         'gender',
         'country_id',
@@ -101,6 +102,19 @@ class User extends Authenticatable
     }
 
     public function getLogoAttribute($value)
+    {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('spaces');
+
+        return $value ? $disk->url($value) : null;
+    }
+
+    /**
+     * The cover is stored as a disk path like `users/abc.png`, the same as the
+     * logo. Without this it left the API as that bare path, which is not a URL
+     * any client can render.
+     */
+    public function getCoverAttribute($value)
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');

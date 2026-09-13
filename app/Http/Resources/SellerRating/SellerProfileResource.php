@@ -20,6 +20,7 @@ final class SellerProfileResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'logo' => $this->logo,
+            'cover' => $this->cover,
             'location' => implode(', ', array_filter([
                 $this->country?->name,
                 $this->state?->name,

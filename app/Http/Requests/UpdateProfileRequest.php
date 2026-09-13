@@ -19,6 +19,7 @@ final class UpdateProfileRequest extends FormRequest
             'name' => ['nullable', 'string', 'max:255'],
             'phone' => ['prohibited'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'birth_date' => ['nullable', 'date'],
             'gender' => ['nullable', 'in:male,female'],
             'country_id' => ['nullable', 'exists:countries,id'],

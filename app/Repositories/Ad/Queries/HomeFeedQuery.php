@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Cache;
 
 final class HomeFeedQuery
 {
-    private const ADS_PER_CATEGORY = 4;
+    private const ADS_PER_CATEGORY = 10;
 
     private const CACHE_PREFIX = 'ads:home:cards-v3:v';
 

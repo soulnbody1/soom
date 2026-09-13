@@ -16,6 +16,7 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'phone' => $this->phone,
             'logo' => $this->logo,
+            'cover' => $this->cover,
             'birth_date' => $this->birth_date,
             'gender' => $this->gender,
             'address' => implode(',', array_filter([
