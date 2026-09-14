@@ -102,7 +102,7 @@ final class ConversationThreadsQuery
 
         $messages = Message::query()
             ->select(['id', 'sender_id', 'content', 'ad_id', 'created_at'])
-            ->with(['ad:id,title,description,price', 'ad.images' => fn ($query) => $query->select('ad_id', 'image_path')->limit(1)])
+            ->with(['ad:id,public_id,title,description,price,deleted_at', 'ad.images' => fn ($query) => $query->select('ad_id', 'image_path')->limit(1)])
             ->whereIn('id', $rows->pluck('last_message_id')->all())
             ->get()
             ->keyBy('id');
@@ -133,8 +133,8 @@ final class ConversationThreadsQuery
                         'content' => $message->content,
                         'from_me' => $message->sender_id == $userId,
                         'created_at' => $message->created_at->format('Y-m-d H:i'),
-                        'ad' => $message->ad ? (object) [
-                            'id' => $message->ad->id,
+                        'ad' => $message->ad && ! $message->ad->trashed() ? (object) [
+                            'id' => $message->ad->public_id,
                             'title' => $message->ad->title,
                             'description' => $message->ad->description,
                             'price' => $message->ad->price,

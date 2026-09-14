@@ -54,8 +54,9 @@ class MessageSent implements ShouldBroadcast
             'attachment_url' => $this->message->attachmentUrl() ?? null,
             'attachment_type' => $this->message->attachment_type ?? null,
             'is_read' => $this->is_read,
-            'ad' => $this->message->ad ? [
-                'id' => $this->message->ad->id,
+            'ad_id' => $this->message->ad?->public_id,
+            'ad' => $this->message->ad && ! $this->message->ad->trashed() ? [
+                'id' => $this->message->ad->public_id,
                 'title' => $this->message->ad->title,
                 'description' => $this->message->ad->description,
                 'price' => $this->message->ad->price,

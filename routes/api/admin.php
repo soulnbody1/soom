@@ -92,9 +92,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::prefix('ads')->group(function () {
         Route::get('/', [AdminAdController::class, 'index']);
         Route::get('/search', [AdminAdController::class, 'search']);
-        Route::delete('/force-delete/{id}', [AdminAdController::class, 'forceDelete']);
-        Route::put('/toggle-block/{id}', [AdminAdController::class, 'toggleBlock']);
-        Route::put('/toggle-featured/{id}', [AdminAdController::class, 'toggleFeatured']);
+        Route::delete('/force-delete/{ad}', [AdminAdController::class, 'forceDelete'])->whereUlid('ad');
+        Route::put('/toggle-block/{ad}', [AdminAdController::class, 'toggleBlock'])->whereUlid('ad');
+        Route::put('/toggle-featured/{ad}', [AdminAdController::class, 'toggleFeatured'])->whereUlid('ad');
     });
 
     Route::prefix('attribute-options')->group(function () {

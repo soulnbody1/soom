@@ -9,7 +9,7 @@ class AdResource extends JsonResource
     public function toArray($request): array
     {
         return [
-            'id' => $this->id,
+            'id' => $this->public_id,
             'title' => $this->title,
             'description' => $this->description,
             'price' => $this->price,

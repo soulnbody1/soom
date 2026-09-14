@@ -18,9 +18,12 @@ class FavoriteRequest extends FormRequest
     {
         return [
             'ad_id' => [
+                'bail',
                 'required',
-                'integer',
-                Rule::exists('ads', 'id')->whereNull('deleted_at'),
+                'string',
+                'size:26',
+                'ulid',
+                Rule::exists('ads', 'public_id')->whereNull('deleted_at'),
             ],
         ];
     }
@@ -28,7 +31,7 @@ class FavoriteRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'ad_id.required' => 'رقم الإعلان مطلوب',
+            'ad_id.required' => 'معرّف الإعلان مطلوب',
             'ad_id.exists' => 'هذا الإعلان غير موجود',
         ];
     }

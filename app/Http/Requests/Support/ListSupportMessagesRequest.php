@@ -15,7 +15,7 @@ final class ListSupportMessagesRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['before_id' => ['nullable', 'integer', 'min:1'], 'per_page' => ['nullable', 'integer', 'between:1,100']];
+        return ['before_id' => ['nullable', 'string', 'size:26', 'ulid'], 'per_page' => ['nullable', 'integer', 'between:1,100']];
     }
 
     public function perPage(): int

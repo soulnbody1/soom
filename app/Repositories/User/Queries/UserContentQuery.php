@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class UserContentQuery
 {
-    private const AD_COLUMNS = ['id', 'user_id', 'category_id', 'title', 'price', 'city_id', 'is_featured', 'created_at', 'deleted_at'];
+    private const AD_COLUMNS = ['id', 'public_id', 'user_id', 'category_id', 'title', 'price', 'city_id', 'is_featured', 'created_at', 'deleted_at'];
 
     private const AD_RELATIONS = ['category:id,name', 'city:id,name', 'images:id,ad_id,image_path'];
 

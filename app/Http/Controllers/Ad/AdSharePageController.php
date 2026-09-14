@@ -10,8 +10,8 @@ use Illuminate\Contracts\View\View;
 
 class AdSharePageController extends Controller
 {
-    public function __invoke(int $id): View
+    public function __invoke(Ad $ad): View
     {
-        return view('share.show', ['ad' => Ad::with('images')->findOrFail($id)]);
+        return view('share.show', ['ad' => $ad->load('images')]);
     }
 }

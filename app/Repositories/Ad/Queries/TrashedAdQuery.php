@@ -9,16 +9,24 @@ use Illuminate\Support\Facades\Auth;
 
 final class TrashedAdQuery
 {
-    public function ownedOrFail(int $adId): Ad
+    public function ownedActiveOrFail(string $publicId): Ad
     {
-        return Ad::withTrashed()
-            ->where('id', $adId)
+        return Ad::query()
+            ->where('public_id', $publicId)
             ->where('user_id', Auth::id())
             ->firstOrFail();
     }
 
-    public function findOrFail(int $adId): Ad
+    public function ownedOrFail(string $publicId): Ad
     {
-        return Ad::withTrashed()->where('id', $adId)->firstOrFail();
+        return Ad::withTrashed()
+            ->where('public_id', $publicId)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+    }
+
+    public function findOrFail(string $publicId): Ad
+    {
+        return Ad::withTrashed()->where('public_id', $publicId)->firstOrFail();
     }
 }

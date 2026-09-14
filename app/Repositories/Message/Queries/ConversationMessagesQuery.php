@@ -19,7 +19,7 @@ final class ConversationMessagesQuery
     {
         return $this->between($userId, $partnerId)
             ->select(['id', 'sender_id', 'receiver_id', 'content', 'attachment_path', 'attachment_type', 'is_read', 'ad_id', 'created_at'])
-            ->with(['ad:id,title,description,price', 'ad.images' => fn ($query) => $query->select('ad_id', 'image_path')->limit(1)])
+            ->with(['ad:id,public_id,title,description,price,deleted_at', 'ad.images' => fn ($query) => $query->select('ad_id', 'image_path')->limit(1)])
             ->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString();

@@ -27,7 +27,7 @@ final class AdminUserConversationResource extends JsonResource
                 'has_attachment' => $message->attachment_type !== null,
                 'from_user' => $message->sender_id === $this->resource['viewer_id'],
                 'is_read' => (bool) $message->is_read,
-                'ad' => $message->ad ? ['id' => $message->ad->id, 'title' => $message->ad->title] : null,
+                'ad' => $message->ad ? ['id' => $message->ad->public_id, 'title' => $message->ad->title] : null,
                 'created_at' => $message->created_at?->toIso8601String(),
             ],
             'messages_count' => $this->resource['messages_count'],

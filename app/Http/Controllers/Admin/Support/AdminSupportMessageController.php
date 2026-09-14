@@ -30,15 +30,25 @@ final class AdminSupportMessageController extends Controller
 
     #[Endpoint(title: 'عرض محادثة التذكرة للموظف', description: 'يعرض الرسائل العامة والملاحظات الداخلية للموظف فقط، مرتبة من الأحدث إلى الأقدم مع تحميل تدريجي باستخدام before_id.')]
     #[PathParameter('ticket', description: 'المعرّف العام ULID للتذكرة.')]
-    #[QueryParameter('before_id', description: 'المعرّف الرقمي الداخلي لجلب الرسائل الأقدم منه.')]
+    #[QueryParameter('before_id', description: 'المعرّف العام ULID لأقدم رسالة محمّلة لجلب ما قبلها.')]
     #[QueryParameter('per_page', description: 'عدد الرسائل، والقيمة الافتراضية 50 والحد الأقصى 100.')]
     #[Response(200, description: 'محادثة التذكرة شاملة الملاحظات الداخلية.')]
     #[Response(403, description: 'الحساب ليس مديرًا.')]
     #[Response(404, description: 'التذكرة غير موجودة.')]
     public function index(ListSupportMessagesRequest $request, SupportTicket $ticket): AnonymousResourceCollection
     {
+        $before = $request->validated('before_id');
+        $cursorId = $before === null ? null : SupportMessage::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('public_id', $before)
+            ->value('id');
+
+        if ($before !== null && $cursorId === null) {
+            abort(404);
+        }
+
         $messages = SupportMessage::query()->with('author')->where('ticket_id', $ticket->id)
-            ->when($request->validated('before_id'), fn ($query, $id) => $query->where('id', '<', $id))
+            ->when($cursorId, fn ($query, $id) => $query->where('id', '<', $id))
             ->orderByDesc('id')->paginate($request->perPage());
 
         return SupportMessageResource::collection($messages)->additional(['success' => true, 'message' => 'تم جلب محادثة الدعم بنجاح.']);

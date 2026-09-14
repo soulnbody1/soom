@@ -19,7 +19,7 @@ final class AdminUserMessageResource extends JsonResource
             'attachment_url' => $this->attachmentUrl(),
             'attachment_type' => $this->attachment_type,
             'is_read' => (bool) $this->is_read,
-            'ad' => $this->ad ? ['id' => $this->ad->id, 'title' => $this->ad->title, 'price' => $this->ad->price] : null,
+            'ad' => $this->ad ? ['id' => $this->ad->public_id, 'title' => $this->ad->title, 'price' => $this->ad->price] : null,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

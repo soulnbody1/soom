@@ -19,12 +19,12 @@ final class ReelFeedQuery
     private const WINDOW_DAYS = 1;
 
     private const FEED_RELATIONS = [
-        'ad:id,user_id,category_id,state_id,title,description,price',
+        'ad:id,public_id,user_id,category_id,state_id,title,description,price',
         'ad.user:id,name,logo,phone',
     ];
 
     private const OWN_RELATIONS = [
-        'ad:id,user_id,category_id,title,description,price',
+        'ad:id,public_id,user_id,category_id,title,description,price',
         'ad.user:id,name,logo',
     ];
 

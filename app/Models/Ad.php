@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPublicId;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class Ad extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasPublicId, SoftDeletes;
 
     protected $fillable = [
         'user_id',

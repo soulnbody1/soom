@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Resources\Notification;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class NotificationResource extends JsonResource
 {
     public function toArray($request): array
     {
         $data = is_array($this->data) ? $this->data : [];
+        $adId = $data['ad_id'] ?? null;
+        $adId = is_string($adId) && Str::isUlid($adId) ? $adId : null;
 
         return [
             'id' => $this->id,
@@ -21,7 +24,7 @@ class NotificationResource extends JsonResource
             'message' => $data['message'] ?? null,
 
             'auction_id' => $data['auction_id'] ?? null,
-            'ad_id' => $data['ad_id'] ?? null,
+            'ad_id' => $adId,
             'category_id' => $data['category_id'] ?? null,
 
             'your_bid' => $data['your_bid'] ?? null,

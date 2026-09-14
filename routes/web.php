@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return response()->json(['status' => 'ok']);
 });
-Route::get('/share/show/{id}', AdSharePageController::class)->name('share.show');
+Route::get('/share/show/{ad}', AdSharePageController::class)->whereUlid('ad')->name('share.show');
 Route::get('/open/soom', function () {
     return view('share.soom');
 })->name('open.soom');

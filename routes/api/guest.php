@@ -9,6 +9,7 @@ use App\Http\Controllers\Attribute\AttributeController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\CharitySystemController;
+use App\Http\Controllers\HomePromotionController;
 use App\Http\Controllers\Location\CityController;
 use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Location\StateController;
@@ -27,7 +28,7 @@ Route::prefix('soom')->group(function () {
             Route::get('/', [AdListingController::class, 'index']);
             Route::get('/reels', [AdReelViewController::class, 'reels']);
             Route::get('/reels/{id}', [AdReelViewController::class, 'ReelsForCategories']);
-            Route::get('/{id}', [AdController::class, 'show']);
+            Route::get('/{ad}', [AdController::class, 'show'])->whereUlid('ad');
             Route::get('/category/{id}', [AdListingController::class, 'byCategory']);
         });
     });
@@ -63,4 +64,5 @@ Route::prefix('soom')->group(function () {
     });
 
     Route::get('home', [AdListingController::class, 'home'])->middleware('throttle:ads-public');
+    Route::get('home/promotions', HomePromotionController::class)->middleware('throttle:catalog-public');
 });

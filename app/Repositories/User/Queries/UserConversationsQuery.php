@@ -65,7 +65,7 @@ final class UserConversationsQuery
             ->select(['id', 'sender_id', 'receiver_id', 'content', 'attachment_path', 'attachment_type', 'is_read', 'ad_id', 'created_at'])
             ->where(fn ($query) => $query->where('sender_id', $user->id)->where('receiver_id', $partner->id))
             ->orWhere(fn ($query) => $query->where('sender_id', $partner->id)->where('receiver_id', $user->id))
-            ->with('ad:id,title,price')
+            ->with('ad:id,public_id,title,price')
             ->latest('id')
             ->paginate($perPage)
             ->withQueryString();
@@ -80,7 +80,7 @@ final class UserConversationsQuery
         $messages = Message::query()
             ->select(['id', 'sender_id', 'receiver_id', 'content', 'attachment_type', 'is_read', 'ad_id', 'created_at'])
             ->whereIn('id', $rows->pluck('last_message_id')->all())
-            ->with('ad:id,title')
+            ->with('ad:id,public_id,title')
             ->get()
             ->keyBy('id');
 

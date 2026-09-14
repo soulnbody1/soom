@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Support;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class CreateSupportTicketRequest extends FormRequest
 {
@@ -30,7 +31,13 @@ final class CreateSupportTicketRequest extends FormRequest
             'message' => ['required', 'string', 'max:'.config('support_chat.message_max_length')],
             'client_message_id' => ['nullable', 'uuid'],
             'context_type' => ['nullable', 'string', 'in:auction,ad,payment,account'],
-            'context_id' => ['nullable', 'string', 'max:64'],
+            'context_id' => [
+                'bail',
+                'nullable',
+                'string',
+                'max:64',
+                Rule::when($this->input('context_type') === 'ad', ['size:26', 'ulid', 'exists:ads,public_id']),
+            ],
         ];
     }
 }

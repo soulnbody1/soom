@@ -12,7 +12,7 @@ class FavoriteResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'ad_id' => $this->ad_id,
+            'ad_id' => $this->ad?->public_id,
             'ad' => AdResource::make($this->whenLoaded('ad')),
             'added_at' => $this->created_at?->diffForHumans(),
         ];

@@ -10,6 +10,7 @@ use App\Http\Controllers\Message\ConversationController;
 use App\Http\Controllers\Message\MessageController;
 use App\Http\Controllers\Notification\DeviceTokenController;
 use App\Http\Controllers\Notification\NotificationController;
+use App\Http\Controllers\User\AccountDashboardSummaryController;
 use App\Http\Controllers\User\AccountShellController;
 use App\Http\Controllers\User\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -17,16 +18,17 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(function () {
 
     Route::get('/account/shell', AccountShellController::class);
+    Route::get('/account/dashboard-summary', AccountDashboardSummaryController::class);
 
     // ============= الاعلانات =============
     Route::prefix('ads')->group(function () {
         Route::post('/', [AdController::class, 'store'])->middleware('throttle:ads-write');
-        Route::put('/my/{ad}', [AdController::class, 'update'])->middleware('throttle:ads-write');
+        Route::put('/my/{ad}', [AdController::class, 'update'])->whereUlid('ad')->middleware('throttle:ads-write');
         Route::post('/ad-reel-views', [AdReelViewController::class, 'store'])->middleware('throttle:ads-engagement');
         Route::get('/my', [MyAdController::class, 'index']);
-        Route::delete('/my/soft-delete/{ad}', [MyAdController::class, 'destroy']);
-        Route::delete('/my/force-delete/{ad}', [MyAdController::class, 'forceDelete']);
-        Route::post('/my/restore/{id}', [MyAdController::class, 'restore']);
+        Route::delete('/my/soft-delete/{ad}', [MyAdController::class, 'destroy'])->whereUlid('ad');
+        Route::delete('/my/force-delete/{ad}', [MyAdController::class, 'forceDelete'])->whereUlid('ad');
+        Route::post('/my/restore/{ad}', [MyAdController::class, 'restore'])->whereUlid('ad');
         Route::delete('/my/reel/{id}', [AdReelViewController::class, 'delete']);
     });
 
@@ -34,7 +36,7 @@ Route::middleware(['auth:sanctum', 'role:admin,user'])->prefix('soom')->group(fu
     Route::prefix('favorites')->group(function () {
         Route::get('/', [FavoriteController::class, 'index']);
         Route::post('/', [FavoriteController::class, 'store'])->middleware('throttle:ads-engagement');
-        Route::delete('/{ad}', [FavoriteController::class, 'destroy'])->middleware('throttle:ads-engagement');
+        Route::delete('/{ad}', [FavoriteController::class, 'destroy'])->whereUlid('ad')->middleware('throttle:ads-engagement');
     });
 
     // ============= الرسائل =============

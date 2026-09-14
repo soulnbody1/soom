@@ -37,13 +37,13 @@ final class SendAdNotificationChunk implements ShouldQueue
 
     public function handle(PushDispatcher $push): void
     {
-        $ad = Ad::query()->find($this->adId, ['id', 'title', 'category_id']);
+        $ad = Ad::query()->find($this->adId, ['id', 'public_id', 'title', 'category_id']);
 
         if ($ad === null || $this->userIds === []) {
             return;
         }
 
-        $pending = array_values(array_diff($this->userIds, $this->alreadyNotified()));
+        $pending = array_values(array_diff($this->userIds, $this->alreadyNotified((string) $ad->public_id)));
 
         if ($pending === []) {
             return;
@@ -58,14 +58,14 @@ final class SendAdNotificationChunk implements ShouldQueue
         $recipientIds = $recipients->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
         Notification::send($recipients, new NewAdNotification(
-            (int) $ad->id,
+            (string) $ad->public_id,
             (string) $ad->title,
             (int) $ad->category_id,
             $this->unreadCountsAfterDelivery($recipientIds)
         ));
 
         $push->toUsers($recipientIds, '📢 إعلان جديد', (string) $ad->title, [
-            'ad_id' => $ad->id,
+            'ad_id' => $ad->public_id,
             'category_id' => $ad->category_id,
         ]);
     }
@@ -78,13 +78,13 @@ final class SendAdNotificationChunk implements ShouldQueue
         ]);
     }
 
-    private function alreadyNotified(): array
+    private function alreadyNotified(string $adPublicId): array
     {
         return DatabaseNotification::query()
             ->where('notifiable_type', User::class)
             ->whereIn('notifiable_id', $this->userIds)
             ->where('type', NewAdNotification::class)
-            ->where('data->ad_id', $this->adId)
+            ->where('data->ad_id', $adPublicId)
             ->pluck('notifiable_id')
             ->map(static fn ($id): int => (int) $id)
             ->all();

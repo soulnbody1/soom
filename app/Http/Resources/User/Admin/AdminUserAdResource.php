@@ -12,7 +12,7 @@ final class AdminUserAdResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
+            'id' => $this->public_id,
             'title' => $this->title,
             'price' => $this->price,
             'category' => $this->category?->name,

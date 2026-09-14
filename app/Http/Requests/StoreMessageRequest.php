@@ -26,7 +26,7 @@ class StoreMessageRequest extends FormRequest
                 Rule::notIn([(int) $this->user()?->id]),
                 'exists:users,id',
             ],
-            'ad_id' => ['nullable', 'integer', 'exists:ads,id'],
+            'ad_id' => ['bail', 'nullable', 'string', 'size:26', 'ulid', Rule::exists('ads', 'public_id')->whereNull('deleted_at')],
             'content' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH, 'required_without:file'],
             'TemporaryCode' => ['nullable', 'string', 'max:100'],
             'file' => ['nullable', 'file', 'mimes:jpeg,png,jpg,pdf,mp3,wav,mp4,zip', 'max:15360', 'required_without:content'],
@@ -50,7 +50,9 @@ class StoreMessageRequest extends FormRequest
     public function payload(): array
     {
         return [
-            'ad_id' => $this->input('ad_id') !== null ? (int) $this->input('ad_id') : null,
+            'ad_id' => $this->input('ad_id') !== null
+                ? \App\Models\Ad::query()->where('public_id', $this->input('ad_id'))->value('id')
+                : null,
             'content' => $this->input('content'),
             'temporary_code' => $this->input('TemporaryCode'),
             'file' => $this->file('file') instanceof UploadedFile ? $this->file('file') : null,

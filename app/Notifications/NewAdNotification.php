@@ -11,7 +11,7 @@ class NewAdNotification extends Notification
     use Queueable;
 
     public function __construct(
-        protected int $adId,
+        protected string $adId,
         protected string $adTitle,
         protected int $categoryId,
         protected array $unreadCounts = [],

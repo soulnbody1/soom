@@ -40,7 +40,7 @@ class Message extends Model
 
     public function ad(): BelongsTo
     {
-        return $this->belongsTo(Ad::class, 'ad_id');
+        return $this->belongsTo(Ad::class, 'ad_id')->withTrashed();
     }
 
     public function attachmentUrl(): ?string

@@ -8,12 +8,13 @@ use App\Models\Ad;
 
 final class AdDetailQuery
 {
-    public function findOrFail(int $adId, ?object $viewer): Ad
+    public function findOrFail(string $publicId, ?object $viewer): Ad
     {
         return Ad::query()
             ->with(Ad::$defaultRelations)
             ->withCount('views')
             ->withIsFavorite($viewer)
-            ->findOrFail($adId);
+            ->where('public_id', $publicId)
+            ->firstOrFail();
     }
 }

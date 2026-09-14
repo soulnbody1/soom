@@ -10,7 +10,7 @@
     <meta property="og:description" content="{{ Str::limit($ad->description, 150) }}">
     <meta property="og:image" content="{{ count($ad->images) > 0 ? $ad->images[0]->image_path : asset('default.jpg') }}">
 
-    <meta property="og:url" content="{{ route('share.show', $ad->id) }}">
+    <meta property="og:url" content="{{ route('share.show', $ad->public_id) }}">
     <meta property="og:type" content="website">
 </head>
 
@@ -18,7 +18,7 @@
     <h1>جاري فتح الإعلان...</h1>
     <p>{{ $ad->title }}</p>
     <script>
-        const adId = "{{ $ad->id }}";
+        const adId = "{{ $ad->public_id }}";
         const deeplink = "soom://ad/" + adId;
         const playStore = "https://play.google.com/store/apps/details?id=com.soulnbody.soom";
         const appStore =
