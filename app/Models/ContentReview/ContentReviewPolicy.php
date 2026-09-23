@@ -7,6 +7,7 @@ namespace App\Models\ContentReview;
 use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Domain\ContentReview\ValueObjects\ReviewPolicy;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\ContentReview\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class ContentReviewPolicy extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
     protected $table = 'content_review_policies';
 

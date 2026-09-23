@@ -7,6 +7,7 @@ namespace App\Models\Support;
 use App\Domain\Support\Enums\SupportTicketPriority;
 use App\Domain\Support\Enums\SupportTicketStatus;
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,9 +16,9 @@ use Illuminate\Support\Str;
 
 final class SupportTicket extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
-    protected $fillable = ['public_id', 'reference_number', 'requester_id', 'category_id', 'assigned_to', 'subject', 'status', 'priority', 'context_type', 'context_id', 'last_message_id', 'last_message_at', 'first_response_due_at', 'resolution_due_at', 'first_responded_at', 'resolved_at', 'closed_at', 'reopened_at', 'version'];
+    protected $fillable = ['market_id', 'public_id', 'reference_number', 'requester_id', 'category_id', 'assigned_to', 'subject', 'status', 'priority', 'context_type', 'context_id', 'last_message_id', 'last_message_at', 'first_response_due_at', 'first_responded_at', 'resolved_at', 'closed_at', 'reopened_at', 'version'];
 
     protected $casts = [
         'status' => SupportTicketStatus::class,

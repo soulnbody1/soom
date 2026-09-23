@@ -34,7 +34,15 @@ final class SellerPayoutController extends Controller
 {
     use ApiResponseTrait;
 
-    private const ADMIN_RELATIONS = ['auction:id,public_id,title', 'seller:id,name,phone', 'settlement', 'processor:id,name', 'payer:id,name'];
+    private const ADMIN_RELATIONS = [
+        'market:id,code,web_host',
+        'auction:id,market_id,public_id,title',
+        'auction.market:id,code,web_host',
+        'seller:id,name,phone',
+        'settlement',
+        'processor:id,name',
+        'payer:id,name',
+    ];
 
     #[Endpoint(
         title: 'عرض مستحقات البائعين',
@@ -245,7 +253,11 @@ final class SellerPayoutController extends Controller
             return $this->sendError(__('auction.errors.payout_not_found'), 404, 'payout_not_found');
         }
 
-        $sellerPayout->load('auction:id,public_id,title');
+        $sellerPayout->load([
+            'market:id,code,web_host',
+            'auction:id,market_id,public_id,title',
+            'auction.market:id,code,web_host',
+        ]);
 
         return $this->sendResponse(SellerPayoutResource::sellerPayload($sellerPayout), __('auction.messages.payout_fetched'));
     }

@@ -12,6 +12,7 @@ use App\Models\Auction\Auction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Services\Auction\Actions\CreatePaymentIntentAction;
 use App\Services\Auction\Actions\RefreshOnlinePaymentAction;
+use App\Support\Market\MarketContext;
 use App\Traits\ApiResponseTrait;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
@@ -70,7 +71,8 @@ final class OnlinePaymentController extends Controller
     public function show(
         string $paymentTransaction,
         AuctionPaymentRepository $payments,
-        RefreshOnlinePaymentAction $refresh
+        RefreshOnlinePaymentAction $refresh,
+        MarketContext $markets,
     ): JsonResponse {
         $transaction = $payments->findTransactionForUser($paymentTransaction, (int) Auth::id());
 
@@ -78,8 +80,13 @@ final class OnlinePaymentController extends Controller
             return $this->sendError(__('auction.errors.payment_transaction_not_found'), 404, 'payment_transaction_not_found');
         }
 
+        $refreshed = $markets->runInMarket(
+            (int) $transaction->market_id,
+            fn () => $refresh->execute($transaction)
+        );
+
         return $this->sendResponse(
-            new PaymentTransactionResource($refresh->execute($transaction)),
+            new PaymentTransactionResource($refreshed),
             __('auction.messages.online_payment_status_fetched')
         );
     }

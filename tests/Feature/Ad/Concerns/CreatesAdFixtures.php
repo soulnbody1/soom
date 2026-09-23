@@ -10,6 +10,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\User;
+use App\Support\Market\MarketContext;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -29,7 +30,7 @@ trait CreatesAdFixtures
 
     protected function country(): Country
     {
-        return $this->fixtureCountry ??= Country::factory()->create();
+        return $this->fixtureCountry ??= Country::query()->where('iso2', 'JO')->firstOrFail();
     }
 
     protected function state(): State
@@ -44,10 +45,17 @@ trait CreatesAdFixtures
 
     protected function category(?int $parentId = null, ?string $name = null): Category
     {
-        return Category::factory()->create(array_filter([
+        $category = Category::factory()->create(array_filter([
             'parent_id' => $parentId,
             'name' => $name,
         ], static fn ($value): bool => $value !== null));
+
+        $category->markets()->attach(app(MarketContext::class)->marketId(), [
+            'is_visible' => true,
+            'display_order' => (int) $category->display_order,
+        ]);
+
+        return $category;
     }
 
     protected function adUser(string $role = 'user'): User
@@ -65,10 +73,22 @@ trait CreatesAdFixtures
      */
     protected function makeAds(int $count, array $overrides = []): Collection
     {
-        return Ad::factory()
+        $ads = Ad::factory()
             ->count($count)
             ->atLocation($this->country(), $this->state(), $this->city())
             ->create($overrides);
+
+        $marketId = app(MarketContext::class)->marketId();
+        $ads->pluck('category')->filter()->unique('id')->each(
+            fn (Category $category) => $category->markets()->syncWithoutDetaching([
+                $marketId => [
+                    'is_visible' => true,
+                    'display_order' => (int) $category->display_order,
+                ],
+            ])
+        );
+
+        return $ads;
     }
 
     protected function makeAd(array $overrides = []): Ad

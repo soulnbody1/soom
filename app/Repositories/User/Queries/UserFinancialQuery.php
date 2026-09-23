@@ -10,14 +10,20 @@ use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
 use App\Models\Auction\PayoutDestination;
 use App\Models\Auction\RefundTransaction;
+use App\Models\Market;
 use App\Models\User;
+use App\Services\Market\MarketQuery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 final class UserFinancialQuery
 {
     private const AUCTION_RELATION = 'auction:id,public_id,title,currency_code,status';
+
+    /** @var array<int, string>|null */
+    private ?array $codes = null;
+
+    public function __construct(private readonly MarketQuery $markets) {}
 
     public function summary(User $user): array
     {
@@ -104,18 +110,31 @@ final class UserFinancialQuery
 
     private function groupTotals(string $table, string $column, int $userId, string $amountColumn = 'amount_minor'): array
     {
-        return DB::table($table)
-            ->selectRaw('status, currency_code, COUNT(*) as count, SUM('.$amountColumn.') as total_minor')
+        $codes = $this->marketCodes();
+
+        return $this->markets->table($table)
+            ->selectRaw('market_id, status, currency_code, COUNT(*) as count, SUM('.$amountColumn.') as total_minor')
             ->where($column, $userId)
-            ->groupBy('status', 'currency_code')
+            ->groupBy('market_id', 'status', 'currency_code')
+            ->orderBy('market_id')
+            ->orderBy('status')
             ->get()
             ->map(fn (object $row): array => [
+                'market' => $codes[(int) $row->market_id] ?? null,
                 'status' => $row->status,
                 'currency' => $row->currency_code,
                 'count' => (int) $row->count,
                 'total_minor' => (int) $row->total_minor,
             ])
             ->values()
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private function marketCodes(): array
+    {
+        return $this->codes ??= Market::query()->pluck('code', 'id')
+            ->map(fn (string $code): string => strtolower($code))
             ->all();
     }
 }

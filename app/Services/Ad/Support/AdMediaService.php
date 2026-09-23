@@ -33,6 +33,7 @@ final class AdMediaService
         $now = now();
 
         AdImage::insert(array_map(static fn (string $path): array => [
+            'market_id' => $ad->market_id,
             'ad_id' => $ad->id,
             'image_path' => $path,
             'created_at' => $now,

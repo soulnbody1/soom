@@ -12,7 +12,7 @@ use App\Models\AdReel;
 use App\Models\Category;
 use App\Repositories\Ad\Queries\ReelFeedQuery;
 use App\Services\Ad\Actions\RecordAdReelViewAction;
-use App\Services\Ad\Support\CategoryTreeResolver;
+use App\Services\Market\MarketCategoryCatalog;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
@@ -52,8 +52,10 @@ class AdReelViewController extends Controller
     #[Endpoint(title: 'عرض ريلز تصنيف', description: 'يعرض ريلز التصنيف وفروعه وتكون معرّفات الإعلانات ULID عامة.')]
     #[PathParameter('id', description: 'المعرّف الرقمي للتصنيف.')]
     #[Response(200, description: 'ريلز التصنيف مقسّمة إلى صفحات.')]
-    public function ReelsForCategories(Category $id, ReelFeedQuery $feed, CategoryTreeResolver $categories): JsonResponse
+    public function ReelsForCategories(Category $id, ReelFeedQuery $feed, MarketCategoryCatalog $categories): JsonResponse
     {
+        abort_unless($categories->isVisible((int) $id->id), 404);
+
         return response()->json(
             $this->publicFeed($feed->build($this->viewer(), $categories->subtreeIds((int) $id->id)))
         );

@@ -4,20 +4,22 @@ declare(strict_types=1);
 
 namespace App\Repositories\Auction\Dashboard;
 
-use Illuminate\Support\Facades\DB;
+use App\Services\Market\MarketQuery;
 
 final class DashboardActionQuery
 {
     private const RECENT_LIMIT = 5;
 
+    public function __construct(private readonly MarketQuery $markets) {}
+
     public function queueAges(): array
     {
-        $submissions = DB::table('payment_submissions')
+        $submissions = $this->markets->table('payment_submissions')
             ->where('status', 'pending_review')
             ->selectRaw('count(*) as pending_count, min(submitted_at) as oldest_at')
             ->first();
 
-        $refunds = DB::table('refund_transactions')
+        $refunds = $this->markets->table('refund_transactions')
             ->selectRaw("
                 coalesce(sum(case when status = 'pending' then 1 else 0 end), 0) as pending_count,
                 min(case when status = 'pending' then created_at end) as oldest_pending_at,
@@ -26,14 +28,14 @@ final class DashboardActionQuery
             ")
             ->first();
 
-        $payouts = DB::table('auction_seller_payouts')
+        $payouts = $this->markets->table('auction_seller_payouts')
             ->selectRaw("
                 min(case when status = 'pending' then created_at end) as oldest_pending_at,
                 coalesce(sum(case when status in ('pending', 'manual_review', 'on_hold') and destination_id is null then 1 else 0 end), 0) as missing_destination_count
             ")
             ->first();
 
-        $disputes = DB::table('auction_disputes')
+        $disputes = $this->markets->table('auction_disputes')
             ->where('status', 'open')
             ->selectRaw('count(*) as open_count, min(opened_at) as oldest_at')
             ->first();
@@ -57,7 +59,7 @@ final class DashboardActionQuery
     /** @return array<int, object> */
     public function recentCompletedSettlements(): array
     {
-        return DB::table('auction_settlements')
+        return $this->markets->table('auction_settlements')
             ->join('auctions', 'auctions.id', '=', 'auction_settlements.auction_id')
             ->where('auction_settlements.status', 'completed')
             ->whereNotNull('auction_settlements.completed_at')
@@ -79,7 +81,7 @@ final class DashboardActionQuery
     /** @return array<int, object> */
     public function largestUnpaidPayouts(): array
     {
-        return DB::table('auction_seller_payouts')
+        return $this->markets->table('auction_seller_payouts')
             ->join('auctions', 'auctions.id', '=', 'auction_seller_payouts.auction_id')
             ->join('users', 'users.id', '=', 'auction_seller_payouts.seller_id')
             ->whereIn('auction_seller_payouts.status', ['pending', 'on_hold', 'processing', 'manual_review', 'failed'])
@@ -101,7 +103,7 @@ final class DashboardActionQuery
     /** @return array<int, object> */
     public function overdueWinnerPayments(): array
     {
-        return DB::table('auction_settlements')
+        return $this->markets->table('auction_settlements')
             ->join('auctions', 'auctions.id', '=', 'auction_settlements.auction_id')
             ->join('users', 'users.id', '=', 'auction_settlements.winner_id')
             ->where('auction_settlements.is_current', true)
@@ -125,7 +127,7 @@ final class DashboardActionQuery
     /** @return array<int, object> */
     public function recentOpenDisputes(): array
     {
-        return DB::table('auction_disputes')
+        return $this->markets->table('auction_disputes')
             ->join('auctions', 'auctions.id', '=', 'auction_disputes.auction_id')
             ->where('auction_disputes.status', 'open')
             ->orderByDesc('auction_disputes.opened_at')
@@ -143,7 +145,7 @@ final class DashboardActionQuery
     /** @return array<int, object> */
     public function attentionRefunds(): array
     {
-        return DB::table('refund_transactions')
+        return $this->markets->table('refund_transactions')
             ->join('auctions', 'auctions.id', '=', 'refund_transactions.auction_id')
             ->join('users', 'users.id', '=', 'refund_transactions.user_id')
             ->whereIn('refund_transactions.status', ['manual_review', 'failed'])

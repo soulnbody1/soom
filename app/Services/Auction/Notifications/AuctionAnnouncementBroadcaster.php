@@ -40,6 +40,8 @@ final class AuctionAnnouncementBroadcaster
 
         broadcast(new AuctionPublicAnnouncementEvent($type, [
             'auction_id' => $auction->public_id,
+            'market_code' => strtolower((string) $auction->market?->code),
+            'url' => $auction->market?->webUrl('auctions/'.$auction->public_id),
             'title' => (string) $auction->title,
             'category' => $auction->category?->name,
             'image_url' => $this->primaryImageUrl($auction),
@@ -53,7 +55,7 @@ final class AuctionAnnouncementBroadcaster
         ]));
 
         if ($type === 'published') {
-            SendAuctionAnnouncementJob::dispatch($auction->id, $type, $title, $body);
+            SendAuctionAnnouncementJob::dispatch($auction->id, $auction->market_id, $type, $title, $body);
         }
     }
 

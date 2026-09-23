@@ -8,6 +8,7 @@ use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Models\ContentReview\ContentReviewPolicy;
 use App\Repositories\ContentReview\ContentReviewPolicyRepository;
+use App\Services\Market\MarketCacheKey;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -16,7 +17,10 @@ final class PublishContentReviewPolicyAction
 {
     private const LOCK_PREFIX = 'content_review:publish:policy:';
 
-    public function __construct(private readonly ContentReviewPolicyRepository $policies) {}
+    public function __construct(
+        private readonly ContentReviewPolicyRepository $policies,
+        private readonly MarketCacheKey $cacheKeys,
+    ) {}
 
     public function execute(
         ReviewableSubjectType $type,
@@ -26,7 +30,7 @@ final class PublishContentReviewPolicyAction
         int $resultSchemaVersion,
         ?int $creatorId,
     ): ContentReviewPolicy {
-        $lock = Cache::lock(self::LOCK_PREFIX.$type->value, 10);
+        $lock = Cache::lock($this->cacheKeys->market(self::LOCK_PREFIX, $type->value), 10);
 
         if (! $lock->get()) {
             throw ContentReviewException::domain('version_conflict', [], 409);

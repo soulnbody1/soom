@@ -6,11 +6,11 @@ namespace App\Repositories\Auction\Queries;
 
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\PaymentTransaction;
+use App\Services\Market\MarketQuery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 final class AdminPaymentRecordQuery
 {
@@ -28,6 +28,8 @@ final class AdminPaymentRecordQuery
         'paymentMethod',
         'deposit',
     ];
+
+    public function __construct(private readonly MarketQuery $markets) {}
 
     public function paginate(array $filters, int $perPage, int $page): LengthAwarePaginator
     {
@@ -105,7 +107,7 @@ final class AdminPaymentRecordQuery
 
     private function union(): Builder
     {
-        $transactions = DB::table('payment_transactions')
+        $transactions = $this->markets->table('payment_transactions')
             ->select([
                 DB::raw("'transaction' as source"),
                 'id as source_id',
@@ -118,7 +120,7 @@ final class AdminPaymentRecordQuery
                 'created_at',
             ]);
 
-        $submissions = DB::table('payment_submissions')
+        $submissions = $this->markets->table('payment_submissions')
             ->select([
                 DB::raw("'submission' as source"),
                 'id as source_id',
@@ -145,7 +147,7 @@ final class AdminPaymentRecordQuery
             return (int) $value;
         }
 
-        return (int) DB::table('auctions')->where('public_id', $value)->value('id');
+        return (int) $this->markets->table('auctions')->where('public_id', $value)->value('id');
     }
 
     private function hydrate(Collection $rows): Collection

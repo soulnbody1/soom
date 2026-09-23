@@ -62,6 +62,7 @@ final class ViewerAuctionQuery
     public function relations(?int $viewerId): array
     {
         $relations = [
+            'market:id,code,web_host',
             'media',
             'category',
             'country',

@@ -23,7 +23,6 @@ final class UpdateDraftAuctionAction
 {
     private const EDITABLE_ATTRIBUTES = [
         'category_id',
-        'country_id',
         'state_id',
         'city_id',
         'title',

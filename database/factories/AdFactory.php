@@ -31,6 +31,7 @@ final class AdFactory extends Factory
             'title' => $this->faker->sentence(3),
             'description' => $this->faker->paragraph(),
             'price' => $this->faker->randomFloat(2, 1, 99_999),
+            'currency_code' => 'JOD',
             'country_id' => $country,
             'state_id' => $state,
             'city_id' => $city,

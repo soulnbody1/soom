@@ -27,6 +27,7 @@ final class AuctionOutboxNotifier implements OutboxNotifier
         }
 
         $auction = Auction::with([
+            'market:id,code,web_host',
             'seller',
             'settlement.winner',
             'participants.user',

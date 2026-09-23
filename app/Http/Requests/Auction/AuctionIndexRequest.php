@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auction;
 
 use App\Domain\Auction\Enums\AuctionStatus;
+use App\Support\Market\MarketContext;
 use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 #[QueryParameter('per_page', description: 'عدد العناصر في الصفحة الواحدة، والقيمة الافتراضية 20.')]
 #[QueryParameter('page', description: 'رقم الصفحة المطلوبة.')]
@@ -27,7 +29,11 @@ final class AuctionIndexRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', Rule::in(array_column(AuctionStatus::cases(), 'value'))],
             'phase' => ['nullable', Rule::in(['live', 'upcoming', 'finished'])],
-            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'category_id' => [
+                'nullable',
+                'integer',
+                $this->categoryExistsRule(),
+            ],
             'currency' => ['nullable', 'string', 'size:3'],
             'sort' => ['nullable', Rule::in(['latest', 'starting_soon', 'ending_soon', 'price_asc', 'price_desc'])],
         ];
@@ -48,5 +54,18 @@ final class AuctionIndexRequest extends FormRequest
     public function perPage(): int
     {
         return min(100, max(1, (int) $this->input('per_page', 20)));
+    }
+
+    private function categoryExistsRule(): Exists
+    {
+        $context = app(MarketContext::class);
+
+        if ($context->state()->mode->isGlobal()) {
+            return Rule::exists('categories', 'id');
+        }
+
+        return Rule::exists('market_category', 'category_id')
+            ->where('market_id', $context->marketId())
+            ->where('is_visible', true);
     }
 }

@@ -39,7 +39,7 @@ final class BackfillCommandTest extends TestCase
         $this->publishSettings(ReviewMode::AiAutomatic);
         $auction = $this->legacyPendingAuction();
 
-        $exitCode = Artisan::call('content-review:backfill');
+        $exitCode = Artisan::call('content-review:backfill', ['--market' => 'jo']);
         $output = Artisan::output();
 
         $this->assertSame(0, $exitCode);
@@ -56,7 +56,7 @@ final class BackfillCommandTest extends TestCase
         $this->legacyPendingAuction();
         $this->legacyPendingAuction();
 
-        Artisan::call('content-review:backfill');
+        Artisan::call('content-review:backfill', ['--market' => 'jo']);
 
         $this->assertMatchesRegularExpression('/eligible\s*\|\s*2/', Artisan::output());
     }
@@ -67,7 +67,7 @@ final class BackfillCommandTest extends TestCase
         $this->publishSettings(ReviewMode::AiAutomatic);
         $auction = $this->legacyPendingAuction();
 
-        Artisan::call('content-review:backfill', ['--execute' => true]);
+        Artisan::call('content-review:backfill', ['--market' => 'jo', '--execute' => true]);
 
         $review = ContentReview::where('subject_id', (int) $auction->id)->firstOrFail();
 
@@ -83,7 +83,7 @@ final class BackfillCommandTest extends TestCase
         $this->publishSettings(ReviewMode::Shadow);
         $this->legacyPendingAuction();
 
-        $exitCode = Artisan::call('content-review:backfill', ['--execute' => true]);
+        $exitCode = Artisan::call('content-review:backfill', ['--market' => 'jo', '--execute' => true]);
 
         $this->assertSame(1, $exitCode);
         $this->assertSame(0, ContentReview::count());
@@ -95,7 +95,7 @@ final class BackfillCommandTest extends TestCase
         $this->publishSettings(ReviewMode::Manual);
         $this->legacyPendingAuction();
 
-        Artisan::call('content-review:backfill', ['--execute' => true]);
+        Artisan::call('content-review:backfill', ['--market' => 'jo', '--execute' => true]);
 
         $this->assertSame(0, ContentReview::count());
         $this->assertMatchesRegularExpression('/skipped\s*\|\s*1/', Artisan::output());
@@ -106,7 +106,7 @@ final class BackfillCommandTest extends TestCase
         $reviewed = $this->reviewedAuction(ReviewMode::Shadow);
         $this->legacyPendingAuction();
 
-        Artisan::call('content-review:backfill', ['--execute' => true]);
+        Artisan::call('content-review:backfill', ['--market' => 'jo', '--execute' => true]);
 
         $this->assertSame(1, ContentReview::where('subject_id', (int) $reviewed->id)->count());
         $this->assertMatchesRegularExpression('/already reviewed\s*\|\s*1/', Artisan::output());
@@ -121,7 +121,7 @@ final class BackfillCommandTest extends TestCase
             $this->legacyPendingAuction();
         }
 
-        Artisan::call('content-review:backfill', ['--execute' => true, '--limit' => 2]);
+        Artisan::call('content-review:backfill', ['--market' => 'jo', '--execute' => true, '--limit' => 2]);
 
         $this->assertSame(2, ContentReview::count());
     }

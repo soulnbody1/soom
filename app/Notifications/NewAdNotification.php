@@ -14,6 +14,8 @@ class NewAdNotification extends Notification
         protected string $adId,
         protected string $adTitle,
         protected int $categoryId,
+        protected string $marketCode,
+        protected ?string $url,
         protected array $unreadCounts = [],
     ) {}
 
@@ -28,6 +30,8 @@ class NewAdNotification extends Notification
             'ad_id' => $this->adId,
             'title' => $this->adTitle,
             'category_id' => $this->categoryId,
+            'market_code' => strtolower($this->marketCode),
+            'url' => $this->url,
             'message' => '📢 إعلان جديد تم إضافته في الفئة التي تهتم بها',
             'created_at' => now()->toDateTimeString(),
         ];

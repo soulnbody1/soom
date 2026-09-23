@@ -139,7 +139,7 @@ final class AdAttributeValidationTest extends CatalogTestCase
         $this->attachAttribute($foreign, $this->category());
 
         $this->actingAs($owner, 'sanctum')
-            ->putJson('/api/soom/ads/my/'.$ad->id, $this->payload($category, [
+            ->putJson('/api/soom/ads/my/'.$ad->public_id, $this->payload($category, [
                 ['id' => $foreign->id, 'value' => 'x'],
             ]))
             ->assertStatus(422);

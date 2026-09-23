@@ -105,6 +105,7 @@ final class RequestContentReviewAction
     {
         ProcessContentReviewJob::dispatch(
             (string) $review->public_id,
+            (int) $review->market_id,
             $settings->maxAttempts(),
             $settings->timeoutSeconds(),
             $settings->backoffSeconds(),

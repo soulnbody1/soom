@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models\Auction;
 
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class AuctionMetric extends Model
 {
+    use BelongsToMarket;
+
     protected $fillable = [
         'auction_id',
         'views_count',

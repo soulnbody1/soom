@@ -19,16 +19,18 @@ final class ReelFeedQuery
     private const WINDOW_DAYS = 1;
 
     private const FEED_RELATIONS = [
-        'ad:id,public_id,user_id,category_id,state_id,title,description,price',
+        'ad:id,public_id,user_id,category_id,country_id,state_id,title,description,price,currency_code',
         'ad.user:id,name,logo,phone',
     ];
 
     private const OWN_RELATIONS = [
-        'ad:id,public_id,user_id,category_id,title,description,price',
+        'ad:id,public_id,user_id,category_id,country_id,title,description,price,currency_code',
         'ad.user:id,name,logo',
     ];
 
-    public function __construct(private readonly FavoriteFlagHydrator $favorites) {}
+    public function __construct(
+        private readonly FavoriteFlagHydrator $favorites,
+    ) {}
 
     public function build(?object $viewer, ?array $categoryIds = null): array
     {

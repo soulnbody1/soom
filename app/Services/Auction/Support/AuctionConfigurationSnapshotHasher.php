@@ -8,6 +8,11 @@ final class AuctionConfigurationSnapshotHasher
 {
     private const UNHASHED_KEYS = [
         'id',
+        // Market identity is enforced by the immutable model plus the
+        // (auction_id, market_id) database constraint. Keeping it outside the
+        // historical payload hash preserves existing finalized snapshots when
+        // market ownership is backfilled.
+        'market_id',
         'snapshot_hash',
         'created_by',
         'finalized_at',

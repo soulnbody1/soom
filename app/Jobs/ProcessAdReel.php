@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Contracts\Market\RunsInMarket;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Ad;
 use Cloudinary\Cloudinary;
 use Illuminate\Bus\Queueable;
@@ -15,9 +17,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
-class ProcessAdReel implements ShouldQueue
+class ProcessAdReel implements RunsInMarket, ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, HasMarketJobContext, InteractsWithQueue, Queueable, SerializesModels;
 
     public const TEMP_DISK = 'spaces_private';
 
@@ -32,20 +34,39 @@ class ProcessAdReel implements ShouldQueue
     public int $maxExceptions = 2;
 
     public function __construct(
-        public readonly Ad $ad,
+        Ad $ad,
         public readonly string $videoPath
-    ) {}
+    ) {
+        $this->adId = (int) $ad->id;
+        $this->marketId = (int) $ad->market_id;
+    }
+
+    public readonly int $adId;
+
+    public readonly int $marketId;
+
+    public function marketId(): int
+    {
+        return $this->marketId;
+    }
 
     public function handle(): void
     {
-        if ($this->ad->reel()->exists()) {
+        $ad = Ad::query()->find($this->adId);
+        if ($ad === null) {
+            $this->discardSource();
+
+            return;
+        }
+
+        if ($ad->reel()->exists()) {
             $this->discardSource();
 
             return;
         }
 
         if (! Storage::disk(self::TEMP_DISK)->exists($this->videoPath)) {
-            Log::error('Ad reel source missing', ['ad_id' => $this->ad->id, 'path' => $this->videoPath]);
+            Log::error('Ad reel source missing', ['ad_id' => $ad->id, 'path' => $this->videoPath]);
 
             return;
         }
@@ -56,7 +77,7 @@ class ProcessAdReel implements ShouldQueue
             $localPath = $this->copyToLocalTemp();
             $upload = $this->uploadToCloudinary($localPath);
 
-            $this->ad->reel()->updateOrCreate([], [
+            $ad->reel()->updateOrCreate([], [
                 'video_path' => $upload['secure_url'] ?? null,
                 'thumbnail_path' => $this->thumbnailUrl($upload),
                 'duration' => $upload['duration'] ?? null,
@@ -73,7 +94,7 @@ class ProcessAdReel implements ShouldQueue
     public function failed(?Throwable $exception): void
     {
         Log::error('Ad reel processing failed', [
-            'ad_id' => $this->ad->id,
+            'ad_id' => $this->adId,
             'path' => $this->videoPath,
             'error' => $exception?->getMessage(),
         ]);

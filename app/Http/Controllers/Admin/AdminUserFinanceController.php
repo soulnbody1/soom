@@ -41,9 +41,12 @@ final class AdminUserFinanceController extends Controller
         $summary = [];
         foreach ($finance->summary($user) as $section => $rows) {
             $summary[$section] = array_map(fn (array $row): array => [
+                'market' => $row['market'],
                 'status' => $row['status'],
+                'currency' => $row['currency'],
                 'count' => $row['count'],
                 'total' => MoneyResource::make($row['total_minor'], $row['currency']),
+                'total_minor' => $row['total_minor'],
             ], $rows);
         }
 

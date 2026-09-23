@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class PaymentProviderEvent extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
     protected $fillable = [
         'public_id',
@@ -32,6 +33,11 @@ final class PaymentProviderEvent extends Model
         'received_at' => 'immutable_datetime',
         'processed_at' => 'immutable_datetime',
     ];
+
+    public function marketIsOptional(): bool
+    {
+        return true;
+    }
 
     public function transaction(): BelongsTo
     {

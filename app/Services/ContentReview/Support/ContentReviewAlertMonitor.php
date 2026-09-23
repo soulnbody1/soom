@@ -8,6 +8,7 @@ use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\Repositories\ContentReview\ContentReviewMetricsRepository;
 use App\Services\ContentReview\Contracts\ContentReviewEventPublisher;
+use App\Services\Market\MarketCacheKey;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
@@ -44,6 +45,7 @@ final class ContentReviewAlertMonitor
         private readonly ContentReviewBudgetGuard $budget,
         private readonly ReviewModeResolver $modes,
         private readonly ContentReviewEventPublisher $events,
+        private readonly MarketCacheKey $cacheKeys,
     ) {}
 
     public static function codes(): array
@@ -116,7 +118,7 @@ final class ContentReviewAlertMonitor
 
     public function reset(): void
     {
-        Cache::forget(self::EVALUATION_KEY);
+        Cache::forget($this->cacheKeys->market(self::EVALUATION_KEY));
 
         foreach (self::codes() as $code) {
             $this->forgetState($code);
@@ -131,7 +133,7 @@ final class ContentReviewAlertMonitor
 
         $seconds = max(1, (int) config('content_review.alerts.evaluation_cache_seconds', 60));
 
-        return Cache::remember(self::EVALUATION_KEY.':'.$type->value, $seconds, fn (): array => $this->evaluate($type));
+        return Cache::remember($this->cacheKeys->market(self::EVALUATION_KEY, $type->value), $seconds, fn (): array => $this->evaluate($type));
     }
 
     private function evaluate(ReviewableSubjectType $type): array
@@ -260,7 +262,7 @@ final class ContentReviewAlertMonitor
 
     private function storedState(string $code): array
     {
-        $stored = Cache::get(self::STATE_PREFIX.$code);
+        $stored = Cache::get($this->cacheKeys->market(self::STATE_PREFIX, $code));
 
         return is_array($stored) ? $stored : [];
     }
@@ -269,11 +271,11 @@ final class ContentReviewAlertMonitor
     {
         $ttl = max(300, (int) config('content_review.alerts.state_ttl_seconds', 604_800));
 
-        Cache::put(self::STATE_PREFIX.$code, $state, $ttl);
+        Cache::put($this->cacheKeys->market(self::STATE_PREFIX, $code), $state, $ttl);
     }
 
     private function forgetState(string $code): void
     {
-        Cache::forget(self::STATE_PREFIX.$code);
+        Cache::forget($this->cacheKeys->market(self::STATE_PREFIX, $code));
     }
 }

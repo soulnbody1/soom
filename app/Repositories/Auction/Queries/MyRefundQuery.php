@@ -14,7 +14,11 @@ final class MyRefundQuery
     {
         return RefundTransaction::query()
             ->where('user_id', $userId)
-            ->with(['auction:id,public_id,title,currency_code,status'])
+            ->with([
+                'market:id,code,web_host',
+                'auction:id,market_id,public_id,title,currency_code,status',
+                'auction.market:id,code,web_host',
+            ])
             ->when($filters['status'] ?? null, fn (Builder $q, $value) => $q->where('status', $value))
             ->when($filters['search'] ?? null, function (Builder $q, $value): void {
                 $term = trim((string) $value);

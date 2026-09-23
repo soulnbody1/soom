@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Jobs\Message;
 
+use App\Contracts\Market\RunsGlobally;
 use App\Events\ConversationUpdated;
 use App\Events\UnreadCountUpdated;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Repositories\Message\Queries\ConversationThreadsQuery;
 use App\Repositories\Message\Queries\UnreadConversationCounter;
 use Illuminate\Bus\Queueable;
@@ -14,9 +16,9 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-final class BroadcastConversationUpdate implements ShouldQueue
+final class BroadcastConversationUpdate implements RunsGlobally, ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, HasMarketJobContext, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
 

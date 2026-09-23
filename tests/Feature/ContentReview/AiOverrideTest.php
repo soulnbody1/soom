@@ -128,7 +128,7 @@ final class AiOverrideTest extends TestCase
         [$review, $auction] = $this->assistedReview();
 
         $this->actingAs($this->decider(), 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'reject',
                 'reason' => '   ',
             ])
@@ -151,7 +151,7 @@ final class AiOverrideTest extends TestCase
         $admin = $this->overrider();
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'reject',
                 'reason' => 'Contradicts the recommendation on purpose.',
             ])
@@ -171,7 +171,7 @@ final class AiOverrideTest extends TestCase
         $admin = $this->decider();
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'approve',
                 'reason' => 'Agrees with the recommendation.',
             ])
@@ -193,7 +193,7 @@ final class AiOverrideTest extends TestCase
         $this->assertSame(0, ContentReview::count());
 
         $this->actingAs($this->decider(), 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'approve',
                 'reason' => 'Plain manual approval.',
             ])
@@ -208,7 +208,7 @@ final class AiOverrideTest extends TestCase
         [$review, $auction] = $this->assistedReview(null, ReviewMode::Shadow);
 
         $this->actingAs($this->decider(), 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'reject',
                 'reason' => 'Shadow mode keeps the employee in charge.',
             ])
@@ -226,7 +226,7 @@ final class AiOverrideTest extends TestCase
         $review = ContentReview::firstOrFail();
 
         $this->actingAs($this->decider(), 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'approve',
                 'reason' => 'Decided before the automated result arrived.',
             ])
@@ -244,7 +244,7 @@ final class AiOverrideTest extends TestCase
     private function decide(User $user, ContentReview $review, string $decision, ?string $reason = null)
     {
         return $this->actingAs($user, 'sanctum')->postJson(
-            "/api/admin/content-reviews/{$review->public_id}/decide",
+            "/api/admin/content-reviews/{$review->public_id}/decide?market=jo",
             array_filter(['decision' => $decision, 'reason' => $reason], static fn ($value): bool => $value !== null)
         );
     }

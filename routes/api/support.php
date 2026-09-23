@@ -33,9 +33,9 @@ Route::middleware(['auth:sanctum', 'role:admin', 'throttle:support-read'])->pref
     Route::get('/summary', [AdminSupportTicketController::class, 'summary']);
     Route::get('/tickets/{ticket}', [AdminSupportTicketController::class, 'show']);
     Route::get('/tickets/{ticket}/conversation', AdminSupportConversationController::class);
-    Route::patch('/tickets/{ticket}', [AdminSupportTicketController::class, 'update'])->middleware('throttle:support-admin-write');
+    Route::patch('/tickets/{ticket}', [AdminSupportTicketController::class, 'update'])->middleware(['admin_market_required', 'throttle:support-admin-write']);
     Route::get('/tickets/{ticket}/messages', [AdminSupportMessageController::class, 'index']);
-    Route::post('/tickets/{ticket}/messages', [AdminSupportMessageController::class, 'store'])->middleware('throttle:support-admin-write');
-    Route::post('/tickets/{ticket}/internal-notes', [AdminSupportMessageController::class, 'internalNote'])->middleware('throttle:support-admin-write');
-    Route::post('/tickets/{ticket}/read', AdminSupportReadController::class)->middleware('throttle:support-admin-write');
+    Route::post('/tickets/{ticket}/messages', [AdminSupportMessageController::class, 'store'])->middleware(['admin_market_required', 'throttle:support-admin-write']);
+    Route::post('/tickets/{ticket}/internal-notes', [AdminSupportMessageController::class, 'internalNote'])->middleware(['admin_market_required', 'throttle:support-admin-write']);
+    Route::post('/tickets/{ticket}/read', AdminSupportReadController::class)->middleware(['admin_market_required', 'throttle:support-admin-write']);
 });

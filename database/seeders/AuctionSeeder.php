@@ -6,11 +6,19 @@ namespace Database\Seeders;
 
 use App\Models\Auction\AuctionTermsVersion;
 use App\Models\Auction\PaymentMethod;
+use Database\Seeders\Concerns\SeedsInDefaultMarket;
 use Illuminate\Database\Seeder;
 
 final class AuctionSeeder extends Seeder
 {
+    use SeedsInDefaultMarket;
+
     public function run(): void
+    {
+        $this->inDefaultMarket(fn () => $this->seed());
+    }
+
+    private function seed(): void
     {
         PaymentMethod::firstOrCreate(
             ['code' => 'manual_bank_transfer'],

@@ -9,6 +9,8 @@ use App\Models\AdImage;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use App\Services\Ad\Support\FavoriteFlagHydrator;
+use App\Services\Market\MarketCacheKey;
+use App\Services\Market\MarketCategoryCatalog;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Cache;
 
@@ -32,12 +34,14 @@ final class HomeFeedQuery
         private readonly CategoryTreeResolver $categories,
         private readonly FavoriteFlagHydrator $favorites,
         private readonly AdCacheVersion $version,
+        private readonly MarketCacheKey $cacheKeys,
+        private readonly MarketCategoryCatalog $marketCategories,
     ) {}
 
     public function build(?object $viewer): array
     {
         $groups = Cache::remember(
-            self::CACHE_PREFIX.$this->version->current(),
+            $this->cacheKeys->market(self::CACHE_PREFIX, $this->version->current()),
             self::TTL_SECONDS,
             fn (): array => $this->buildGroups()
         );
@@ -50,9 +54,9 @@ final class HomeFeedQuery
         $groups = [];
         $ads = [];
 
-        foreach ($this->categories->roots() as $root) {
+        foreach ($this->marketCategories->roots() as $root) {
             $categoryAds = Ad::query()
-                ->whereIn('category_id', $this->categories->subtreeIds($root['id']))
+                ->whereIn('category_id', $this->marketCategories->subtreeIds((int) $root->id))
                 ->latest()
                 ->limit(self::ADS_PER_CATEGORY)
                 ->get();
@@ -62,8 +66,8 @@ final class HomeFeedQuery
             }
 
             $groups[] = [
-                'category' => $root['name'],
-                'category_id' => (int) $root['id'],
+                'category' => $root->name,
+                'category_id' => (int) $root->id,
                 'ads' => $categoryAds,
             ];
         }

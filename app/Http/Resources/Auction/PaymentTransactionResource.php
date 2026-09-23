@@ -13,6 +13,7 @@ final class PaymentTransactionResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
+            'market_code' => strtolower((string) $this->market?->code),
             'purpose' => $this->purpose->value,
             'status' => $this->status->value,
             'failure_code' => $this->failure_code,

@@ -29,10 +29,10 @@ final class UserAuctionResourceShapeTest extends TestCase
 {
     private const EXPECTED_KEYS = [
         'category', 'currency_code', 'current_amount', 'current_dispute', 'description',
-        'handover_status', 'id', 'images', 'location', 'metrics', 'minimum_next_bid', 'my_bids',
+        'handover_status', 'id', 'images', 'location', 'market_code', 'metrics', 'minimum_next_bid', 'my_bids',
         'my_deposits', 'my_participation', 'my_payment_submissions', 'my_refunds', 'next_action',
         'participation_requirements', 'reserve_met', 'seller', 'seller_context', 'starting_amount',
-        'status', 'status_label', 'timeline', 'title', 'winner_settlement',
+        'status', 'status_label', 'timeline', 'title', 'url', 'winner_settlement',
     ];
 
     private const PARTICIPATION_KEYS = [

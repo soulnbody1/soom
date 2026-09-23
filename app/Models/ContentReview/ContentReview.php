@@ -12,6 +12,7 @@ use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\Enums\ReviewRecommendation;
 use App\Domain\ContentReview\Enums\ReviewRiskLevel;
 use App\Domain\ContentReview\Enums\ReviewTrigger;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\ContentReview\Concerns\HasPublicId;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,8 +23,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class ContentReview extends Model
 {
+    use BelongsToMarket, HasPublicId;
     use HasFactory;
-    use HasPublicId;
 
     protected $table = 'content_reviews';
 

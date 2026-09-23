@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace App\Repositories\Auction\Dashboard;
 
 use App\Services\Auction\Support\DashboardPeriod;
+use App\Services\Market\MarketQuery;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Facades\DB;
 
 final class DashboardAuctionQuery
 {
     use BuildsPeriodWindows;
 
+    public function __construct(private readonly MarketQuery $markets) {}
+
     /** @return array<string, int> */
     public function statusCounts(): array
     {
         $counts = [];
-        foreach (DB::table('auctions')
+        foreach ($this->markets->table('auctions')
             ->whereNull('deleted_at')
             ->selectRaw('status, count(*) as row_count')
             ->groupBy('status')
@@ -29,7 +31,7 @@ final class DashboardAuctionQuery
 
     public function lifecycle(DashboardPeriod $period): array
     {
-        $row = DB::table('auctions')
+        $row = $this->markets->table('auctions')
             ->whereNull('deleted_at')
             ->selectRaw(implode(', ', [
                 $this->windowCount('created_at', $period, 'created_cur', 'created_prev'),
@@ -48,7 +50,7 @@ final class DashboardAuctionQuery
      */
     public function endedPerformance(DashboardPeriod $period): array
     {
-        $row = $this->bounded(DB::table('auctions')->whereNull('deleted_at'), 'ended_at', $period)
+        $row = $this->bounded($this->markets->table('auctions')->whereNull('deleted_at'), 'ended_at', $period)
             ->whereNotNull('ended_at')
             ->leftJoin('auction_metrics', 'auction_metrics.auction_id', '=', 'auctions.id')
             ->selectRaw("
@@ -81,7 +83,7 @@ final class DashboardAuctionQuery
     public function settlementPerformance(DashboardPeriod $period): array
     {
         $completed = $this->bounded(
-            DB::table('auction_settlements')
+            $this->markets->table('auction_settlements')
                 ->join('auctions', 'auctions.id', '=', 'auction_settlements.auction_id')
                 ->where('auction_settlements.status', 'completed'),
             'auction_settlements.completed_at',
@@ -100,12 +102,12 @@ final class DashboardAuctionQuery
             ->first();
 
         $defaults = $this->bounded(
-            DB::table('auction_settlements')->where('status', 'defaulted'),
+            $this->markets->table('auction_settlements')->where('status', 'defaulted'),
             'defaulted_at',
             $period
         )->whereNotNull('defaulted_at')->count();
 
-        $reassignments = $this->bounded(DB::table('auction_winner_reassignments'), 'created_at', $period)->count();
+        $reassignments = $this->bounded($this->markets->table('auction_winner_reassignments'), 'created_at', $period)->count();
 
         return [
             'settled_count' => (int) $completed->completed_count,
@@ -119,11 +121,11 @@ final class DashboardAuctionQuery
 
     public function participation(DashboardPeriod $period): array
     {
-        $bids = $this->bounded(DB::table('auction_bids'), 'accepted_at', $period)
+        $bids = $this->bounded($this->markets->table('auction_bids'), 'accepted_at', $period)
             ->selectRaw('count(*) as total_bids, count(distinct bidder_id) as unique_bidders, count(distinct auction_id) as auctions_with_bids')
             ->first();
 
-        $participants = $this->bounded(DB::table('auction_participants'), 'registered_at', $period)
+        $participants = $this->bounded($this->markets->table('auction_participants'), 'registered_at', $period)
             ->selectRaw('count(*) as registrations, count(distinct user_id) as unique_users, coalesce(sum(case when qualified_at is not null then 1 else 0 end), 0) as qualified')
             ->first();
 
@@ -140,7 +142,7 @@ final class DashboardAuctionQuery
     /** @return array<int, object> */
     public function topAuctionsByBids(DashboardPeriod $period, int $limit = 5): array
     {
-        return $this->bounded(DB::table('auction_bids'), 'auction_bids.accepted_at', $period)
+        return $this->bounded($this->markets->table('auction_bids'), 'auction_bids.accepted_at', $period)
             ->join('auctions', 'auctions.id', '=', 'auction_bids.auction_id')
             ->selectRaw('
                 auctions.public_id,

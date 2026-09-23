@@ -8,15 +8,35 @@ use App\Domain\Auction\Enums\AuctionStatus;
 use App\Models\Auction\Auction;
 use App\Services\Auction\Support\AuctionStateMachine;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Market\MarketCommandRunner;
 use Illuminate\Console\Command;
+use InvalidArgumentException;
 
 final class NormalizeLegacyDisputedAuctionsCommand extends Command
 {
-    protected $signature = 'auction:normalize-legacy-disputes {--dry-run}';
+    protected $signature = 'auction:normalize-legacy-disputes {--market= : Required ISO market code} {--dry-run}';
 
     protected $description = 'Move auctions still parked in the legacy disputed status back to handover_pending.';
 
-    public function handle(AuctionStateMachine $stateMachine, AuctionTransaction $transaction): int
+    public function handle(AuctionStateMachine $stateMachine, AuctionTransaction $transaction, MarketCommandRunner $markets): int
+    {
+        $code = trim((string) $this->option('market'));
+        if ($code === '') {
+            $this->error('The --market option is required.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            return $markets->in($code, fn (): int => $this->handleMarket($stateMachine, $transaction));
+        } catch (InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+    }
+
+    private function handleMarket(AuctionStateMachine $stateMachine, AuctionTransaction $transaction): int
     {
         $auctions = Auction::where('status', AuctionStatus::Disputed->value)->get();
 

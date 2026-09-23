@@ -40,6 +40,13 @@ final class AuctionTermsController extends Controller
         );
     }
 
+    public function adminIndex(\App\Repositories\Auction\Queries\AuctionTermsQuery $query): JsonResponse
+    {
+        Gate::authorize('viewAny', Auction::class);
+
+        return $this->sendResponse($query->adminList(), __('auction.messages.terms_fetched'));
+    }
+
     #[Endpoint(
         title: 'عرض شروط المزاد',
         description: 'يعرض نص نسخة الشروط المثبّتة على المزاد وقت نشره مع بيان ما إذا كان المستخدم الحالي قد قبلها وتاريخ القبول. يُرجع 404 إذا لم يكن المزاد متاحًا للعرض أو لم تُثبّت له نسخة شروط.'
@@ -125,6 +132,7 @@ final class AuctionTermsController extends Controller
             'version_number' => $terms->version_number,
             'title' => $terms->title,
             'is_active' => $terms->is_active,
+            'market' => strtolower((string) $terms->market->code),
         ], __('auction.messages.terms_version_created'), 201);
     }
 

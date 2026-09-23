@@ -76,8 +76,8 @@ final class PaymentMethodResource extends JsonResource
 
         return $payload + [
             'allowed_purposes' => $this->allowed_purposes ?? [],
-            'country_codes' => $this->country_codes ?? [],
-            'currency_codes' => $this->currency_codes ?? [],
+            'market' => strtolower((string) $this->market?->code),
+            'currency_code' => $this->market?->currency_code,
             'min_amount_minor' => $this->min_amount_minor,
             'max_amount_minor' => $this->max_amount_minor,
             'fee_basis' => $this->fee_basis,

@@ -7,6 +7,8 @@ namespace App\Repositories\Auction;
 use App\Domain\Auction\Enums\SellerPayoutStatus;
 use App\Models\Auction\AuctionSellerPayout;
 use App\Models\Auction\RefundTransaction;
+use App\Models\Market;
+use App\Support\Market\MarketContext;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -30,7 +32,9 @@ final class AuctionSellerPayoutRepository
     public function paginateForAdmin(array $filters, int $perPage): LengthAwarePaginator
     {
         return AuctionSellerPayout::with([
-            'auction:id,public_id,title',
+            'market:id,code,web_host',
+            'auction:id,market_id,public_id,title',
+            'auction.market:id,code,web_host',
             'seller:id,name',
         ])
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
@@ -70,9 +74,13 @@ final class AuctionSellerPayoutRepository
             ->groupBy('status', 'currency_code')
             ->get();
 
+        $state = app(MarketContext::class)->state();
+        $fallbackCurrency = $state->market?->currency_code
+            ?? (string) ($rows->first()->currency_code ?? Market::query()->where('is_active', true)->value('currency_code') ?? 'JOD');
+
         $summary = [];
         foreach (SellerPayoutStatus::cases() as $status) {
-            $summary[$status->value] = ['count' => 0, 'amount_minor' => 0, 'currency_code' => 'JOD'];
+            $summary[$status->value] = ['count' => 0, 'amount_minor' => 0, 'currency_code' => $fallbackCurrency];
         }
 
         foreach ($rows as $row) {
@@ -98,7 +106,11 @@ final class AuctionSellerPayoutRepository
 
     public function paginateForSeller(int $sellerId, array $filters, int $perPage): LengthAwarePaginator
     {
-        return AuctionSellerPayout::with('auction:id,public_id,title')
+        return AuctionSellerPayout::with([
+            'market:id,code,web_host',
+            'auction:id,market_id,public_id,title',
+            'auction.market:id,code,web_host',
+        ])
             ->where('seller_id', $sellerId)
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
             ->latest('created_at')

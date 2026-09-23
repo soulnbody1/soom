@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
-
 class CharitySystem extends Model
 {
+    use BelongsToMarket;
 
     protected $fillable = [
+        'market_id',
         'image',
         'link_url',
         'is_active',
@@ -32,11 +34,11 @@ class CharitySystem extends Model
         'display_order' => 'integer',
     ];
 
-
     public function getImageAttribute($value)
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');
+
         return $value ? $disk->url($value) : null;
     }
 }

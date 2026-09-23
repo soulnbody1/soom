@@ -563,7 +563,7 @@ final class ContentReviewPipelineTest extends TestCase
         $review = ContentReview::firstOrFail();
         app(ProcessContentReviewAction::class)->execute((string) $review->public_id);
 
-        (new ProcessContentReviewJob((string) $review->public_id))->failed(null);
+        (new ProcessContentReviewJob((string) $review->public_id, (int) $review->market_id))->failed(null);
 
         $review->refresh();
 

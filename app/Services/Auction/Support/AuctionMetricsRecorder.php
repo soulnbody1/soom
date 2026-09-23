@@ -6,11 +6,13 @@ namespace App\Services\Auction\Support;
 
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionMetric;
+use App\Services\Market\MarketQuery;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 final class AuctionMetricsRecorder
 {
+    public function __construct(private readonly MarketQuery $markets) {}
+
     public function ensure(Auction $auction): AuctionMetric
     {
         return AuctionMetric::firstOrCreate(['auction_id' => $auction->id]);
@@ -27,7 +29,8 @@ final class AuctionMetricsRecorder
         ]));
 
         $now = Carbon::now();
-        $isNewViewer = DB::table('auction_views')->insertOrIgnore([
+        $isNewViewer = $this->markets->table('auction_views')->insertOrIgnore([
+            'market_id' => $auction->market_id,
             'auction_id' => $auction->id,
             'user_id' => $userId,
             'viewer_hash' => $viewerHash,
@@ -49,7 +52,7 @@ final class AuctionMetricsRecorder
 
     public function refreshBidMetrics(int $auctionId): void
     {
-        $summary = DB::table('auction_bids')
+        $summary = $this->markets->table('auction_bids')
             ->selectRaw('COUNT(*) as bids_count, COUNT(DISTINCT bidder_id) as unique_bidders_count, MAX(accepted_at) as last_bid_at')
             ->where('auction_id', $auctionId)
             ->first();
@@ -68,7 +71,7 @@ final class AuctionMetricsRecorder
     {
         AuctionMetric::updateOrCreate(
             ['auction_id' => $auctionId],
-            ['participants_count' => DB::table('auction_participants')->where('auction_id', $auctionId)->count()]
+            ['participants_count' => $this->markets->table('auction_participants')->where('auction_id', $auctionId)->count()]
         );
     }
 }

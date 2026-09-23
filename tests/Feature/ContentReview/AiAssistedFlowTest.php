@@ -215,7 +215,7 @@ final class AiAssistedFlowTest extends TestCase
     private function decide(User $user, ContentReview $review, string $decision, ?string $reason = null)
     {
         return $this->actingAs($user, 'sanctum')->postJson(
-            "/api/admin/content-reviews/{$review->public_id}/decide",
+            "/api/admin/content-reviews/{$review->public_id}/decide?market=jo",
             array_filter(['decision' => $decision, 'reason' => $reason], static fn ($value): bool => $value !== null)
         );
     }

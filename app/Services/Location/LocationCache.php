@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Location;
 
+use App\Services\Market\MarketCacheKey;
 use Illuminate\Support\Facades\Cache;
 
 final class LocationCache
@@ -14,10 +15,12 @@ final class LocationCache
 
     private const TTL_SECONDS = 86400;
 
+    public function __construct(private readonly MarketCacheKey $cacheKeys) {}
+
     public function remember(string $key, callable $callback): array
     {
         return Cache::remember(
-            self::PREFIX.$this->version().':'.$key,
+            $this->cacheKeys->market(self::PREFIX, $this->version(), $key),
             self::TTL_SECONDS,
             $callback
         );

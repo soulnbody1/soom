@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
+use App\Contracts\Market\RunsAcrossMarkets;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Repositories\Auction\AuctionRepository;
 use App\Services\Auction\Actions\FinalizeAuctionAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
-final class FinalizeExpiredAuctionsJob implements ShouldQueue
+final class FinalizeExpiredAuctionsJob implements RunsAcrossMarkets, ShouldQueue
 {
-    use Queueable;
+    use HasMarketJobContext, Queueable;
 
     public int $tries = 3;
 

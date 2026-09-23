@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class Banner extends Model
 {
-    use HasFactory;
+    use BelongsToMarket, HasFactory;
 
     protected $table = 'banners';
 
@@ -20,6 +21,7 @@ class Banner extends Model
         'end_date',
         'display_order',
         'price',
+        'market_id',
     ];
 
     protected $dates = [
@@ -36,11 +38,11 @@ class Banner extends Model
         'display_order' => 'integer',
     ];
 
-
     public function getImageAttribute($value)
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');
+
         return $value ? $disk->url($value) : null;
     }
 }

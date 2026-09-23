@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Collection;
 
 final class CategoryTreeLoader
 {
-    public function roots(): Collection
+    public function roots(?array $allowedIds = null): Collection
     {
-        $byParent = $this->byParent();
+        $byParent = $this->byParent($allowedIds);
 
         return new Collection(array_map(
             fn (Category $root): Category => $this->hydrate($root, $byParent, []),
@@ -19,9 +19,9 @@ final class CategoryTreeLoader
         ));
     }
 
-    public function withDescendants(Category $category): Category
+    public function withDescendants(Category $category, ?array $allowedIds = null): Category
     {
-        return $this->hydrate($category, $this->byParent(), []);
+        return $this->hydrate($category, $this->byParent($allowedIds), []);
     }
 
     /**
@@ -47,11 +47,16 @@ final class CategoryTreeLoader
     /**
      * @return array<int, list<Category>>
      */
-    private function byParent(): array
+    private function byParent(?array $allowedIds = null): array
     {
         $byParent = [];
 
-        foreach (Category::query()->orderBy('display_order')->get() as $category) {
+        $query = Category::query()->orderBy('display_order');
+        if ($allowedIds !== null) {
+            $query->whereIn('id', $allowedIds);
+        }
+
+        foreach ($query->get() as $category) {
             $byParent[(int) $category->parent_id][] = $category;
         }
 

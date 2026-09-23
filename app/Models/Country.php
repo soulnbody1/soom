@@ -11,7 +11,12 @@ class Country extends Model
 
     protected $table = 'countries';
 
-    protected $fillable = ['name', 'code'];
+    protected $fillable = ['name', 'code', 'iso2'];
+
+    public function market()
+    {
+        return $this->hasOne(Market::class);
+    }
 
     public function states()
     {

@@ -124,7 +124,7 @@ final class NotificationKnownDefectsTest extends NotificationTestCase
         $user = $this->notifiableUser();
         $ad = $this->makeAd();
 
-        $chunk = new SendAdNotificationChunk($ad->id, [$user->id]);
+        $chunk = new SendAdNotificationChunk($ad->id, $ad->market_id, [$user->id]);
         $registry = app(PushDispatcher::class);
 
         $chunk->handle($registry);
@@ -175,7 +175,13 @@ final class NotificationKnownDefectsTest extends NotificationTestCase
         $this->seedNotifications($user, 2);
         $ad = $this->makeAd();
 
-        $payload = (new NewAdNotification((int) $ad->id, (string) $ad->title, (int) $ad->category_id))->toBroadcast($user->fresh())->data;
+        $payload = (new NewAdNotification(
+            (string) $ad->public_id,
+            (string) $ad->title,
+            (int) $ad->category_id,
+            'JO',
+            'https://jo.soom.test/ads/'.$ad->public_id,
+        ))->toBroadcast($user->fresh())->data;
         $actual = $user->unreadNotifications()->count();
 
         if ($payload['unread_count'] !== $actual) {

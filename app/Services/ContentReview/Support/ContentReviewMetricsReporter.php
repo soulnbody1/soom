@@ -12,6 +12,7 @@ use App\Domain\ContentReview\Enums\ReviewMode;
 use App\Domain\ContentReview\ValueObjects\ReviewSettings;
 use App\DTO\ContentReview\MetricsRange;
 use App\Repositories\ContentReview\ContentReviewMetricsRepository;
+use App\Services\Market\MarketCacheKey;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
@@ -26,6 +27,7 @@ final class ContentReviewMetricsReporter
         private readonly ContentReviewBudgetGuard $budget,
         private readonly ReviewModeResolver $modes,
         private readonly ContentReviewWorkerHeartbeat $heartbeat,
+        private readonly MarketCacheKey $cacheKeys,
     ) {}
 
     public function report(ReviewableSubjectType $type, MetricsRange $range): array
@@ -57,7 +59,7 @@ final class ContentReviewMetricsReporter
         $seconds = max(1, (int) config('content_review.metrics.cache_seconds', 60));
 
         return Cache::remember(
-            self::CACHE_PREFIX.$range->cacheKey(),
+            $this->cacheKeys->market(self::CACHE_PREFIX, $range->cacheKey()),
             $seconds,
             fn (): array => $this->computeAggregates($range)
         );

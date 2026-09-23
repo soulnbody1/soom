@@ -143,7 +143,7 @@ final class MyAdsEndpointsTest extends AdTestCase
             'value' => 'small',
         ]);
 
-        $response = $this->actingAs($owner, 'sanctum')->putJson('/api/soom/ads/my/'.$ad->id, [
+        $response = $this->actingAs($owner, 'sanctum')->putJson('/api/soom/ads/my/'.$ad->public_id, [
             'title' => 'Updated title',
             'description' => 'Updated description',
             'price' => 42,
@@ -167,7 +167,7 @@ final class MyAdsEndpointsTest extends AdTestCase
     {
         $ad = $this->makeAd(['user_id' => $this->adUser()->id]);
 
-        $this->actingAs($this->adUser(), 'sanctum')->putJson('/api/soom/ads/my/'.$ad->id, [
+        $this->actingAs($this->adUser(), 'sanctum')->putJson('/api/soom/ads/my/'.$ad->public_id, [
             'title' => 'Hijacked',
             'description' => 'Not mine',
             'price' => 1,
@@ -176,7 +176,7 @@ final class MyAdsEndpointsTest extends AdTestCase
             'state_id' => $this->state()->id,
             'city_id' => $this->city()->id,
             'images' => [UploadedFile::fake()->image('x.jpg')],
-        ])->assertForbidden()
+        ])->assertNotFound()
             ->assertJsonPath('success', false);
     }
 
@@ -284,21 +284,21 @@ final class MyAdsEndpointsTest extends AdTestCase
         $ad = $this->makeAd(['user_id' => $owner->id]);
 
         $this->actingAs($owner, 'sanctum')
-            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->id)
+            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->public_id)
             ->assertOk()
             ->assertJsonPath('success', true);
 
         $this->assertSoftDeleted('ads', ['id' => $ad->id]);
 
         $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/soom/ads/my/restore/'.$ad->id)
+            ->postJson('/api/soom/ads/my/restore/'.$ad->public_id)
             ->assertOk()
             ->assertJsonPath('success', true);
 
         $this->assertDatabaseHas('ads', ['id' => $ad->id, 'deleted_at' => null]);
 
         $this->actingAs($owner, 'sanctum')
-            ->deleteJson('/api/soom/ads/my/force-delete/'.$ad->id)
+            ->deleteJson('/api/soom/ads/my/force-delete/'.$ad->public_id)
             ->assertOk();
 
         $this->assertDatabaseMissing('ads', ['id' => $ad->id]);
@@ -310,7 +310,7 @@ final class MyAdsEndpointsTest extends AdTestCase
         $ad = $this->makeAd(['user_id' => $owner->id]);
 
         $this->actingAs($owner, 'sanctum')
-            ->postJson('/api/soom/ads/my/restore/'.$ad->id)
+            ->postJson('/api/soom/ads/my/restore/'.$ad->public_id)
             ->assertStatus(400)
             ->assertJsonPath('success', false);
     }
@@ -321,11 +321,11 @@ final class MyAdsEndpointsTest extends AdTestCase
         $stranger = $this->adUser();
 
         $this->actingAs($stranger, 'sanctum')
-            ->postJson('/api/soom/ads/my/restore/'.$ad->id)
+            ->postJson('/api/soom/ads/my/restore/'.$ad->public_id)
             ->assertNotFound();
 
         $this->actingAs($stranger, 'sanctum')
-            ->deleteJson('/api/soom/ads/my/force-delete/'.$ad->id)
+            ->deleteJson('/api/soom/ads/my/force-delete/'.$ad->public_id)
             ->assertNotFound();
     }
 
@@ -334,7 +334,7 @@ final class MyAdsEndpointsTest extends AdTestCase
         $ad = $this->makeAd(['user_id' => $this->adUser()->id]);
 
         $this->actingAs($this->adUser(), 'sanctum')
-            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->id)
-            ->assertForbidden();
+            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->public_id)
+            ->assertNotFound();
     }
 }

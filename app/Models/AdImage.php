@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class AdImage extends Model
 {
-    use HasFactory;
+    use BelongsToMarket, HasFactory;
 
-    protected $fillable = ['ad_id', 'image_path'];
+    protected $fillable = ['market_id', 'ad_id', 'image_path'];
 
     public function ad()
     {

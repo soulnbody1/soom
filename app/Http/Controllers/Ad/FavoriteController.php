@@ -55,7 +55,7 @@ class FavoriteController extends Controller
             'ad_id' => $ad->id,
         ]);
 
-        RecordAdEngagement::dispatch((int) $ad->id, (int) $userId, AdInteractionAction::Save);
+        RecordAdEngagement::dispatch((int) $ad->id, (int) $ad->market_id, (int) $userId, AdInteractionAction::Save);
 
         return response()->json(['message' => 'تمت الإضافة إلى المفضلة']);
     }

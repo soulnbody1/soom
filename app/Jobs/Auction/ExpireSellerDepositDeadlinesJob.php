@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
+use App\Contracts\Market\RunsAcrossMarkets;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\PaymentSubmissionStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Auction\Auction;
 use App\Services\Auction\Actions\ExpireSellerDepositDeadlineAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
 
-final class ExpireSellerDepositDeadlinesJob implements ShouldQueue
+final class ExpireSellerDepositDeadlinesJob implements RunsAcrossMarkets, ShouldQueue
 {
-    use Queueable;
+    use HasMarketJobContext, Queueable;
 
     public int $tries = 3;
 

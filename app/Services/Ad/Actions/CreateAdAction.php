@@ -10,6 +10,7 @@ use App\Models\Ad;
 use App\Services\Ad\Support\AdAttributeWriter;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\AdMediaService;
+use App\Support\Market\MarketContext;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -19,6 +20,7 @@ final class CreateAdAction
         private readonly AdMediaService $media,
         private readonly AdAttributeWriter $attributes,
         private readonly AdCacheVersion $cacheVersion,
+        private readonly MarketContext $market,
     ) {}
 
     public function execute(AdWriteInputDTO $input, int $ownerId): Ad
@@ -27,7 +29,12 @@ final class CreateAdAction
 
         try {
             $ad = DB::transaction(function () use ($input, $ownerId, $uploadedPaths): Ad {
-                $ad = Ad::create([...$input->fields, 'user_id' => $ownerId]);
+                $ad = Ad::create([
+                    ...$input->fields,
+                    'country_id' => $this->market->market()->country_id,
+                    'currency_code' => $this->market->market()->currency_code,
+                    'user_id' => $ownerId,
+                ]);
 
                 $this->attributes->insert($ad, $input->attributes);
                 $this->media->attach($ad, $uploadedPaths);
@@ -41,7 +48,7 @@ final class CreateAdAction
         }
 
         $this->media->queueReel($ad, $input->reelVideo);
-        SendAdNotification::dispatch($ad);
+        SendAdNotification::dispatch((int) $ad->id, (int) $ad->market_id);
         $this->cacheVersion->bump();
 
         return $ad;

@@ -6,6 +6,7 @@ namespace App\Services\Notification;
 
 use App\Models\DeviceToken;
 use App\Models\User;
+use App\Support\Market\MarketContext;
 
 final class DeviceTokenRegistry
 {
@@ -13,13 +14,15 @@ final class DeviceTokenRegistry
 
     private const MAX_LENGTH = 512;
 
+    public function __construct(private readonly MarketContext $market) {}
+
     public function remember(User $user, ?string $token, ?string $platform = null): void
     {
         if (! $this->isPlausible($token)) {
             return;
         }
 
-        DeviceToken::query()->updateOrCreate(
+        $device = DeviceToken::query()->updateOrCreate(
             ['token' => $token],
             [
                 'user_id' => $user->id,
@@ -27,6 +30,8 @@ final class DeviceTokenRegistry
                 'last_used_at' => now(),
             ]
         );
+
+        $device->markets()->syncWithoutDetaching([$this->market->marketId()]);
     }
 
     public function forget(?string $token): void
@@ -73,6 +78,27 @@ final class DeviceTokenRegistry
         return DeviceToken::query()
             ->whereIn('user_id', $userIds)
             ->get(['user_id', 'token'])
+            ->groupBy('user_id')
+            ->map(fn ($rows): array => $rows->pluck('token')->all())
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $userIds
+     * @return array<int, list<string>>
+     */
+    public function tokensForManyInMarket(array $userIds, int $marketId): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+
+        return DeviceToken::query()
+            ->select('device_tokens.user_id', 'device_tokens.token')
+            ->join('device_token_market', 'device_token_market.device_token_id', '=', 'device_tokens.id')
+            ->where('device_token_market.market_id', $marketId)
+            ->whereIn('device_tokens.user_id', $userIds)
+            ->get()
             ->groupBy('user_id')
             ->map(fn ($rows): array => $rows->pluck('token')->all())
             ->all();

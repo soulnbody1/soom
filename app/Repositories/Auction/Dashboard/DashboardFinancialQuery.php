@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace App\Repositories\Auction\Dashboard;
 
 use App\Services\Auction\Support\DashboardPeriod;
-use Illuminate\Support\Facades\DB;
+use App\Services\Market\MarketQuery;
 
 final class DashboardFinancialQuery
 {
     use BuildsPeriodWindows;
+
+    public function __construct(private readonly MarketQuery $markets) {}
 
     /**
      * Recognized commissions and gross sold value from completed settlements.
      */
     public function revenueAndGross(DashboardPeriod $period): array
     {
-        $row = DB::table('auction_settlements')
+        $row = $this->markets->table('auction_settlements')
             ->where('status', 'completed')
             ->whereNotNull('completed_at')
             ->selectRaw(implode(', ', [
@@ -31,7 +33,7 @@ final class DashboardFinancialQuery
 
     public function forfeitedDeposits(DashboardPeriod $period): array
     {
-        $row = DB::table('auction_deposits')
+        $row = $this->markets->table('auction_deposits')
             ->where('status', 'forfeited')
             ->selectRaw(implode(', ', [
                 $this->windowSum('forfeited_amount_minor', 'released_at', $period, 'forfeited_cur', 'forfeited_prev'),
@@ -49,7 +51,7 @@ final class DashboardFinancialQuery
      */
     public function heldFunds(): array
     {
-        $deposits = DB::table('auction_deposits')
+        $deposits = $this->markets->table('auction_deposits')
             ->where('status', 'held')
             ->selectRaw("
                 coalesce(sum(case when type = 'bidder' then held_amount_minor else 0 end), 0) as bidder_minor,
@@ -59,7 +61,7 @@ final class DashboardFinancialQuery
             ")
             ->first();
 
-        $winner = DB::table('auction_settlements')
+        $winner = $this->markets->table('auction_settlements')
             ->where('is_current', true)
             ->whereIn('status', ['payment_pending', 'paid', 'handover_pending', 'disputed'])
             ->whereRaw('(amount_paid_minor + deposit_applied_minor) > 0')
@@ -75,7 +77,7 @@ final class DashboardFinancialQuery
     public function payoutSummary(DashboardPeriod $period): array
     {
         $statuses = [];
-        foreach (DB::table('auction_seller_payouts')
+        foreach ($this->markets->table('auction_seller_payouts')
             ->selectRaw('status, count(*) as row_count, coalesce(sum(amount_minor), 0) as total_minor')
             ->groupBy('status')
             ->get() as $row) {
@@ -85,7 +87,7 @@ final class DashboardFinancialQuery
             ];
         }
 
-        $paid = DB::table('auction_seller_payouts')
+        $paid = $this->markets->table('auction_seller_payouts')
             ->where('status', 'paid')
             ->whereNotNull('paid_at')
             ->selectRaw(implode(', ', [
@@ -103,7 +105,7 @@ final class DashboardFinancialQuery
     public function refundSummary(DashboardPeriod $period): array
     {
         $statuses = [];
-        foreach (DB::table('refund_transactions')
+        foreach ($this->markets->table('refund_transactions')
             ->selectRaw('status, count(*) as row_count, coalesce(sum(amount_minor), 0) as total_minor')
             ->groupBy('status')
             ->get() as $row) {
@@ -113,7 +115,7 @@ final class DashboardFinancialQuery
             ];
         }
 
-        $succeeded = DB::table('refund_transactions')
+        $succeeded = $this->markets->table('refund_transactions')
             ->where('status', 'succeeded')
             ->whereNotNull('succeeded_at')
             ->selectRaw(implode(', ', [
@@ -127,13 +129,13 @@ final class DashboardFinancialQuery
 
     public function winnerCollections(DashboardPeriod $period): array
     {
-        $pending = DB::table('payment_submissions')
+        $pending = $this->markets->table('payment_submissions')
             ->where('purpose', 'winner_settlement')
             ->where('status', 'pending_review')
             ->selectRaw('count(*) as pending_count, coalesce(sum(amount_minor), 0) as pending_minor, min(submitted_at) as oldest_submitted_at')
             ->first();
 
-        $reviewed = DB::table('payment_submissions')
+        $reviewed = $this->markets->table('payment_submissions')
             ->where('purpose', 'winner_settlement')
             ->whereNotNull('reviewed_at')
             ->selectRaw(implode(', ', [
@@ -143,16 +145,16 @@ final class DashboardFinancialQuery
             ]), $this->windowBindings($period, 3))
             ->first();
 
-        $awaiting = DB::table('auction_settlements')
+        $awaiting = $this->markets->table('auction_settlements')
             ->where('is_current', true)
             ->where('status', 'payment_pending')
-            ->selectRaw("
+            ->selectRaw('
                 count(*) as awaiting_count,
                 coalesce(sum(remaining_amount_minor), 0) as awaiting_minor,
                 coalesce(sum(case when payment_due_at is not null and payment_due_at < now() then 1 else 0 end), 0) as overdue_count,
                 coalesce(sum(case when payment_due_at is not null and payment_due_at < now() then remaining_amount_minor else 0 end), 0) as overdue_minor,
                 coalesce(sum(case when payment_due_at is not null and payment_due_at >= now() and payment_due_at < date_add(now(), interval 24 hour) then 1 else 0 end), 0) as due_soon_count
-            ")
+            ')
             ->first();
 
         return array_merge(

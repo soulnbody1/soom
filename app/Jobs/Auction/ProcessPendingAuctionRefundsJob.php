@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
+use App\Contracts\Market\RunsAcrossMarkets;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Auction\RefundTransaction;
 use App\Repositories\Auction\AuctionRefundRepository;
 use App\Services\Auction\Actions\ProcessAuctionRefundAction;
@@ -12,9 +14,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 
-final class ProcessPendingAuctionRefundsJob implements ShouldQueue
+final class ProcessPendingAuctionRefundsJob implements RunsAcrossMarkets, ShouldQueue
 {
-    use Queueable;
+    use HasMarketJobContext, Queueable;
 
     public int $tries = 1;
 

@@ -74,7 +74,7 @@ final class KillSwitchTest extends TestCase
         $admin = $this->auctionReviewer();
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson("/api/admin/auctions/{$auction->public_id}/review", [
+            ->postJson("/api/admin/auctions/{$auction->public_id}/review?market=jo", [
                 'action' => 'approve',
                 'reason' => 'Reviewed by hand while the automated review is switched off.',
             ])
@@ -154,7 +154,7 @@ final class KillSwitchTest extends TestCase
         config()->set('content_review.enabled', false);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/health')
+            ->getJson('/api/admin/content-review/health?market=jo')
             ->assertOk()
             ->assertJsonPath('data.enabled', false)
             ->assertJsonPath('data.mode', 'manual');

@@ -5,8 +5,12 @@ namespace Tests;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionConfigurationVersion;
+use App\Models\Market;
 use App\Repositories\Auction\AuctionConfigurationSnapshotRepository;
+use App\Support\Market\MarketContext;
+use App\Support\Market\MarketState;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
@@ -16,6 +20,17 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         $this->guardAgainstNonTestingDatabase();
+
+        $this->app->singleton(MarketContext::class);
+        $this->app->afterResolving(MarketContext::class, function (MarketContext $context): void {
+            if (! $context->initialized() && Schema::hasTable('markets')) {
+                $this->initializeTestMarketContext($context);
+            }
+        });
+
+        if (Schema::hasTable('markets')) {
+            $this->initializeTestMarketContext(app(MarketContext::class));
+        }
     }
 
     /**
@@ -86,6 +101,14 @@ abstract class TestCase extends BaseTestCase
                 "Refusing to run tests: MySQL database '{$database}' does not end with '_testing'. "
                 .'Aborting before any migration or transaction runs to avoid destructive operations.'
             );
+        }
+    }
+
+    private function initializeTestMarketContext(MarketContext $context): void
+    {
+        $market = Market::query()->where('code', 'JO')->first();
+        if ($market !== null) {
+            $context->replace(MarketState::systemMarket($market));
         }
     }
 }

@@ -6,6 +6,7 @@ namespace App\Console\Commands\ContentReview;
 
 use App\Services\ContentReview\Actions\ReconcileContentReviewsAction;
 use App\Services\ContentReview\Support\ContentReviewLogContext;
+use App\Services\Market\MarketCommandRunner;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -17,10 +18,19 @@ final class ReconcileContentReviews extends Command
 
     protected $description = 'Report content reviews left inconsistent by a crash, and optionally apply the two idempotent repairs.';
 
-    public function handle(ReconcileContentReviewsAction $reconcile, ContentReviewLogContext $logContext): int
+    public function handle(ReconcileContentReviewsAction $reconcile, ContentReviewLogContext $logContext, MarketCommandRunner $markets): int
     {
         $apply = (bool) $this->option('apply');
-        $report = $reconcile->execute($apply, $this->limit());
+        foreach ($markets->each(fn () => $reconcile->execute($apply, $this->limit())) as $market => $report) {
+            $this->info("Market: {$market}");
+            $this->renderReport($report, $apply, $logContext);
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function renderReport(array $report, bool $apply, ContentReviewLogContext $logContext): void
+    {
 
         $this->line($apply ? 'Reconciliation applied.' : 'Reconciliation dry run — nothing was changed.');
 
@@ -53,7 +63,6 @@ final class ReconcileContentReviews extends Command
             'repaired' => $report['repaired']['expired_leases'] + $report['repaired']['terminal_rows_marked_active'],
         ]));
 
-        return self::SUCCESS;
     }
 
     private function limit(): int

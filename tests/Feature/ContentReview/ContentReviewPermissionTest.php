@@ -53,12 +53,12 @@ final class ContentReviewPermissionTest extends TestCase
             "/api/admin/content-reviews/{$review->public_id}",
             "/api/admin/content-reviews/auction/{$auction->public_id}",
             "/api/admin/content-reviews/auction/{$auction->public_id}/current",
-            '/api/admin/content-review/settings',
-            '/api/admin/content-review/settings/versions',
-            '/api/admin/content-review/policies',
-            '/api/admin/content-review/policies/active',
-            '/api/admin/content-review/health',
-            '/api/admin/content-review/metrics',
+            '/api/admin/content-review/settings?market=jo',
+            '/api/admin/content-review/settings/versions?market=jo',
+            '/api/admin/content-review/policies?market=jo',
+            '/api/admin/content-review/policies/active?market=jo',
+            '/api/admin/content-review/health?market=jo',
+            '/api/admin/content-review/metrics?market=jo',
         ] as $path) {
             $this->actingAs($admin, 'sanctum')->getJson($path)->assertOk();
         }
@@ -71,11 +71,11 @@ final class ContentReviewPermissionTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/admin/content-review/provider/test')
+            ->postJson('/api/admin/content-review/provider/test?market=jo')
             ->assertOk();
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual")
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual?market=jo")
             ->assertOk();
     }
 
@@ -86,10 +86,10 @@ final class ContentReviewPermissionTest extends TestCase
 
         foreach ([
             "/api/admin/content-reviews/{$review->public_id}",
-            '/api/admin/content-review/settings',
-            '/api/admin/content-review/policies',
-            '/api/admin/content-review/health',
-            '/api/admin/content-review/metrics',
+            '/api/admin/content-review/settings?market=jo',
+            '/api/admin/content-review/policies?market=jo',
+            '/api/admin/content-review/health?market=jo',
+            '/api/admin/content-review/metrics?market=jo',
         ] as $path) {
             $this->actingAs($seller, 'sanctum')->getJson($path)->assertForbidden();
         }
@@ -102,15 +102,15 @@ final class ContentReviewPermissionTest extends TestCase
         $seller = $this->seller();
 
         $this->actingAs($seller, 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/decide", ['decision' => 'approve'])
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/decide?market=jo", ['decision' => 'approve'])
             ->assertForbidden();
 
         $this->actingAs($seller, 'sanctum')
-            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual")
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual?market=jo")
             ->assertForbidden();
 
         $this->actingAs($seller, 'sanctum')
-            ->postJson('/api/admin/content-review/provider/test')
+            ->postJson('/api/admin/content-review/provider/test?market=jo')
             ->assertForbidden();
     }
 
@@ -157,11 +157,11 @@ final class ContentReviewPermissionTest extends TestCase
         $admin = $this->admin();
 
         $health = (array) $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/admin/content-review/health')->assertOk()->json('data');
+            ->getJson('/api/admin/content-review/health?market=jo')->assertOk()->json('data');
         $this->assertArrayHasKey('budget', $health);
 
         $metrics = (array) $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/admin/content-review/metrics')->assertOk()->json('data');
+            ->getJson('/api/admin/content-review/metrics?market=jo')->assertOk()->json('data');
         $this->assertArrayHasKey('cost', $metrics);
     }
 

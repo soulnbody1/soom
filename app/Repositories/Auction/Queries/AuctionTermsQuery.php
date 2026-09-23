@@ -15,10 +15,24 @@ final class AuctionTermsQuery
      */
     public function list(): Collection
     {
-        return AuctionTermsVersion::latest('version_number')
+        return AuctionTermsVersion::query()
+            ->latest('version_number')
             ->get()
             ->map(fn (AuctionTermsVersion $terms) => [
                 'id' => $terms->public_id,
+                'version_number' => $terms->version_number,
+                'title' => $terms->title,
+                'is_active' => $terms->is_active,
+                'published_at' => $terms->published_at?->toIso8601String(),
+            ]);
+    }
+
+    public function adminList(): Collection
+    {
+        return AuctionTermsVersion::query()->latest('version_number')->get()
+            ->map(fn (AuctionTermsVersion $terms) => [
+                'id' => $terms->public_id,
+                'market' => strtolower((string) $terms->market->code),
                 'version_number' => $terms->version_number,
                 'title' => $terms->title,
                 'is_active' => $terms->is_active,

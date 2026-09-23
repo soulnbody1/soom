@@ -6,6 +6,7 @@ namespace App\Repositories\User\Queries;
 
 use App\Models\Auction\Auction;
 use App\Models\User;
+use App\Services\Market\MarketQuery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -41,6 +42,8 @@ final class UserAuctionsQuery
         'metric',
         'currentLeadingBid:id,auction_id,amount_minor,currency_code',
     ];
+
+    public function __construct(private readonly MarketQuery $markets) {}
 
     public function paginate(User $user, string $scope, array $filters, int $perPage): LengthAwarePaginator
     {
@@ -101,7 +104,7 @@ final class UserAuctionsQuery
 
         $auctionIds = $auctions->pluck('id')->all();
 
-        $bidStats = DB::table('auction_bids')
+        $bidStats = $this->markets->table('auction_bids')
             ->selectRaw('auction_id, COUNT(*) as bids_count, MAX(amount_minor) as highest_amount_minor')
             ->where('bidder_id', $user->id)
             ->whereIn('auction_id', $auctionIds)
@@ -109,7 +112,7 @@ final class UserAuctionsQuery
             ->get()
             ->keyBy('auction_id');
 
-        $settlements = DB::table('auction_settlements')
+        $settlements = $this->markets->table('auction_settlements')
             ->select(['auction_id', 'public_id', 'status', 'winning_amount_minor', 'amount_due_minor', 'amount_paid_minor', 'currency_code', 'payment_due_at'])
             ->where('winner_id', $user->id)
             ->where('is_current', true)
@@ -117,7 +120,7 @@ final class UserAuctionsQuery
             ->get()
             ->keyBy('auction_id');
 
-        $deposits = DB::table('auction_deposits')
+        $deposits = $this->markets->table('auction_deposits')
             ->select(['auction_id', 'status', 'type', 'held_amount_minor', 'currency_code'])
             ->where('user_id', $user->id)
             ->where('type', 'bidder')

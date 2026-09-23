@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Domain\Auction\Exceptions\AuctionConfigurationSnapshotImmutableException;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class AuctionConfigurationSnapshot extends Model
 {
+    use BelongsToMarket;
+
     protected $fillable = [
         'auction_id',
         'source_configuration_version_id',

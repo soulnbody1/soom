@@ -15,6 +15,7 @@ final class OnlinePaymentMethodRule
 {
     public function __construct(
         private readonly PaymentProviderFactory $providers,
+        private readonly PaymentMethodMarketRule $markets,
     ) {}
 
     public function assertUsable(
@@ -27,6 +28,8 @@ final class OnlinePaymentMethodRule
             throw AuctionException::domain('payment_method_not_online');
         }
 
+        $this->markets->assertUsable($method, $auction, $obligation->currencyCode);
+
         $providerCode = trim((string) $method->provider_code);
 
         if ($providerCode === '' || ! $this->providers->isEnabled($providerCode)) {
@@ -35,8 +38,6 @@ final class OnlinePaymentMethodRule
 
         $this->assertEnvironment($method, $providerCode);
         $this->assertPurpose($method, $purpose);
-        $this->assertCountry($method, $auction);
-        $this->assertCurrency($method, $obligation->currencyCode);
         $this->assertAmount($method, $obligation->amountMinor);
 
         $capabilities = $this->providers->make($providerCode)->capabilities();
@@ -52,6 +53,10 @@ final class OnlinePaymentMethodRule
             return false;
         }
 
+        if (! $this->markets->isAvailableFor($method, $auction, (string) $auction->currency_code)) {
+            return false;
+        }
+
         if ($method->channel !== PaymentChannel::Online) {
             return true;
         }
@@ -64,8 +69,6 @@ final class OnlinePaymentMethodRule
 
         try {
             $this->assertPurpose($method, $purpose);
-            $this->assertCountry($method, $auction);
-            $this->assertCurrency($method, (string) $auction->currency_code);
         } catch (AuctionException) {
             return false;
         }
@@ -92,34 +95,6 @@ final class OnlinePaymentMethodRule
 
         if (is_array($allowed) && $allowed !== [] && ! in_array($purpose->value, $allowed, true)) {
             throw AuctionException::domain('payment_method_purpose_not_allowed');
-        }
-    }
-
-    private function assertCountry(PaymentMethod $method, Auction $auction): void
-    {
-        $allowed = $method->country_codes;
-
-        if (! is_array($allowed) || $allowed === []) {
-            return;
-        }
-
-        $countryCode = strtoupper((string) $auction->country?->code);
-
-        if ($countryCode === '' || ! in_array($countryCode, array_map('strtoupper', $allowed), true)) {
-            throw AuctionException::domain('payment_method_country_not_allowed');
-        }
-    }
-
-    private function assertCurrency(PaymentMethod $method, string $currencyCode): void
-    {
-        $allowed = $method->currency_codes;
-
-        if (! is_array($allowed) || $allowed === []) {
-            return;
-        }
-
-        if (! in_array(strtoupper($currencyCode), array_map('strtoupper', $allowed), true)) {
-            throw AuctionException::domain('payment_method_currency_not_allowed');
         }
     }
 

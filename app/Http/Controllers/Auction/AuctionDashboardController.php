@@ -7,16 +7,19 @@ namespace App\Http\Controllers\Auction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auction\AdminDashboardRequest;
 use App\Http\Resources\Auction\DashboardResource;
+use App\Models\Market;
 use App\Repositories\Auction\Dashboard\DashboardActionQuery;
 use App\Repositories\Auction\Dashboard\DashboardAuctionQuery;
 use App\Repositories\Auction\Dashboard\DashboardFinancialQuery;
 use App\Repositories\Auction\Dashboard\DashboardSeriesQuery;
+use App\Support\Market\MarketContext;
+use App\Support\Market\MarketMode;
+use App\Support\Market\MarketState;
 use App\Traits\ApiResponseTrait;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 #[Group(name: 'لوحة تحكم المزادات', description: 'مؤشرات المزادات المالية والتشغيلية خلال فترة زمنية محددة.', weight: 13)]
@@ -35,11 +38,42 @@ final class AuctionDashboardController extends Controller
         DashboardAuctionQuery $auctions,
         DashboardSeriesQuery $series,
         DashboardActionQuery $actions,
+        MarketContext $context,
     ): JsonResponse {
         Gate::authorize('auction.dashboard.view');
 
+        if ($context->state()->mode === MarketMode::AdminAll) {
+            $rows = Market::query()->orderBy('code')->get()->map(function (Market $market) use (
+                $context, $request, $financial, $auctions, $series, $actions
+            ): array {
+                return $context->run(
+                    MarketState::adminMarket($market),
+                    fn (): array => [
+                        'market' => strtolower($market->code),
+                        'is_active' => (bool) $market->is_active,
+                        ...$this->payload($request, $financial, $auctions, $series, $actions, $market->currency_code),
+                    ]
+                );
+            })->values();
+
+            return $this->sendResponse(['markets' => $rows], __('auction.messages.dashboard_fetched'));
+        }
+
+        return $this->sendResponse(
+            $this->payload($request, $financial, $auctions, $series, $actions, $context->market()->currency_code),
+            __('auction.messages.dashboard_fetched')
+        );
+    }
+
+    private function payload(
+        AdminDashboardRequest $request,
+        DashboardFinancialQuery $financial,
+        DashboardAuctionQuery $auctions,
+        DashboardSeriesQuery $series,
+        DashboardActionQuery $actions,
+        string $currency,
+    ): array {
         $period = $request->period();
-        $currency = (string) (DB::table('auctions')->value('currency_code') ?? 'JOD');
 
         $revenue = $financial->revenueAndGross($period);
         $payouts = $financial->payoutSummary($period);
@@ -92,6 +126,6 @@ final class AuctionDashboardController extends Controller
             ),
         ];
 
-        return $this->sendResponse($payload, __('auction.messages.dashboard_fetched'));
+        return $payload;
     }
 }

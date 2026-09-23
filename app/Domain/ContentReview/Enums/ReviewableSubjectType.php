@@ -7,4 +7,5 @@ namespace App\Domain\ContentReview\Enums;
 enum ReviewableSubjectType: string
 {
     case Auction = 'auction';
+    case Ad = 'ad';
 }

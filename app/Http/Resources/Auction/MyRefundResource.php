@@ -14,9 +14,11 @@ final class MyRefundResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
+            'market_code' => strtolower((string) $this->market?->code),
             'auction' => $this->resource->relationLoaded('auction') && $this->resource->auction
                 ? [
                     'id' => $this->resource->auction->public_id,
+                    'url' => $this->resource->auction->market?->webUrl('auctions/'.$this->resource->auction->public_id),
                     'title' => $this->resource->auction->title,
                     'status' => $this->resource->auction->status->value,
                 ]

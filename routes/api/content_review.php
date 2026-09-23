@@ -16,29 +16,31 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/content-reviews
     Route::get('/{subjectType}/{subjectId}/current', [ContentReviewController::class, 'current'])
         ->whereIn('subjectType', $subjectTypes);
     Route::post('/{subjectType}/{subjectId}/run', [ContentReviewController::class, 'run'])
+        ->middleware('admin_market_required')
         ->whereIn('subjectType', $subjectTypes);
     Route::post('/{subjectType}/{subjectId}/force-manual', [ContentReviewController::class, 'forceManual'])
+        ->middleware('admin_market_required')
         ->whereIn('subjectType', $subjectTypes);
 
     Route::get('/{contentReview}', [ContentReviewController::class, 'show']);
-    Route::post('/{contentReview}/retry', [ContentReviewController::class, 'retry']);
-    Route::post('/{contentReview}/cancel', [ContentReviewController::class, 'cancel']);
-    Route::post('/{contentReview}/decide', [ContentReviewController::class, 'decide']);
+    Route::post('/{contentReview}/retry', [ContentReviewController::class, 'retry'])->middleware('admin_market_required');
+    Route::post('/{contentReview}/cancel', [ContentReviewController::class, 'cancel'])->middleware('admin_market_required');
+    Route::post('/{contentReview}/decide', [ContentReviewController::class, 'decide'])->middleware('admin_market_required');
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/content-review')->group(function () {
-    Route::get('/settings', [ContentReviewSettingsController::class, 'show']);
-    Route::get('/settings/versions', [ContentReviewSettingsController::class, 'index']);
-    Route::post('/settings', [ContentReviewSettingsController::class, 'store']);
+    Route::get('/settings', [ContentReviewSettingsController::class, 'show'])->middleware('admin_market_required');
+    Route::get('/settings/versions', [ContentReviewSettingsController::class, 'index'])->middleware('admin_market_required');
+    Route::post('/settings', [ContentReviewSettingsController::class, 'store'])->middleware('admin_market_required');
 
-    Route::get('/policies', [ContentReviewPolicyController::class, 'index']);
-    Route::get('/policies/active', [ContentReviewPolicyController::class, 'active']);
-    Route::get('/policies/{contentReviewPolicy}', [ContentReviewPolicyController::class, 'show']);
-    Route::post('/policies', [ContentReviewPolicyController::class, 'store']);
+    Route::get('/policies', [ContentReviewPolicyController::class, 'index'])->middleware('admin_market_required');
+    Route::get('/policies/active', [ContentReviewPolicyController::class, 'active'])->middleware('admin_market_required');
+    Route::get('/policies/{contentReviewPolicy}', [ContentReviewPolicyController::class, 'show'])->middleware('admin_market_required');
+    Route::post('/policies', [ContentReviewPolicyController::class, 'store'])->middleware('admin_market_required');
 
-    Route::get('/metrics', [ContentReviewMetricsController::class, 'show']);
+    Route::get('/metrics', [ContentReviewMetricsController::class, 'show'])->middleware('admin_market_required');
 
-    Route::get('/health', [ContentReviewHealthController::class, 'show']);
+    Route::get('/health', [ContentReviewHealthController::class, 'show'])->middleware('admin_market_required');
     Route::post('/provider/test', [ContentReviewHealthController::class, 'test'])
-        ->middleware('throttle:content-review-provider-test');
+        ->middleware(['admin_market_required', 'throttle:content-review-provider-test']);
 });

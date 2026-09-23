@@ -20,6 +20,7 @@ final class AuctionBidResource extends JsonResource
 
         return [
             'id' => $this->public_id,
+            'market_code' => strtolower((string) $this->market?->code),
             'auction_id' => $this->whenLoaded('auction', fn () => $this->auction->public_id),
             'auction' => $this->whenLoaded('auction', fn () => $this->auctionSummary($user?->id)),
             'amount' => MoneyResource::make($this->amount_minor, $this->currency_code),
@@ -46,6 +47,8 @@ final class AuctionBidResource extends JsonResource
 
         return [
             'id' => $auction->public_id,
+            'market_code' => strtolower((string) $auction->market?->code),
+            'url' => $auction->market?->webUrl('auctions/'.$auction->public_id),
             'title' => $auction->title,
             'status' => $auction->status->value,
             'status_label' => __('auction.statuses.'.$auction->status->value),

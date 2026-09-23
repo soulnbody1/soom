@@ -32,10 +32,12 @@ Route::prefix('auctions')->middleware([OptionalSanctumAuthentication::class, Att
 });
 
 Route::post('webhooks/payments/{provider}', [PaymentWebhookController::class, 'handle'])
+    ->withoutMiddleware('market')
     ->middleware('throttle:payment-webhooks')
     ->where('provider', '[A-Za-z0-9_-]+');
 
 Route::post('webhooks/payments/{provider}/bills', [BillPresentmentController::class, 'handle'])
+    ->withoutMiddleware('market')
     ->middleware('throttle:payment-bill-queries')
     ->where('provider', '[A-Za-z0-9_-]+');
 
@@ -47,19 +49,19 @@ Route::prefix('soom')->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'role:admin,user', AttachServerTime::class])->prefix('soom')->group(function () {
-    Route::get('/my/auctions', [AuctionController::class, 'mine']);
-    Route::get('/my/participations', [MyParticipationController::class, 'index']);
-    Route::get('/my/refunds', [MyParticipationController::class, 'refunds']);
-    Route::get('/my/bids', [BidController::class, 'mine']);
-    Route::get('/my/payouts', [SellerPayoutController::class, 'mine']);
-    Route::get('/my/payouts/{sellerPayout}', [SellerPayoutController::class, 'showMine']);
-    Route::get('/my/payouts/{sellerPayout}/proof-url', [SellerPayoutController::class, 'proofUrl']);
+    Route::get('/my/auctions', [AuctionController::class, 'mine'])->middleware('account_global');
+    Route::get('/my/participations', [MyParticipationController::class, 'index'])->middleware('account_global');
+    Route::get('/my/refunds', [MyParticipationController::class, 'refunds'])->middleware('account_global');
+    Route::get('/my/bids', [BidController::class, 'mine'])->middleware('account_global');
+    Route::get('/my/payouts', [SellerPayoutController::class, 'mine'])->middleware('account_global');
+    Route::get('/my/payouts/{sellerPayout}', [SellerPayoutController::class, 'showMine'])->middleware('account_global');
+    Route::get('/my/payouts/{sellerPayout}/proof-url', [SellerPayoutController::class, 'proofUrl'])->middleware('account_global');
     Route::get('/my/payout-destinations', [PayoutDestinationController::class, 'index']);
     Route::post('/my/payout-destinations', [PayoutDestinationController::class, 'store']);
     Route::put('/my/payout-destinations/{payoutDestination}', [PayoutDestinationController::class, 'update']);
     Route::delete('/my/payout-destinations/{payoutDestination}', [PayoutDestinationController::class, 'destroy']);
-    Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
-    Route::get('/payments/{paymentTransaction}', [OnlinePaymentController::class, 'show']);
+    Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl'])->middleware('account_global');
+    Route::get('/payments/{paymentTransaction}', [OnlinePaymentController::class, 'show'])->middleware('account_global');
 
     Route::prefix('auctions')->group(function () {
         Route::post('/', [AuctionController::class, 'store']);
@@ -88,47 +90,48 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin/auctions')->gro
     Route::get('/', [AuctionController::class, 'all']);
     Route::get('/dashboard', [AuctionDashboardController::class, 'index']);
     Route::get('/operational-settings', [AuctionOperationalSettingsController::class, 'show']);
-    Route::get('/support-contact', [SupportContactController::class, 'edit']);
-    Route::post('/support-contact', [SupportContactController::class, 'store']);
+    Route::get('/support-contact', [SupportContactController::class, 'edit'])->middleware('admin_market_required');
+    Route::post('/support-contact', [SupportContactController::class, 'store'])->middleware('admin_market_required');
     Route::get('/terms/{terms}', [AuctionTermsController::class, 'show']);
-    Route::post('/terms', [AuctionTermsController::class, 'store']);
+    Route::get('/terms', [AuctionTermsController::class, 'adminIndex']);
+    Route::post('/terms', [AuctionTermsController::class, 'store'])->middleware('admin_market_required');
     Route::get('/configuration-versions', [AuctionConfigurationController::class, 'index']);
     Route::get('/configuration-versions/{configurationVersion}', [AuctionConfigurationController::class, 'show']);
-    Route::post('/configuration-versions', [AuctionConfigurationController::class, 'store']);
+    Route::post('/configuration-versions', [AuctionConfigurationController::class, 'store'])->middleware('admin_market_required');
     Route::get('/disputes', [AuctionDisputeController::class, 'index']);
     Route::get('/payment-methods', [PaymentMethodController::class, 'all']);
     Route::get('/payment-providers', [PaymentProviderController::class, 'index']);
     Route::get('/payment-method-options', [PaymentProviderController::class, 'options']);
-    Route::post('/payment-providers/{provider}/test', [PaymentProviderController::class, 'test'])->where('provider', '[A-Za-z0-9_-]+');
-    Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
-    Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update']);
+    Route::post('/payment-providers/{provider}/test', [PaymentProviderController::class, 'test'])->where('provider', '[A-Za-z0-9_-]+')->middleware('admin_market_required');
+    Route::post('/payment-methods', [PaymentMethodController::class, 'store'])->middleware('admin_market_required');
+    Route::put('/payment-methods/{paymentMethod}', [PaymentMethodController::class, 'update'])->middleware('admin_market_required');
     Route::get('/refunds', [RefundController::class, 'index']);
     Route::get('/refunds/{refund}/proof-url', [RefundController::class, 'proofUrl']);
-    Route::post('/refunds/{refund}/confirm', [RefundController::class, 'confirm']);
-    Route::post('/refunds/{refund}/cancel', [RefundController::class, 'cancel']);
+    Route::post('/refunds/{refund}/confirm', [RefundController::class, 'confirm'])->middleware('admin_market_required');
+    Route::post('/refunds/{refund}/cancel', [RefundController::class, 'cancel'])->middleware('admin_market_required');
     Route::get('/payouts', [SellerPayoutController::class, 'index']);
     Route::get('/payouts/summary', [SellerPayoutController::class, 'summary']);
     Route::get('/payouts/{sellerPayout}', [SellerPayoutController::class, 'show']);
     Route::get('/payouts/{sellerPayout}/proof-url', [SellerPayoutController::class, 'proofUrl']);
-    Route::post('/payouts/{sellerPayout}/start-processing', [SellerPayoutController::class, 'startProcessing']);
-    Route::post('/payouts/{sellerPayout}/mark-paid', [SellerPayoutController::class, 'markPaid']);
-    Route::post('/payouts/{sellerPayout}/mark-failed', [SellerPayoutController::class, 'markFailed']);
-    Route::post('/payouts/{sellerPayout}/hold', [SellerPayoutController::class, 'hold']);
-    Route::post('/payouts/{sellerPayout}/release', [SellerPayoutController::class, 'release']);
-    Route::post('/{auction}/end-now', [AuctionController::class, 'endEarly']);
-    Route::post('/{auction}/review', [AuctionController::class, 'review']);
-    Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute']);
-    Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted']);
+    Route::post('/payouts/{sellerPayout}/start-processing', [SellerPayoutController::class, 'startProcessing'])->middleware('admin_market_required');
+    Route::post('/payouts/{sellerPayout}/mark-paid', [SellerPayoutController::class, 'markPaid'])->middleware('admin_market_required');
+    Route::post('/payouts/{sellerPayout}/mark-failed', [SellerPayoutController::class, 'markFailed'])->middleware('admin_market_required');
+    Route::post('/payouts/{sellerPayout}/hold', [SellerPayoutController::class, 'hold'])->middleware('admin_market_required');
+    Route::post('/payouts/{sellerPayout}/release', [SellerPayoutController::class, 'release'])->middleware('admin_market_required');
+    Route::post('/{auction}/end-now', [AuctionController::class, 'endEarly'])->middleware('admin_market_required');
+    Route::post('/{auction}/review', [AuctionController::class, 'review'])->middleware('admin_market_required');
+    Route::post('/{auction}/disputes/{auctionDispute}/resolve', [AuctionController::class, 'resolveDispute'])->middleware('admin_market_required');
+    Route::post('/{auction}/winner-default', [AuctionController::class, 'markWinnerDefaulted'])->middleware('admin_market_required');
     Route::get('/{auction}/participants', [AuctionController::class, 'participants']);
-    Route::post('/{auction}/participants/{participant}/block', [AuctionController::class, 'blockParticipant']);
-    Route::post('/{auction}/participants/{participant}/unblock', [AuctionController::class, 'unblockParticipant']);
+    Route::post('/{auction}/participants/{participant}/block', [AuctionController::class, 'blockParticipant'])->middleware('admin_market_required');
+    Route::post('/{auction}/participants/{participant}/unblock', [AuctionController::class, 'unblockParticipant'])->middleware('admin_market_required');
     Route::get('/{auction}/activity', [AuctionAuditController::class, 'activity']);
     Route::get('/{auction}/status-history', [AuctionAuditController::class, 'statusHistory']);
     Route::get('/payments', [PaymentRecordController::class, 'index']);
     Route::get('/payments/{record}', [PaymentRecordController::class, 'show']);
-    Route::post('/payments/{record}/refund', [PaymentRecordController::class, 'refund']);
+    Route::post('/payments/{record}/refund', [PaymentRecordController::class, 'refund'])->middleware('admin_market_required');
     Route::get('/payment-submissions', [PaymentSubmissionController::class, 'index']);
     Route::get('/payment-submissions/{paymentSubmission}/receipt-url', [PaymentSubmissionController::class, 'receiptUrl']);
-    Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review']);
+    Route::post('/payment-submissions/{paymentSubmission}/review', [PaymentSubmissionController::class, 'review'])->middleware('admin_market_required');
     Route::get('/{auction}', [AuctionController::class, 'showForAdmin']);
 });

@@ -32,6 +32,8 @@ final class UserAuctionResource extends JsonResource
 
         return [
             'id' => $this->resource->public_id,
+            'market_code' => strtolower((string) $this->resource->market?->code),
+            'url' => $this->resource->market?->webUrl('auctions/'.$this->resource->public_id),
             'title' => $this->resource->title,
             'description' => $this->resource->description,
             'status' => $this->resource->status->value,

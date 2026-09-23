@@ -6,11 +6,14 @@ namespace App\Services\Location;
 
 use App\Models\Ad;
 use App\Models\User;
+use App\Support\Market\MarketContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 final class GeographyDeletionGuard
 {
+    public function __construct(private readonly MarketContext $context) {}
+
     public function assertCountryDeletable(int $countryId): void
     {
         $stateIds = $this->stateIds($countryId);
@@ -42,11 +45,11 @@ final class GeographyDeletionGuard
 
     private function assertEmpty(array $countryIds, array $stateIds, array $cityIds, string $key, string $message): void
     {
-        $counts = [
+        $counts = $this->context->runGlobally(fn (): array => [
             'ads' => $this->countAds($countryIds, $stateIds, $cityIds),
             'users' => $this->countUsers($countryIds, $stateIds, $cityIds),
             'auctions' => $this->countAuctions($countryIds, $stateIds, $cityIds),
-        ];
+        ]);
 
         if (array_sum($counts) === 0) {
             return;

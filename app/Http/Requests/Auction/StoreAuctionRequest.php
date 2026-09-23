@@ -7,9 +7,11 @@ namespace App\Http\Requests\Auction;
 use App\Domain\Auction\Rules\CurrencyDecimalRule;
 use App\Domain\Auction\Rules\SupportedCurrencyRule;
 use App\Domain\Auction\ValueObjects\Money;
+use App\Support\Market\MarketContext;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 #[BodyParameter('category_id', description: 'معرّف تصنيف المزاد.')]
 #[BodyParameter('country_id', description: 'معرّف الدولة التي يوجد فيها المنتج.')]
@@ -35,13 +37,20 @@ final class StoreAuctionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_id' => ['required', 'integer', 'exists:categories,id'],
-            'country_id' => ['required', 'integer', 'exists:countries,id'],
-            'state_id' => ['nullable', 'integer', 'exists:states,id'],
-            'city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'category_id' => [
+                'required',
+                'integer',
+                Rule::exists('market_category', 'category_id')
+                    ->where('market_id', app(MarketContext::class)->marketId())
+                    ->where('is_visible', true),
+            ],
+            'country_id' => ['required', 'integer', Rule::in([app(MarketContext::class)->market()->country_id])],
+            'state_id' => ['nullable', 'integer', Rule::exists('states', 'id')->where('country_id', $this->input('country_id'))],
+            'city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')->where('state_id', $this->input('state_id'))],
             'title' => ['required', 'string', 'max:180'],
             'description' => ['required', 'string', 'max:10000'],
-            'currency_code' => ['required', 'string', 'size:3', new SupportedCurrencyRule],
+            'currency_code' => ['required', 'string', 'size:3', new SupportedCurrencyRule,
+                Rule::in([app(MarketContext::class)->market()->currency_code])],
             'starting_amount' => ['required', new CurrencyDecimalRule('currency_code')],
             'reserve_amount' => ['nullable', new CurrencyDecimalRule('currency_code')],
             'starts_at' => ['required', 'date', 'after:now'],

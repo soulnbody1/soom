@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\Concerns\HasPublicId;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,14 +13,16 @@ use Illuminate\Support\Facades\DB;
 
 class Ad extends Model
 {
-    use HasFactory, HasPublicId, SoftDeletes;
+    use BelongsToMarket, HasFactory, HasPublicId, SoftDeletes;
 
     protected $fillable = [
+        'market_id',
         'user_id',
         'category_id',
         'title',
         'description',
         'price',
+        'currency_code',
         'country_id',
         'state_id',
         'city_id',
@@ -96,6 +99,7 @@ class Ad extends Model
         'city:id,name',
         'images:id,ad_id,image_path',
         'attributeValues.attribute:id,name',
+        'market:id,code,web_host',
     ];
 
     public function scopeWithIsFavorite(Builder $query, ?object $user): Builder

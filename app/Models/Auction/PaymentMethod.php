@@ -7,13 +7,14 @@ namespace App\Models\Auction;
 use App\Domain\Auction\Enums\PaymentChannel;
 use App\Domain\Auction\Enums\PaymentRail;
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 final class PaymentMethod extends Model
 {
+    use BelongsToMarket, HasPublicId;
     use HasFactory;
-    use HasPublicId;
 
     public const IDENTIFIER_TYPES = [
         'cliq_alias',
@@ -40,8 +41,6 @@ final class PaymentMethod extends Model
         'is_active',
         'display_order',
         'allowed_purposes',
-        'country_codes',
-        'currency_codes',
         'min_amount_minor',
         'max_amount_minor',
         'fee_basis',
@@ -57,8 +56,6 @@ final class PaymentMethod extends Model
         'is_active' => 'boolean',
         'display_order' => 'integer',
         'allowed_purposes' => 'array',
-        'country_codes' => 'array',
-        'currency_codes' => 'array',
         'min_amount_minor' => 'integer',
         'max_amount_minor' => 'integer',
         'fee_tiers' => 'array',

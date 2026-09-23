@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Support\Market\MarketContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
@@ -26,7 +27,8 @@ class StoreMessageRequest extends FormRequest
                 Rule::notIn([(int) $this->user()?->id]),
                 'exists:users,id',
             ],
-            'ad_id' => ['bail', 'nullable', 'string', 'size:26', 'ulid', Rule::exists('ads', 'public_id')->whereNull('deleted_at')],
+            'ad_id' => ['bail', 'nullable', 'string', 'size:26', 'ulid', Rule::exists('ads', 'public_id')
+                ->whereNull('deleted_at')->where('market_id', app(MarketContext::class)->marketId())],
             'content' => ['nullable', 'string', 'max:'.self::MAX_CONTENT_LENGTH, 'required_without:file'],
             'TemporaryCode' => ['nullable', 'string', 'max:100'],
             'file' => ['nullable', 'file', 'mimes:jpeg,png,jpg,pdf,mp3,wav,mp4,zip', 'max:15360', 'required_without:content'],

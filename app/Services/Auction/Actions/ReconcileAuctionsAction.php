@@ -14,11 +14,13 @@ use App\Models\Auction\AuctionDeposit;
 use App\Models\Auction\OutboxMessage;
 use App\Models\Auction\PaymentSubmission;
 use App\Models\Auction\RefundTransaction;
-use Illuminate\Support\Facades\DB;
+use App\Services\Market\MarketQuery;
 use Illuminate\Support\Facades\Log;
 
 final class ReconcileAuctionsAction
 {
+    public function __construct(private readonly MarketQuery $markets) {}
+
     public function execute(): array
     {
         $report = [
@@ -45,7 +47,7 @@ final class ReconcileAuctionsAction
 
     private function terminalHeldNonWinnerDepositCount(): int
     {
-        return (int) DB::table('auction_deposits')
+        return (int) $this->markets->table('auction_deposits')
             ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
             ->leftJoin('auction_bids as winning_bids', 'winning_bids.id', '=', 'auctions.winning_bid_id')
             ->leftJoin('auction_settlements as current_settlements', function ($join): void {
@@ -73,7 +75,7 @@ final class ReconcileAuctionsAction
 
     private function terminalHeldSellerDepositCount(): int
     {
-        return (int) DB::table('auction_deposits')
+        return (int) $this->markets->table('auction_deposits')
             ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
             ->where('auction_deposits.type', 'seller')
             ->where('auction_deposits.status', AuctionDepositStatus::Held->value)
@@ -94,7 +96,7 @@ final class ReconcileAuctionsAction
 
     private function sellerDepositsResolvedWithoutTerminalReasonCount(): int
     {
-        return (int) DB::table('auction_deposits')
+        return (int) $this->markets->table('auction_deposits')
             ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
             ->where('auction_deposits.type', 'seller')
             ->whereIn('auction_deposits.status', [
@@ -124,7 +126,7 @@ final class ReconcileAuctionsAction
 
     private function cancelledCurrentSettlementsActiveCount(): int
     {
-        return (int) DB::table('auction_settlements')
+        return (int) $this->markets->table('auction_settlements')
             ->join('auctions', 'auctions.id', '=', 'auction_settlements.auction_id')
             ->where('auctions.status', AuctionStatus::Cancelled->value)
             ->where('auction_settlements.current_marker', 1)
@@ -133,7 +135,7 @@ final class ReconcileAuctionsAction
 
     private function cancelledPendingPaymentSubmissionsCount(): int
     {
-        return (int) DB::table('payment_submissions')
+        return (int) $this->markets->table('payment_submissions')
             ->join('auctions', 'auctions.id', '=', 'payment_submissions.auction_id')
             ->where('auctions.status', AuctionStatus::Cancelled->value)
             ->where('payment_submissions.status', PaymentSubmissionStatus::PendingReview->value)
@@ -142,7 +144,7 @@ final class ReconcileAuctionsAction
 
     private function cancelledSuccessfulPaymentsWithoutRefundOrDispositionCount(): int
     {
-        return (int) DB::table('payment_transactions')
+        return (int) $this->markets->table('payment_transactions')
             ->join('auctions', 'auctions.id', '=', 'payment_transactions.auction_id')
             ->join('payment_submissions', 'payment_submissions.id', '=', 'payment_transactions.payment_submission_id')
             ->leftJoin('auction_deposits', 'auction_deposits.id', '=', 'payment_submissions.deposit_id')
@@ -175,7 +177,7 @@ final class ReconcileAuctionsAction
 
     private function cancelledBidderDepositsHeldCount(): int
     {
-        return (int) DB::table('auction_deposits')
+        return (int) $this->markets->table('auction_deposits')
             ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
             ->where('auctions.status', AuctionStatus::Cancelled->value)
             ->where('auction_deposits.type', 'bidder')
@@ -185,7 +187,7 @@ final class ReconcileAuctionsAction
 
     private function cancelledSellerDepositsWithoutDispositionCount(): int
     {
-        return (int) DB::table('auction_deposits')
+        return (int) $this->markets->table('auction_deposits')
             ->join('auctions', 'auctions.id', '=', 'auction_deposits.auction_id')
             ->where('auctions.status', AuctionStatus::Cancelled->value)
             ->where('auction_deposits.type', 'seller')

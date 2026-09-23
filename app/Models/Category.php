@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\Storage;
 
 class Category extends Model
@@ -31,6 +32,13 @@ class Category extends Model
     {
         return $this->belongsToMany(Attribute::class, 'attribute_category')
             ->withPivot('is_inheritable')
+            ->withTimestamps();
+    }
+
+    public function markets(): BelongsToMany
+    {
+        return $this->belongsToMany(Market::class, 'market_category')
+            ->withPivot(['is_visible', 'display_order'])
             ->withTimestamps();
     }
 

@@ -13,17 +13,24 @@ final class CurrencyDecimalRule implements ValidationRule
 {
     public function __construct(
         private readonly string $currencyField = 'currency_code',
+        private readonly ?string $currency = null,
     ) {}
+
+    public static function forCurrency(string $currency): self
+    {
+        return new self(currency: strtoupper($currency));
+    }
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $request = request();
-        $currencyCode = strtoupper((string) ($request->input($this->currencyField) ?? 'JOD'));
+        $currencyCode = $this->currency
+            ?? strtoupper((string) (request()->input($this->currencyField) ?? 'JOD'));
 
         try {
             $currency = Currency::fromCode($currencyCode);
         } catch (InvalidArgumentException) {
             $fail(__('auction.errors.unsupported_currency', ['code' => $currencyCode]));
+
             return;
         }
 
@@ -32,6 +39,7 @@ final class CurrencyDecimalRule implements ValidationRule
 
         if (! preg_match('/^\d+(\.\d+)?$/', $amount)) {
             $fail(__('validation.numeric'));
+
             return;
         }
 

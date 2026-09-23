@@ -15,10 +15,15 @@ use App\Http\Controllers\CharitySystemController;
 use App\Http\Controllers\Location\CityController;
 use App\Http\Controllers\Location\CountryController;
 use App\Http\Controllers\Location\StateController;
+use App\Http\Controllers\MarketController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
+    Route::get('/markets', [MarketController::class, 'adminIndex']);
     Route::apiResource('categories', CategoryController::class)->only(['store', 'update', 'destroy']);
+    Route::put('categories/{category}/market-visibility', [CategoryController::class, 'updateMarketVisibility'])
+        ->whereNumber('category')
+        ->middleware('admin_market_required');
     Route::apiResource('countries', CountryController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('states', StateController::class)->only(['store', 'update', 'destroy']);
     Route::apiResource('citys', CityController::class)->only(['store', 'update', 'destroy']);
@@ -68,33 +73,33 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::prefix('banners')->group(function () {
         Route::get('/', [BannerController::class, 'indexforadmin']);
         Route::get('/{id}', [BannerController::class, 'show']);
-        Route::post('/', [BannerController::class, 'store']);
-        Route::put('/{id}', [BannerController::class, 'update']);
-        Route::delete('/{id}', [BannerController::class, 'destroy']);
+        Route::post('/', [BannerController::class, 'store'])->middleware('admin_market_required');
+        Route::put('/{id}', [BannerController::class, 'update'])->middleware('admin_market_required');
+        Route::delete('/{id}', [BannerController::class, 'destroy'])->middleware('admin_market_required');
     });
 
     Route::prefix('charity_system')->group(function () {
         Route::get('/', [CharitySystemController::class, 'indexforadmin']);
         Route::get('/{id}', [CharitySystemController::class, 'show']);
-        Route::post('/', [CharitySystemController::class, 'store']);
-        Route::put('/{id}', [CharitySystemController::class, 'update']);
-        Route::delete('/{id}', [CharitySystemController::class, 'destroy']);
+        Route::post('/', [CharitySystemController::class, 'store'])->middleware('admin_market_required');
+        Route::put('/{id}', [CharitySystemController::class, 'update'])->middleware('admin_market_required');
+        Route::delete('/{id}', [CharitySystemController::class, 'destroy'])->middleware('admin_market_required');
     });
 
     Route::prefix('announcements')->group(function () {
         Route::get('/', [AnnouncementController::class, 'indexforadmin']);
         Route::get('/{id}', [AnnouncementController::class, 'show']);
-        Route::post('/', [AnnouncementController::class, 'store']);
-        Route::post('/{id}', [AnnouncementController::class, 'update']);
-        Route::delete('/{id}', [AnnouncementController::class, 'destroy']);
+        Route::post('/', [AnnouncementController::class, 'store'])->middleware('admin_market_required');
+        Route::post('/{id}', [AnnouncementController::class, 'update'])->middleware('admin_market_required');
+        Route::delete('/{id}', [AnnouncementController::class, 'destroy'])->middleware('admin_market_required');
     });
 
     Route::prefix('ads')->group(function () {
         Route::get('/', [AdminAdController::class, 'index']);
         Route::get('/search', [AdminAdController::class, 'search']);
-        Route::delete('/force-delete/{ad}', [AdminAdController::class, 'forceDelete'])->whereUlid('ad');
-        Route::put('/toggle-block/{ad}', [AdminAdController::class, 'toggleBlock'])->whereUlid('ad');
-        Route::put('/toggle-featured/{ad}', [AdminAdController::class, 'toggleFeatured'])->whereUlid('ad');
+        Route::delete('/force-delete/{ad}', [AdminAdController::class, 'forceDelete'])->whereUlid('ad')->middleware('admin_market_required');
+        Route::put('/toggle-block/{ad}', [AdminAdController::class, 'toggleBlock'])->whereUlid('ad')->middleware('admin_market_required');
+        Route::put('/toggle-featured/{ad}', [AdminAdController::class, 'toggleFeatured'])->whereUlid('ad')->middleware('admin_market_required');
     });
 
     Route::prefix('attribute-options')->group(function () {

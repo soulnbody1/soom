@@ -77,7 +77,7 @@ class AdController extends Controller
         $ad = $details->findOrFail($ad, $viewer);
 
         if ($viewer !== null) {
-            RecordAdEngagement::dispatch((int) $ad->id, (int) $viewer->id, AdInteractionAction::Click, true);
+            RecordAdEngagement::dispatch((int) $ad->id, (int) $ad->market_id, (int) $viewer->id, AdInteractionAction::Click, true);
         }
 
         return $this->sendResponse(

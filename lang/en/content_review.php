@@ -58,6 +58,7 @@ return [
 
     'subject_types' => [
         'auction' => 'Auction',
+        'ad' => 'Ad',
     ],
 
     'modes' => [

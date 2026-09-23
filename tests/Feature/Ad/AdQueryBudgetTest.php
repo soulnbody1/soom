@@ -71,7 +71,7 @@ final class AdQueryBudgetTest extends AdTestCase
     {
         $ad = $this->seedRichAds(1)->first();
 
-        $count = $this->measure('/api/soom/ads/'.$ad->id);
+        $count = $this->measure('/api/soom/ads/'.$ad->public_id);
 
         $this->assertLessThanOrEqual(
             15,
@@ -84,7 +84,7 @@ final class AdQueryBudgetTest extends AdTestCase
     {
         $ad = $this->makeAd();
 
-        $this->assertNoWriteQueries(fn () => $this->getJson('/api/soom/ads/'.$ad->id)->assertOk());
+        $this->assertNoWriteQueries(fn () => $this->getJson('/api/soom/ads/'.$ad->public_id)->assertOk());
     }
 
     /**
@@ -100,7 +100,7 @@ final class AdQueryBudgetTest extends AdTestCase
         $viewer = $this->adUser();
 
         $this->countQueries(
-            fn () => $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->id)->assertOk()
+            fn () => $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->public_id)->assertOk()
         );
 
         $writes = array_values(array_filter(
@@ -120,7 +120,7 @@ final class AdQueryBudgetTest extends AdTestCase
         $ad = $this->makeAd();
 
         $this->actingAs($this->adUser(), 'sanctum')
-            ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
+            ->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id])
             ->assertOk();
 
         Queue::assertPushed(RecordAdEngagement::class);

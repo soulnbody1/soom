@@ -95,6 +95,7 @@ final class AuctionConfigurationController extends Controller
             'id' => $version->public_id,
             'version_number' => $version->version_number,
             'is_active' => $version->is_active,
+            'market' => strtolower((string) $version->market->code),
             'published_at' => $version->published_at?->toIso8601String(),
             'created_by' => $version->relationLoaded('creator') && $version->creator ? [
                 'id' => $version->creator->id,

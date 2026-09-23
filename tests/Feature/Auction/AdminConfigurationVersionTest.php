@@ -28,7 +28,7 @@ final class AdminConfigurationVersionTest extends TestCase
         $this->seedVersion(2, true, $creator->id);
 
         $response = $this->actingAs($this->user('admin'), 'sanctum')
-            ->getJson('/api/admin/auctions/configuration-versions')
+            ->getJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions')
             ->assertOk();
 
         $rows = $response->json('data');
@@ -46,7 +46,7 @@ final class AdminConfigurationVersionTest extends TestCase
         $version = $this->seedVersion(3, true, $this->user('admin')->id);
 
         $response = $this->actingAs($this->user('admin'), 'sanctum')
-            ->getJson('/api/admin/auctions/configuration-versions/'.$version->public_id)
+            ->getJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions/'.$version->public_id)
             ->assertOk();
 
         $response->assertJsonPath('data.id', $version->public_id);
@@ -66,7 +66,7 @@ final class AdminConfigurationVersionTest extends TestCase
         $payload = $this->validPayload(['seller_deposit_minor' => 9_999]);
 
         $response = $this->actingAs($this->user('admin'), 'sanctum')
-            ->postJson('/api/admin/auctions/configuration-versions', $payload)
+            ->postJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions?market=jo', $payload)
             ->assertCreated();
 
         $response->assertJsonPath('data.version_number', 2);
@@ -89,7 +89,7 @@ final class AdminConfigurationVersionTest extends TestCase
         $this->seedVersion(1, true, $this->user('admin')->id);
 
         $this->actingAs($this->user('admin'), 'sanctum')
-            ->postJson('/api/admin/auctions/configuration-versions', $this->validPayload() + ['publish' => false])
+            ->postJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions?market=jo', $this->validPayload() + ['publish' => false])
             ->assertCreated()
             ->assertJsonPath('data.is_active', false)
             ->assertJsonPath('data.published_at', null);
@@ -106,7 +106,7 @@ final class AdminConfigurationVersionTest extends TestCase
         unset($missingKey['configuration']['seller_deposit_policy']['dispute_cancel']);
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/admin/auctions/configuration-versions', $missingKey)
+            ->postJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions?market=jo', $missingKey)
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['configuration.seller_deposit_policy.dispute_cancel']);
 
@@ -114,7 +114,7 @@ final class AdminConfigurationVersionTest extends TestCase
         $badEnum['configuration']['seller_deposit_policy']['unsold'] = 'burn_it';
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/admin/auctions/configuration-versions', $badEnum)
+            ->postJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions?market=jo', $badEnum)
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['configuration.seller_deposit_policy.unsold']);
 
@@ -122,7 +122,7 @@ final class AdminConfigurationVersionTest extends TestCase
         $badDisposition['configuration']['winner_default_deposit_policy']['disposition'] = 'confiscate_everything';
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/admin/auctions/configuration-versions', $badDisposition)
+            ->postJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions?market=jo', $badDisposition)
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['configuration.winner_default_deposit_policy.disposition']);
     }
@@ -132,15 +132,15 @@ final class AdminConfigurationVersionTest extends TestCase
         $version = $this->seedVersion(1, true, $this->user('admin')->id);
 
         $this->actingAs($this->user(), 'sanctum')
-            ->getJson('/api/admin/auctions/configuration-versions')
+            ->getJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions')
             ->assertForbidden();
 
         $this->actingAs($this->user(), 'sanctum')
-            ->getJson('/api/admin/auctions/configuration-versions/'.$version->public_id)
+            ->getJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions/'.$version->public_id)
             ->assertForbidden();
 
         $this->actingAs($this->user(), 'sanctum')
-            ->postJson('/api/admin/auctions/configuration-versions', $this->validPayload())
+            ->postJson('http://api-admin.soom.test/api/admin/auctions/configuration-versions?market=jo', $this->validPayload())
             ->assertForbidden();
     }
 

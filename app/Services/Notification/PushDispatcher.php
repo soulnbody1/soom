@@ -22,6 +22,13 @@ final class PushDispatcher
         }
     }
 
+    public function toUsersInMarket(array $userIds, int $marketId, string $title, string $body, array $data = []): void
+    {
+        foreach ($this->devices->tokensForManyInMarket($userIds, $marketId) as $tokens) {
+            $this->dispatchAll($tokens, $title, $body, $data);
+        }
+    }
+
     private function dispatchAll(array $tokens, string $title, string $body, array $data): void
     {
         foreach ($tokens as $token) {

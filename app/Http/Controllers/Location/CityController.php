@@ -9,15 +9,18 @@ use App\Http\Resources\Location\CityResource;
 use App\Models\City;
 use App\Services\Location\GeographyDeletionGuard;
 use App\Services\Location\LocationCache;
+use App\Support\Market\MarketContext;
 
 class CityController extends Controller
 {
-    public function index(LocationCache $cache)
+    public function index(LocationCache $cache, MarketContext $market)
     {
         return response()->json([
             'data' => $cache->remember(
                 'cities:all',
-                fn (): array => CityResource::collection(City::all())->resolve(request())
+                fn (): array => CityResource::collection(
+                    City::query()->whereHas('state', fn ($state) => $state->where('country_id', $market->market()->country_id))->get()
+                )->resolve(request())
             ),
         ]);
     }

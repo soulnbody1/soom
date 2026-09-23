@@ -15,9 +15,11 @@ final class SellerPayoutResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
+            'market_code' => strtolower((string) $this->market?->code),
             'status' => $this->status->value,
             'auction' => $this->whenLoaded('auction', fn () => [
                 'id' => $this->auction->public_id,
+                'url' => $this->auction->market?->webUrl('auctions/'.$this->auction->public_id),
                 'title' => $this->auction->title,
             ]),
             'seller' => $this->whenLoaded('seller', fn () => [
@@ -79,9 +81,11 @@ final class SellerPayoutResource extends JsonResource
     {
         return [
             'id' => $payout->public_id,
+            'market_code' => strtolower((string) $payout->market?->code),
             'status' => $payout->status->value,
             'auction' => $payout->relationLoaded('auction') && $payout->auction ? [
                 'id' => $payout->auction->public_id,
+                'url' => $payout->auction->market?->webUrl('auctions/'.$payout->auction->public_id),
                 'title' => $payout->auction->title,
             ] : null,
             'amount' => MoneyResource::make((int) $payout->amount_minor, (string) $payout->currency_code),

@@ -34,7 +34,7 @@ final class AdNotificationFanOutTest extends AdTestCase
         $qualified = $this->interestedUser($category->id, 3);
         $this->interestedUser($category->id, 2);
 
-        SendAdNotification::dispatch($ad);
+        SendAdNotification::dispatch($ad->id, $ad->market_id);
 
         Bus::assertDispatched(
             SendAdNotificationChunk::class,
@@ -60,7 +60,7 @@ final class AdNotificationFanOutTest extends AdTestCase
 
         $wanted = $this->interestedUser($category->id, 3);
 
-        SendAdNotification::dispatch($ad);
+        SendAdNotification::dispatch($ad->id, $ad->market_id);
 
         Bus::assertDispatched(
             SendAdNotificationChunk::class,
@@ -78,7 +78,7 @@ final class AdNotificationFanOutTest extends AdTestCase
 
         $wanted = $this->interestedUser($parent->id, 3);
 
-        SendAdNotification::dispatch($ad);
+        SendAdNotification::dispatch($ad->id, $ad->market_id);
 
         Bus::assertDispatched(
             SendAdNotificationChunk::class,
@@ -96,7 +96,7 @@ final class AdNotificationFanOutTest extends AdTestCase
 
         collect(range(1, 5))->each(fn () => $this->interestedUser($category->id, 3));
 
-        SendAdNotification::dispatch($ad);
+        SendAdNotification::dispatch($ad->id, $ad->market_id);
 
         Bus::assertDispatchedTimes(SendAdNotificationChunk::class, 3);
     }
@@ -111,7 +111,7 @@ final class AdNotificationFanOutTest extends AdTestCase
 
         collect(range(1, 6))->each(fn () => $this->interestedUser($category->id, 3));
 
-        $this->countQueries(fn () => SendAdNotification::dispatch($ad));
+        $this->countQueries(fn () => SendAdNotification::dispatch($ad->id, $ad->market_id));
 
         $unbounded = array_filter(
             $this->recordedQueries(),
@@ -129,7 +129,7 @@ final class AdNotificationFanOutTest extends AdTestCase
         $ad = $this->makeAd();
         $recipients = collect(range(1, 3))->map(fn () => $this->adUser());
 
-        (new SendAdNotificationChunk($ad->id, $recipients->pluck('id')->all()))->handle(app(PushDispatcher::class));
+        (new SendAdNotificationChunk($ad->id, $ad->market_id, $recipients->pluck('id')->all()))->handle(app(PushDispatcher::class));
 
         Notification::assertSentTimes(NewAdNotification::class, 3);
     }
@@ -142,7 +142,7 @@ final class AdNotificationFanOutTest extends AdTestCase
         $recipient = $this->adUser();
         $ad->forceDelete();
 
-        (new SendAdNotificationChunk($ad->id, [$recipient->id]))->handle(app(PushDispatcher::class));
+        (new SendAdNotificationChunk($ad->id, $ad->market_id, [$recipient->id]))->handle(app(PushDispatcher::class));
 
         Notification::assertNothingSent();
     }

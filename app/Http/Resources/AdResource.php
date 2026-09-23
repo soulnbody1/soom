@@ -13,6 +13,9 @@ class AdResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'price' => $this->price,
+            'currency_code' => $this->currency_code,
+            'market_code' => strtolower((string) $this->market?->code),
+            'url' => $this->market?->webUrl('ads/'.$this->public_id),
             'category' => $this->category?->name,
             'category_id' => $this->category_id,
             'location' => implode(', ', array_filter([

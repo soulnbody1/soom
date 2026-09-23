@@ -127,6 +127,23 @@ final class HandlePaymentWebhookAction
         });
     }
 
+    public function recordUnmatched(string $providerCode, Request $request): string
+    {
+        $event = $this->providers->make($providerCode)->parseEvent($request);
+
+        $record = $this->recordEvent(
+            $providerCode,
+            $event->eventId !== '' ? $event->eventId : 'unmatched:'.Str::ulid(),
+            $event->eventType,
+            $event->providerTransactionId,
+            true,
+            $event->payload
+        );
+        $this->markProcessed($record, 'transaction_not_found');
+
+        return 'unmatched';
+    }
+
     private function recordEvent(
         string $providerCode,
         string $eventId,

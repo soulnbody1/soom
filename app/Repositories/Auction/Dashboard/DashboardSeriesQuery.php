@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Repositories\Auction\Dashboard;
 
 use App\Services\Auction\Support\DashboardPeriod;
+use App\Services\Market\MarketQuery;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Facades\DB;
 
 final class DashboardSeriesQuery
 {
+    public function __construct(private readonly MarketQuery $markets) {}
+
     public function granularity(DashboardPeriod $period): string
     {
         if (! $period->hasBounds() || $period->lengthInDays() > 92) {
@@ -27,19 +29,19 @@ final class DashboardSeriesQuery
         $buckets = [];
 
         $this->mergeSeries($buckets, 'revenue_minor', $this->grouped(
-            DB::table('auction_settlements')->where('status', 'completed')->whereNotNull('completed_at'),
+            $this->markets->table('auction_settlements')->where('status', 'completed')->whereNotNull('completed_at'),
             'completed_at', 'sum(platform_fee_minor)', $period, $granularity
         ));
         $this->mergeSeries($buckets, 'gross_minor', $this->grouped(
-            DB::table('auction_settlements')->where('status', 'completed')->whereNotNull('completed_at'),
+            $this->markets->table('auction_settlements')->where('status', 'completed')->whereNotNull('completed_at'),
             'completed_at', 'sum(winning_amount_minor)', $period, $granularity
         ));
         $this->mergeSeries($buckets, 'payouts_paid_minor', $this->grouped(
-            DB::table('auction_seller_payouts')->where('status', 'paid')->whereNotNull('paid_at'),
+            $this->markets->table('auction_seller_payouts')->where('status', 'paid')->whereNotNull('paid_at'),
             'paid_at', 'sum(amount_minor)', $period, $granularity
         ));
         $this->mergeSeries($buckets, 'refunds_succeeded_minor', $this->grouped(
-            DB::table('refund_transactions')->where('status', 'succeeded')->whereNotNull('succeeded_at'),
+            $this->markets->table('refund_transactions')->where('status', 'succeeded')->whereNotNull('succeeded_at'),
             'succeeded_at', 'sum(amount_minor)', $period, $granularity
         ));
 
@@ -50,7 +52,7 @@ final class DashboardSeriesQuery
     public function lifecycleSeries(DashboardPeriod $period): array
     {
         $granularity = $this->granularity($period);
-        $auctions = fn (): Builder => DB::table('auctions')->whereNull('deleted_at');
+        $auctions = fn (): Builder => $this->markets->table('auctions')->whereNull('deleted_at');
 
         $buckets = [];
         $this->mergeSeries($buckets, 'created', $this->grouped($auctions(), 'created_at', 'count(*)', $period, $granularity));

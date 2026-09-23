@@ -6,13 +6,14 @@ namespace App\Models\Auction;
 
 use App\Domain\Auction\Enums\RefundTransactionStatus;
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class RefundTransaction extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
     protected $fillable = [
         'public_id',

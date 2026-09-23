@@ -1,38 +1,45 @@
 <?php
 
 namespace App\Console\Commands;
-use Illuminate\Console\Command;
+
 use App\Models\AdReel;
+use App\Services\Market\MarketCommandRunner;
 use Cloudinary\Api\Upload\UploadApi;
+use Illuminate\Console\Command;
 
 class DeleteOldAdReels extends Command
 {
     protected $signature = 'reels:cleanup';
+
     protected $description = 'حذف ملفات الفيديو والصورة من Cloudinary بعد مرور 24 ساعة';
 
-    public function handle()
+    public function handle(MarketCommandRunner $markets)
     {
-        $expiredReels = AdReel::where('created_at', '<=', now()->subDay())->get();
-        $uploadApi = new UploadApi();
+        $deleted = 0;
+        $markets->each(function () use (&$deleted): void {
+            $expiredReels = AdReel::where('created_at', '<=', now()->subDay())->get();
+            $uploadApi = new UploadApi;
 
-        foreach ($expiredReels as $reel) {
-            try {
-                $videoPublicId = $this->extractPublicId($reel->video_path);
-                $thumbPublicId = $this->extractPublicId($reel->thumbnail_path);
+            foreach ($expiredReels as $reel) {
+                try {
+                    $videoPublicId = $this->extractPublicId($reel->video_path);
+                    $thumbPublicId = $this->extractPublicId($reel->thumbnail_path);
 
-                $this->info("🗑 حذف الفيديو: $videoPublicId");
-                $uploadApi->destroy($videoPublicId, ['resource_type' => 'video']);
+                    $this->info("🗑 حذف الفيديو: $videoPublicId");
+                    $uploadApi->destroy($videoPublicId, ['resource_type' => 'video']);
 
-                $this->info("🗑 حذف الصورة: $thumbPublicId");
-                $uploadApi->destroy($thumbPublicId, ['resource_type' => 'image']);
+                    $this->info("🗑 حذف الصورة: $thumbPublicId");
+                    $uploadApi->destroy($thumbPublicId, ['resource_type' => 'image']);
 
-                $reel->delete();
-            } catch (\Exception $e) {
-                $this->error("❌ خطأ عند حذف الريل: " . $e->getMessage());
+                    $reel->delete();
+                    $deleted++;
+                } catch (\Exception $e) {
+                    $this->error('❌ خطأ عند حذف الريل: '.$e->getMessage());
+                }
             }
-        }
+        });
 
-        $this->info("✅ تم حذف " . $expiredReels->count() . " من الـ Reels القديمة.");
+        $this->info('✅ تم حذف '.$deleted.' من الـ Reels القديمة.');
     }
 
     private function extractPublicId($url)

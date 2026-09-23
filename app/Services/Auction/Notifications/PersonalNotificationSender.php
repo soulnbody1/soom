@@ -36,12 +36,16 @@ final class PersonalNotificationSender
 
         $title = $this->format->text("{$delivery['key']}.title", $delivery['params']);
         $body = $this->format->text("{$delivery['key']}.body", $delivery['params']);
+        $marketCode = strtolower((string) $auction->market?->code);
+        $url = $auction->market?->webUrl('auctions/'.$auction->public_id);
 
         $user->notify(new AuctionOutboxNotification(
             (string) $message->event_id,
             $message->event_type,
             [
                 'auction_id' => $auction->public_id,
+                'market_code' => $marketCode,
+                'url' => $url,
                 'auction_title' => $auction->title,
                 'screen' => $delivery['screen'],
                 'title' => $title,
@@ -53,6 +57,8 @@ final class PersonalNotificationSender
         $this->push->toUser((int) $user->id, $title, $body, [
             'event_type' => $message->event_type,
             'auction_id' => $auction->public_id,
+            'market_code' => $marketCode,
+            'url' => $url,
             'screen' => $delivery['screen'],
         ]);
     }

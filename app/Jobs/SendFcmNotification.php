@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Contracts\Market\RunsGlobally;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Services\FCMService;
 use App\Services\Notification\DeviceTokenRegistry;
 use Illuminate\Bus\Queueable;
@@ -14,9 +16,9 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class SendFcmNotification implements ShouldQueue
+class SendFcmNotification implements RunsGlobally, ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, HasMarketJobContext, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
 

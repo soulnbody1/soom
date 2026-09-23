@@ -6,22 +6,25 @@ namespace App\Repositories\Ad\Queries;
 
 use App\Domain\Ad\Enums\AdInteractionAction;
 use App\Models\Ad;
+use App\Services\Market\MarketQuery;
 use Illuminate\Database\Query\JoinClause;
-use Illuminate\Support\Facades\DB;
 
 final class AdNotificationAudienceQuery
 {
+    public function __construct(private readonly MarketQuery $markets) {}
+
     public function idsAfter(Ad $ad, array $categoryIds, int $afterUserId, int $limit, int $threshold): array
     {
         if ($categoryIds === []) {
             return [];
         }
 
-        return DB::table('user_ad_interactions as interactions')
+        return $this->markets->table('user_ad_interactions as interactions')
             ->select('interactions.user_id')
-            ->join('ads as sources', function (JoinClause $join) use ($categoryIds): void {
+            ->join('ads as sources', function (JoinClause $join) use ($categoryIds, $ad): void {
                 $join->on('sources.id', '=', 'interactions.ad_id')
-                    ->whereIn('sources.category_id', $categoryIds);
+                    ->whereIn('sources.category_id', $categoryIds)
+                    ->where('sources.market_id', $ad->market_id);
             })
             ->join('users', 'users.id', '=', 'interactions.user_id')
             ->whereIn('interactions.action', [

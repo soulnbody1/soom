@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Domain\Auction\Rules\CurrencyDecimalRule;
+use App\Services\Catalog\AdAttributeValidator;
+use App\Support\Market\MarketContext;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use App\Services\Catalog\AdAttributeValidator;
 use Illuminate\Validation\Rule;
 
 class StoreAdRequest extends FormRequest
@@ -26,9 +28,21 @@ class StoreAdRequest extends FormRequest
         return [
             'title' => 'required|string|max:255',
             'description' => 'required|string|max:5000',
-            'price' => 'required|numeric|min:0|max:999999999',
-            'category_id' => 'required|integer|exists:categories,id',
-            'country_id' => 'required|integer|exists:countries,id',
+            'price' => [
+                'required',
+                'numeric',
+                'min:0',
+                'max:9999999999.999',
+                CurrencyDecimalRule::forCurrency((string) app(MarketContext::class)->market()->currency_code),
+            ],
+            'category_id' => [
+                'required',
+                'integer',
+                Rule::exists('market_category', 'category_id')
+                    ->where('market_id', app(MarketContext::class)->marketId())
+                    ->where('is_visible', true),
+            ],
+            'country_id' => ['required', 'integer', Rule::in([app(MarketContext::class)->market()->country_id])],
             'state_id' => [
                 'required',
                 'integer',

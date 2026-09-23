@@ -8,6 +8,7 @@ use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Services\ContentReview\Support\ContentReviewAlertMonitor;
 use App\Services\ContentReview\Support\ContentReviewLogContext;
 use App\Services\ContentReview\Support\ReviewSubjectResolver;
+use App\Services\Market\MarketCommandRunner;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -21,6 +22,7 @@ final class SweepContentReviewAlerts extends Command
         ContentReviewAlertMonitor $monitor,
         ReviewSubjectResolver $subjects,
         ContentReviewLogContext $logContext,
+        MarketCommandRunner $markets,
     ): int {
         try {
             $type = $subjects->typeOrDefault($this->stringOption('subject-type'));
@@ -30,7 +32,15 @@ final class SweepContentReviewAlerts extends Command
             return self::FAILURE;
         }
 
-        $result = $monitor->sweep($type);
+        foreach ($markets->each(fn () => $monitor->sweep($type)) as $market => $result) {
+            $this->renderMarket($market, $result, $logContext);
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function renderMarket(string $market, array $result, ContentReviewLogContext $logContext): void
+    {
 
         foreach ($result['alerted'] as $code) {
             Log::warning('content_review.alert', $logContext->operational([
@@ -47,12 +57,11 @@ final class SweepContentReviewAlerts extends Command
         }
 
         $this->info(sprintf(
-            'Alerts raised: %d, recovered: %d.',
+            '%s: alerts raised: %d, recovered: %d.',
+            $market,
             count($result['alerted']),
             count($result['recovered'])
         ));
-
-        return self::SUCCESS;
     }
 
     private function stringOption(string $name): ?string

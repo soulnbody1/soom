@@ -124,7 +124,7 @@ final class AdminContentReviewApiTest extends TestCase
         $first = ContentReview::firstOrFail();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/run")
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/run?market=jo")
             ->assertCreated()
             ->assertJsonPath('data.trigger', ReviewTrigger::AdminManual->value)
             ->assertJsonPath('data.status', ContentReviewStatus::Queued->value);
@@ -142,7 +142,7 @@ final class AdminContentReviewApiTest extends TestCase
         $auction = $this->submitForReview();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/run")
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/run?market=jo")
             ->assertStatus(409)
             ->assertJsonPath('code', 'review_manual_mode');
     }
@@ -152,7 +152,7 @@ final class AdminContentReviewApiTest extends TestCase
         $review = $this->failedReview();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry")
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry?market=jo")
             ->assertCreated()
             ->assertJsonPath('data.trigger', ReviewTrigger::AdminRetry->value);
 
@@ -167,7 +167,7 @@ final class AdminContentReviewApiTest extends TestCase
         $review = $this->completedReview();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry")
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry?market=jo")
             ->assertStatus(409)
             ->assertJsonPath('code', 'review_not_retryable');
     }
@@ -184,7 +184,7 @@ final class AdminContentReviewApiTest extends TestCase
         ]);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry")
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry?market=jo")
             ->assertStatus(409)
             ->assertJsonPath('code', 'review_not_retryable');
     }
@@ -196,7 +196,7 @@ final class AdminContentReviewApiTest extends TestCase
         $auction->forceFill(['title' => 'A different title for the very same auction'])->save();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry")
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/retry?market=jo")
             ->assertStatus(409)
             ->assertJsonPath('code', 'review_stale');
     }
@@ -210,7 +210,7 @@ final class AdminContentReviewApiTest extends TestCase
         $review = ContentReview::firstOrFail();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/cancel")
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/cancel?market=jo")
             ->assertOk()
             ->assertJsonPath('data.status', ContentReviewStatus::Cancelled->value);
 
@@ -222,7 +222,7 @@ final class AdminContentReviewApiTest extends TestCase
         $review = $this->completedReview();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/{$review->public_id}/cancel")
+            ->postJson("/api/admin/content-reviews/{$review->public_id}/cancel?market=jo")
             ->assertStatus(409)
             ->assertJsonPath('code', 'review_already_decided');
     }
@@ -236,7 +236,7 @@ final class AdminContentReviewApiTest extends TestCase
         $review = ContentReview::firstOrFail();
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual")
+            ->postJson("/api/admin/content-reviews/auction/{$auction->public_id}/force-manual?market=jo")
             ->assertOk();
 
         $review->refresh();
@@ -259,7 +259,7 @@ final class AdminContentReviewApiTest extends TestCase
         $this->publishSettings(ReviewMode::Shadow, ['provider' => 'anthropic']);
 
         $response = $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/health')
+            ->getJson('/api/admin/content-review/health?market=jo')
             ->assertOk()
             ->assertJsonPath('data.provider', 'anthropic')
             ->assertJsonPath('data.configured', true)
@@ -281,7 +281,7 @@ final class AdminContentReviewApiTest extends TestCase
         $this->publishSettings(ReviewMode::Shadow, ['provider' => 'openrouter', 'model' => 'google/gemini-2.5-flash']);
 
         $response = $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/health')
+            ->getJson('/api/admin/content-review/health?market=jo')
             ->assertOk()
             ->assertJsonPath('data.provider', 'openrouter')
             ->assertJsonPath('data.model', 'google/gemini-2.5-flash')
@@ -305,7 +305,7 @@ final class AdminContentReviewApiTest extends TestCase
         $this->publishSettings(ReviewMode::Shadow);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/health')
+            ->getJson('/api/admin/content-review/health?market=jo')
             ->assertOk();
 
         $this->assertSame(0, $this->fakeProvider()->calls());
@@ -318,7 +318,7 @@ final class AdminContentReviewApiTest extends TestCase
         $this->fakeProvider()->failWith(\App\Domain\ContentReview\Enums\ContentReviewErrorCode::ProviderUnavailable);
 
         $response = $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/provider/test')
+            ->postJson('/api/admin/content-review/provider/test?market=jo')
             ->assertOk()
             ->assertJsonPath('data.ok', false)
             ->assertJsonPath('data.error_code', 'provider_unavailable');
@@ -335,8 +335,8 @@ final class AdminContentReviewApiTest extends TestCase
 
         $admin = $this->fullyPermittedAdmin();
 
-        $this->actingAs($admin, 'sanctum')->postJson('/api/admin/content-review/provider/test')->assertOk();
-        $this->actingAs($admin, 'sanctum')->postJson('/api/admin/content-review/provider/test')->assertStatus(429);
+        $this->actingAs($admin, 'sanctum')->postJson('/api/admin/content-review/provider/test?market=jo')->assertOk();
+        $this->actingAs($admin, 'sanctum')->postJson('/api/admin/content-review/provider/test?market=jo')->assertStatus(429);
     }
 
     private function completedReview(): ContentReview

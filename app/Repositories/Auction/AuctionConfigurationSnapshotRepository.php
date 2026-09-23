@@ -40,7 +40,14 @@ final class AuctionConfigurationSnapshotRepository
             throw new AuctionConfigurationSnapshotIncompleteException(['source_configuration_version_id: not found']);
         }
 
+        if ((int) $sourceVersion->market_id !== (int) $auction->market_id) {
+            throw new AuctionConfigurationSnapshotIncompleteException(['source_configuration_version_id: wrong market']);
+        }
+
         $auction->loadMissing('termsVersion');
+        if ($auction->termsVersion && (int) $auction->termsVersion->market_id !== (int) $auction->market_id) {
+            throw new AuctionConfigurationSnapshotIncompleteException(['terms_version_id: wrong market']);
+        }
         $attributes = $this->factory->fromAuction($auction, $sourceVersion, $createdBy);
 
         return AuctionConfigurationSnapshot::create($attributes);

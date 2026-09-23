@@ -14,11 +14,11 @@ use App\Models\Category;
 use App\Models\ContentReview\ContentReview;
 use App\Models\ContentReview\ContentReviewPolicy;
 use App\Models\ContentReview\ContentReviewSetting;
-use App\Models\Country;
 use App\Models\User;
 use App\Services\Auction\Actions\SubmitAuctionForReviewAction;
 use App\Services\ContentReview\Actions\ProcessContentReviewAction;
 use App\Services\ContentReview\Providers\FakeContentReviewProvider;
+use App\Support\Market\MarketContext;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -152,6 +152,9 @@ trait BuildsContentReviewFixtures
     protected function draftAuction(array $overrides = []): Auction
     {
         $version = $this->auctionConfigurationVersion();
+        $market = app(MarketContext::class)->market();
+        $category = Category::create(['name' => 'cr-cat-'.Str::ulid(), 'display_order' => 0]);
+        $category->markets()->attach($market->id, ['is_visible' => true, 'display_order' => 0]);
 
         $terms = AuctionTermsVersion::create([
             'version_number' => ((int) AuctionTermsVersion::max('version_number')) + 1,
@@ -163,11 +166,8 @@ trait BuildsContentReviewFixtures
 
         return Auction::create(array_replace([
             'seller_id' => $this->seller()->id,
-            'category_id' => Category::create(['name' => 'cr-cat-'.Str::ulid(), 'display_order' => 0])->id,
-            'country_id' => Country::create([
-                'name' => 'cr-country-'.Str::ulid(),
-                'code' => strtoupper(substr((string) Str::ulid(), 0, 6)),
-            ])->id,
+            'category_id' => $category->id,
+            'country_id' => $market->country_id,
             'terms_version_id' => $terms->id,
             'configuration_version_id' => $version->id,
             'currency_code' => 'JOD',

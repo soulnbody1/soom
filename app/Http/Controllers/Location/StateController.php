@@ -10,15 +10,18 @@ use App\Http\Resources\Location\StateResource;
 use App\Models\State;
 use App\Services\Location\GeographyDeletionGuard;
 use App\Services\Location\LocationCache;
+use App\Support\Market\MarketContext;
 
 class StateController extends Controller
 {
-    public function index(LocationCache $cache)
+    public function index(LocationCache $cache, MarketContext $market)
     {
         return response()->json([
             'data' => $cache->remember(
                 'states:all',
-                fn (): array => StateResource::collection(State::all())->resolve(request())
+                fn (): array => StateResource::collection(
+                    State::query()->where('country_id', $market->market()->country_id)->get()
+                )->resolve(request())
             ),
         ]);
     }
@@ -33,9 +36,9 @@ class StateController extends Controller
         ], 201);
     }
 
-    public function show($id, LocationCache $cache)
+    public function show($id, LocationCache $cache, MarketContext $market)
     {
-        $state = State::find($id);
+        $state = State::query()->where('country_id', $market->market()->country_id)->find($id);
 
         if (! $state) {
             return response()->json(['data' => [], 'message' => 'State not found.'], 404);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Jobs\Ad;
 
+use App\Contracts\Market\RunsInMarket;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Ad;
 use App\Models\User;
 use App\Notifications\NewAdNotification;
@@ -18,9 +20,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
 
-final class SendAdNotificationChunk implements ShouldQueue
+final class SendAdNotificationChunk implements RunsInMarket, ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, HasMarketJobContext, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
 
@@ -30,9 +32,15 @@ final class SendAdNotificationChunk implements ShouldQueue
 
     public function __construct(
         public readonly int $adId,
+        public readonly int $marketId,
         public readonly array $userIds,
     ) {
         $this->onQueue(config('notifications.queue'));
+    }
+
+    public function marketId(): int
+    {
+        return $this->marketId;
     }
 
     public function handle(PushDispatcher $push): void
@@ -56,17 +64,23 @@ final class SendAdNotificationChunk implements ShouldQueue
         }
 
         $recipientIds = $recipients->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+        $market = app(\App\Support\Market\MarketContext::class)->market();
+        $url = $market->webUrl('ads/'.$ad->public_id);
 
         Notification::send($recipients, new NewAdNotification(
             (string) $ad->public_id,
             (string) $ad->title,
             (int) $ad->category_id,
+            (string) $market->code,
+            $url,
             $this->unreadCountsAfterDelivery($recipientIds)
         ));
 
-        $push->toUsers($recipientIds, '📢 إعلان جديد', (string) $ad->title, [
+        $push->toUsersInMarket($recipientIds, $this->marketId, '📢 إعلان جديد', (string) $ad->title, [
             'ad_id' => $ad->public_id,
             'category_id' => $ad->category_id,
+            'market_code' => strtolower((string) $market->code),
+            'url' => $url,
         ]);
     }
 

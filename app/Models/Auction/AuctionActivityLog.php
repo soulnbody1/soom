@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class AuctionActivityLog extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
     public const UPDATED_AT = null;
 

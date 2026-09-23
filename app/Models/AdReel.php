@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class AdReel extends Model
 {
-    use HasFactory;
+    use BelongsToMarket, HasFactory;
 
     protected $table = 'ad_reels';
 
     protected $fillable = [
+        'market_id',
         'ad_id',
         'video_path',
         'thumbnail_path',

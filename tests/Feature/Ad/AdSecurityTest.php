@@ -73,7 +73,7 @@ final class AdSecurityTest extends AdTestCase
         $ad->delete();
 
         $this->actingAs($this->adUser(), 'sanctum')
-            ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
+            ->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['ad_id']);
     }
@@ -83,7 +83,7 @@ final class AdSecurityTest extends AdTestCase
         $ad = $this->makeAd(['user_id' => $this->adUser()->id]);
 
         $response = $this->actingAs($this->adUser(), 'sanctum')
-            ->putJson('/api/soom/ads/my/'.$ad->id, [
+            ->putJson('/api/soom/ads/my/'.$ad->public_id, [
                 'title' => 'Hijacked',
                 'description' => 'Not mine',
                 'price' => 1,
@@ -94,10 +94,9 @@ final class AdSecurityTest extends AdTestCase
                 'images' => [UploadedFile::fake()->image('x.jpg')],
             ]);
 
-        $response->assertForbidden()
+        $response->assertNotFound()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('code', 'forbidden')
-            ->assertJsonPath('message', '⚠️ ليس لديك صلاحية لتعديل هذا الإعلان.');
+            ->assertJsonPath('code', 'not_found');
     }
 
     public function test_the_public_listing_is_rate_limited(): void

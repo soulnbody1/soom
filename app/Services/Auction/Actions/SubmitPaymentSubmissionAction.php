@@ -15,6 +15,7 @@ use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Repositories\Auction\AuctionRepository;
 use App\Services\Auction\Support\AuctionAudit;
 use App\Services\Auction\Support\AuctionTransaction;
+use App\Services\Auction\Support\PaymentMethodMarketRule;
 use App\Services\Auction\Support\PaymentObligationResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -29,6 +30,7 @@ final class SubmitPaymentSubmissionAction
         private readonly AuctionPaymentRepository $payments,
         private readonly AuctionDepositRepository $deposits,
         private readonly PaymentObligationResolver $obligations,
+        private readonly PaymentMethodMarketRule $methodMarkets,
     ) {}
 
     public function execute(
@@ -64,6 +66,7 @@ final class SubmitPaymentSubmissionAction
             return $this->transaction->run(function () use ($auction, $userId, $purpose, $method, $receipt, $idempotencyKey, $providerReference, $path): PaymentSubmission {
                 $auction = $this->auctions->lockAuctionForPayment($auction->id);
                 $obligation = $this->obligations->resolve($auction, $userId, $purpose);
+                $this->methodMarkets->assertUsable($method, $auction, $obligation->currencyCode);
                 $deposit = $obligation->deposit;
                 $settlement = $obligation->settlement;
 

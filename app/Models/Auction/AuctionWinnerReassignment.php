@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Models\Auction;
 
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class AuctionWinnerReassignment extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
     public $timestamps = false;
 

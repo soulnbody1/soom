@@ -8,10 +8,12 @@ use App\Domain\Auction\Rules\CurrencyDecimalRule;
 use App\Domain\Auction\Rules\SupportedCurrencyRule;
 use App\Domain\Auction\ValueObjects\Money;
 use App\Models\Auction\Auction;
+use App\Support\Market\MarketContext;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
 #[BodyParameter('category_id', description: 'معرّف تصنيف المزاد.')]
@@ -47,13 +49,22 @@ final class UpdateDraftAuctionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
-            'country_id' => ['sometimes', 'integer', 'exists:countries,id'],
-            'state_id' => ['sometimes', 'nullable', 'integer', 'exists:states,id'],
-            'city_id' => ['sometimes', 'nullable', 'integer', 'exists:cities,id'],
+            'category_id' => [
+                'sometimes',
+                'integer',
+                Rule::exists('market_category', 'category_id')
+                    ->where('market_id', app(MarketContext::class)->marketId())
+                    ->where('is_visible', true),
+            ],
+            'country_id' => ['sometimes', 'integer', Rule::in([$this->auctionModel()?->country_id])],
+            'state_id' => ['sometimes', 'nullable', 'integer', Rule::exists('states', 'id')
+                ->where('country_id', $this->auctionModel()?->country_id)],
+            'city_id' => ['sometimes', 'nullable', 'integer', Rule::exists('cities', 'id')
+                ->where('state_id', $this->input('state_id', $this->auctionModel()?->state_id))],
             'title' => ['sometimes', 'string', 'max:180'],
             'description' => ['sometimes', 'string', 'max:10000'],
-            'currency_code' => ['sometimes', 'string', 'size:3', new SupportedCurrencyRule],
+            'currency_code' => ['sometimes', 'string', 'size:3', new SupportedCurrencyRule,
+                Rule::in([$this->auctionModel()?->currency_code])],
             'starting_amount' => ['sometimes', new CurrencyDecimalRule('effective_currency_code')],
             'reserve_amount' => ['sometimes', 'nullable', new CurrencyDecimalRule('effective_currency_code')],
             'starts_at' => ['sometimes', 'date', 'after:now'],

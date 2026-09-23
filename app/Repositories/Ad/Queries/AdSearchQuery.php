@@ -8,16 +8,16 @@ use App\DTO\Ad\AdSearchDTO;
 use App\Models\Ad;
 use App\Models\Category;
 use App\Services\Ad\Support\AdKeywordFilter;
-use App\Services\Ad\Support\CategoryTreeResolver;
+use App\Services\Market\MarketCategoryCatalog;
 use App\Services\Support\FulltextQuerySanitizer;
 use Illuminate\Database\Eloquent\Builder;
 
 final class AdSearchQuery
 {
     public function __construct(
-        private readonly CategoryTreeResolver $categories,
         private readonly AdKeywordFilter $keywords,
         private readonly FulltextQuerySanitizer $sanitizer,
+        private readonly MarketCategoryCatalog $marketCategories,
     ) {}
 
     public function apply(AdSearchDTO $search): Builder
@@ -45,7 +45,7 @@ final class AdSearchQuery
             return;
         }
 
-        $query->whereIn('category_id', $this->categories->subtreeIds((int) $category->id));
+        $query->whereIn('category_id', $this->marketCategories->subtreeIds((int) $category->id));
     }
 
     private function findCategory(string $keyword): ?Category
@@ -54,6 +54,7 @@ final class AdSearchQuery
 
         return Category::query()
             ->select('id')
+            ->whereIn('id', $this->marketCategories->visibleIds())
             ->where(function (Builder $group) use ($expression, $keyword): void {
                 if ($expression !== null) {
                     $group->whereRaw('MATCH(name) AGAINST(? IN BOOLEAN MODE)', [$expression]);

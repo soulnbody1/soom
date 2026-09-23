@@ -317,13 +317,13 @@ final class UserFacingEndpointsTest extends TestCase
         $admin = $this->user('admin');
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/admin/auctions/support-contact')
+            ->getJson('/api/admin/auctions/support-contact?market=jo')
             ->assertOk()
             ->assertJsonPath('data.stored.phone', null)
             ->assertJsonPath('data.effective.phone', '+962780000000');
 
         $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/admin/auctions/support-contact', [
+            ->postJson('/api/admin/auctions/support-contact?market=jo', [
                 'whatsapp' => '+962799999999',
                 'phone' => null,
                 'email' => 'help@soom.test',
@@ -346,7 +346,7 @@ final class UserFacingEndpointsTest extends TestCase
     public function test_support_contact_rejects_invalid_values_and_denies_non_admins(): void
     {
         $this->actingAs($this->user('admin'), 'sanctum')
-            ->postJson('/api/admin/auctions/support-contact', [
+            ->postJson('/api/admin/auctions/support-contact?market=jo', [
                 'email' => 'not-an-email',
                 'phone' => 'call-us',
             ])
@@ -354,7 +354,7 @@ final class UserFacingEndpointsTest extends TestCase
             ->assertJsonValidationErrors(['email', 'phone']);
 
         $this->actingAs($this->user('user'), 'sanctum')
-            ->getJson('/api/admin/auctions/support-contact')
+            ->getJson('/api/admin/auctions/support-contact?market=jo')
             ->assertStatus(403);
     }
 

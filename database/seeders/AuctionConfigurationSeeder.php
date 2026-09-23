@@ -5,12 +5,20 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Auction\AuctionConfigurationVersion;
+use Database\Seeders\Concerns\SeedsInDefaultMarket;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
 final class AuctionConfigurationSeeder extends Seeder
 {
+    use SeedsInDefaultMarket;
+
     public function run(): void
+    {
+        $this->inDefaultMarket(fn () => $this->seed());
+    }
+
+    private function seed(): void
     {
         AuctionConfigurationVersion::firstOrCreate(
             ['version_number' => 1],

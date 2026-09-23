@@ -26,9 +26,11 @@ final class AdReelResource extends JsonResource
                 'user_id' => $this->ad->user_id,
                 'category_id' => $this->ad->category_id,
                 'state_id' => $this->ad->state_id,
+                'country_id' => $this->ad->country_id,
                 'title' => $this->ad->title,
                 'description' => $this->ad->description,
                 'price' => $this->ad->price,
+                'currency_code' => $this->ad->currency_code,
                 'user' => $this->ad->user ? [
                     'id' => $this->ad->user->id,
                     'name' => $this->ad->user->name,

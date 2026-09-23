@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
+use App\Contracts\Market\RunsAcrossMarkets;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Auction\PaymentTransaction;
 use App\Repositories\Auction\AuctionPaymentRepository;
 use App\Services\Auction\Actions\RefreshOnlinePaymentAction;
@@ -12,9 +14,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 
-final class ReconcilePendingOnlinePaymentsJob implements ShouldQueue
+final class ReconcilePendingOnlinePaymentsJob implements RunsAcrossMarkets, ShouldQueue
 {
-    use Queueable;
+    use HasMarketJobContext, Queueable;
 
     public int $tries = 1;
 

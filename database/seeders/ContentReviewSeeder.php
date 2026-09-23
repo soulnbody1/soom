@@ -8,14 +8,19 @@ use App\Domain\ContentReview\Enums\ReviewableSubjectType;
 use App\Models\ContentReview\ContentReviewPolicy;
 use App\Models\ContentReview\ContentReviewSetting;
 use App\Services\ContentReview\Support\ProviderModelCatalog;
+use Database\Seeders\Concerns\SeedsInDefaultMarket;
 use Illuminate\Database\Seeder;
 
 final class ContentReviewSeeder extends Seeder
 {
+    use SeedsInDefaultMarket;
+
     public function run(): void
     {
-        $this->seedPolicy();
-        $this->seedSettings();
+        $this->inDefaultMarket(function (): void {
+            $this->seedPolicy();
+            $this->seedSettings();
+        });
     }
 
     private function seedPolicy(): void

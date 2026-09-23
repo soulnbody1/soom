@@ -609,7 +609,7 @@ final class OnlinePaymentLifecycleTest extends TestCase
             'X-Fake-Signature' => hash_hmac('sha256', json_encode($payload), 'test-webhook-secret'),
         ])->assertOk()->assertJsonPath('data.result', 'unmatched');
 
-        $this->assertSame('transaction_not_found', PaymentProviderEvent::where('event_id', 'evt-unmatched-1')->firstOrFail()->process_error);
+        $this->assertDatabaseMissing('payment_provider_events', ['event_id' => 'evt-unmatched-1']);
     }
 
     public function test_unknown_provider_webhook_is_rejected(): void

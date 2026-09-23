@@ -16,6 +16,7 @@ final class HomeAdResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'price' => $this->price,
+            'currency_code' => $this->currency_code,
             'category' => $this->category?->name,
             'category_id' => $this->category_id,
             'location' => implode(', ', array_filter([

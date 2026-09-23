@@ -101,7 +101,7 @@ final class AdPublicEndpointsTest extends AdTestCase
         $response = $this->getJson('/api/soom/ads?attributes['.$colour->id.']=red');
 
         $this->assertSame(1, $response->json('total'));
-        $this->assertSame($red->id, $response->json('data.0.id'));
+        $this->assertSame($red->public_id, $response->json('data.0.id'));
     }
 
     public function test_listing_excludes_soft_deleted_ads(): void
@@ -132,12 +132,12 @@ final class AdPublicEndpointsTest extends AdTestCase
             'value' => 'new',
         ]);
 
-        $response = $this->getJson('/api/soom/ads/'.$ad->id);
+        $response = $this->getJson('/api/soom/ads/'.$ad->public_id);
 
         $response->assertOk()
             ->assertJsonStructure(['success', 'message', 'data' => $this->adResourceKeys()]);
 
-        $this->assertSame($ad->id, $response->json('data.id'));
+        $this->assertSame($ad->public_id, $response->json('data.id'));
         $this->assertSame($ad->title, $response->json('data.title'));
         $this->assertTrue($response->json('data.status'));
         $this->assertCount(1, $response->json('data.images'));
@@ -154,7 +154,7 @@ final class AdPublicEndpointsTest extends AdTestCase
         $ad = $this->makeAd();
         $viewer = $this->adUser();
 
-        $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->id)->assertOk();
+        $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->public_id)->assertOk();
 
         $this->assertDatabaseHas('ad_views', ['ad_id' => $ad->id, 'user_id' => $viewer->id]);
         $this->assertDatabaseHas('user_ad_interactions', [
@@ -170,7 +170,7 @@ final class AdPublicEndpointsTest extends AdTestCase
         $viewer = $this->adUser();
 
         foreach (range(1, 3) as $ignored) {
-            $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->id)->assertOk();
+            $this->actingAs($viewer, 'sanctum')->getJson('/api/soom/ads/'.$ad->public_id)->assertOk();
         }
 
         $this->assertSame(1, AdView::where('ad_id', $ad->id)->count());
@@ -293,8 +293,8 @@ final class AdPublicEndpointsTest extends AdTestCase
         $ascending = $this->getJson('/api/soom/ads?sort=price_asc')->json('data.*.id');
         $descending = $this->getJson('/api/soom/ads?sort=price_desc')->json('data.*.id');
 
-        $this->assertSame($cheap->id, $ascending[0]);
-        $this->assertSame($expensive->id, $descending[0]);
+        $this->assertSame($cheap->public_id, $ascending[0]);
+        $this->assertSame($expensive->public_id, $descending[0]);
     }
 
     public function test_listing_orders_by_authoritative_view_totals(): void
@@ -307,7 +307,7 @@ final class AdPublicEndpointsTest extends AdTestCase
 
         $rows = $this->getJson('/api/soom/ads?sort=most_viewed')->json('data');
 
-        $this->assertSame($popular->id, $rows[0]['id']);
+        $this->assertSame($popular->public_id, $rows[0]['id']);
         $this->assertSame(5, $rows[0]['views_count']);
         $this->assertSame(1, $rows[1]['views_count']);
     }
@@ -332,7 +332,7 @@ final class AdPublicEndpointsTest extends AdTestCase
         $category = $this->category();
         $ad = $this->makeAd(['category_id' => $category->id]);
 
-        foreach ([$this->getJson('/api/soom/ads')->json('data.0'), $this->getJson('/api/soom/ads/'.$ad->id)->json('data')] as $row) {
+        foreach ([$this->getJson('/api/soom/ads')->json('data.0'), $this->getJson('/api/soom/ads/'.$ad->public_id)->json('data')] as $row) {
             $this->assertSame($category->id, $row['category_id']);
             $this->assertSame($ad->country_id, $row['country_id']);
             $this->assertSame($ad->state_id, $row['state_id']);
@@ -360,7 +360,7 @@ final class AdPublicEndpointsTest extends AdTestCase
 
         $this->assertSame(0, $this->getJson('/api/soom/ads')->json('total'));
         $this->assertSame(0, $this->getJson('/api/soom/ads/category/'.$category->id)->json('data.meta.total'));
-        $this->getJson('/api/soom/ads/'.$ad->id)->assertNotFound();
+        $this->getJson('/api/soom/ads/'.$ad->public_id)->assertNotFound();
     }
 
     public function test_listing_exposes_the_seller_contact_block(): void

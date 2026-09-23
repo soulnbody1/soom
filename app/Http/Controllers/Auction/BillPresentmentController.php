@@ -8,7 +8,9 @@ use App\Domain\Auction\Exceptions\AuctionException;
 use App\Http\Controllers\Controller;
 use App\Services\Auction\Actions\ResolveBillPresentmentAction;
 use App\Services\Auction\Payments\Contracts\PresentsBills;
+use App\Services\Auction\Payments\FinancialMarketBootstrap;
 use App\Services\Auction\Payments\PaymentProviderFactory;
+use App\Support\Market\MarketContext;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\PathParameter;
@@ -30,7 +32,9 @@ final class BillPresentmentController extends Controller
         Request $request,
         string $provider,
         PaymentProviderFactory $providers,
-        ResolveBillPresentmentAction $action
+        ResolveBillPresentmentAction $action,
+        FinancialMarketBootstrap $bootstrap,
+        MarketContext $context,
     ): HttpResponse {
         if (! $providers->isRegistered($provider) || ! $providers->isEnabled($provider)) {
             throw AuctionException::domain('payment_provider_unknown', ['code' => $provider], 404);
@@ -55,7 +59,15 @@ final class BillPresentmentController extends Controller
             return $instance->renderBillQueryFailure($request, $error);
         }
 
-        return $instance->renderBills($query, $action->execute($query));
+        $marketId = $bootstrap->forBillQuery($provider, $query);
+        if ($marketId === null) {
+            return $instance->renderBills($query, []);
+        }
+
+        return $context->runInMarket(
+            $marketId,
+            fn (): HttpResponse => $instance->renderBills($query, $action->execute($query))
+        );
     }
 
     private function maxBodyBytes(): int

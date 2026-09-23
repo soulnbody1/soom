@@ -8,6 +8,7 @@ use App\Models\ContentReview\ContentReview;
 use App\Repositories\ContentReview\ContentReviewRepository;
 use App\Services\ContentReview\Actions\RequestContentReviewAction;
 use App\Services\ContentReview\Support\ReviewModeResolver;
+use App\Services\Market\MarketCommandRunner;
 use Illuminate\Console\Command;
 
 final class DispatchPendingContentReviews extends Command
@@ -20,6 +21,7 @@ final class DispatchPendingContentReviews extends Command
         ContentReviewRepository $reviews,
         RequestContentReviewAction $requests,
         ReviewModeResolver $modes,
+        MarketCommandRunner $markets,
     ): int {
         if (config('content_review.enabled') !== true) {
             $this->info('Content review is disabled; nothing to dispatch.');
@@ -27,20 +29,22 @@ final class DispatchPendingContentReviews extends Command
             return self::SUCCESS;
         }
 
-        $limit = (int) ($this->option('limit') ?? config('content_review.sweeper.batch', 25));
-        $requeueAfter = (int) config('content_review.sweeper.requeue_after_seconds', 60);
+        foreach ($markets->each(function ($market) use ($reviews, $requests, $modes): int {
+            $limit = (int) ($this->option('limit') ?? config('content_review.sweeper.batch', 25));
+            $requeueAfter = (int) config('content_review.sweeper.requeue_after_seconds', 60);
+            $dispatched = 0;
 
-        $due = $reviews->dueForDispatch(max(1, $limit), max(1, $requeueAfter));
-        $dispatched = 0;
-
-        foreach ($due as $review) {
-            if ($this->reclaim($reviews, $review)) {
-                $requests->dispatch($review, $modes->effectiveSettings($review->subject_type));
-                $dispatched++;
+            foreach ($reviews->dueForDispatch(max(1, $limit), max(1, $requeueAfter)) as $review) {
+                if ($this->reclaim($reviews, $review)) {
+                    $requests->dispatch($review, $modes->effectiveSettings($review->subject_type));
+                    $dispatched++;
+                }
             }
-        }
 
-        $this->info("Re-dispatched {$dispatched} content review(s).");
+            return $dispatched;
+        }) as $market => $dispatched) {
+            $this->info("{$market}: re-dispatched {$dispatched} content review(s).");
+        }
 
         return self::SUCCESS;
     }

@@ -265,11 +265,12 @@ final class AdKnownDefectsTest extends AdTestCase
 
         $this->getJson('/api/soom/home')->assertOk();
 
-        $cacheKey = 'ads:home:cards-v3:v'.app(AdCacheVersion::class)->current();
+        $cacheKey = app(\App\Services\Market\MarketCacheKey::class)
+            ->market('ads:home:cards-v3:v', app(AdCacheVersion::class)->current());
         $this->assertTrue(Cache::has($cacheKey));
 
         $this->actingAs($this->adUser(), 'sanctum')
-            ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
+            ->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id])
             ->assertOk();
 
         $this->assertTrue(Cache::has($cacheKey), 'A favourite toggle must not cool the shared home cache.');
@@ -288,7 +289,7 @@ final class AdKnownDefectsTest extends AdTestCase
         $before = app(AdCacheVersion::class)->current();
 
         $this->actingAs($owner, 'sanctum')
-            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->id)
+            ->deleteJson('/api/soom/ads/my/soft-delete/'.$ad->public_id)
             ->assertOk();
 
         $this->assertGreaterThan($before, app(AdCacheVersion::class)->current());

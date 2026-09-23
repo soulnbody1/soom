@@ -58,6 +58,7 @@ return [
 
     'subject_types' => [
         'auction' => 'مزاد',
+        'ad' => 'إعلان',
     ],
 
     'modes' => [

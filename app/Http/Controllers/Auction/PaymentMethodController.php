@@ -6,10 +6,8 @@ namespace App\Http\Controllers\Auction;
 
 use App\Domain\Auction\Enums\CustomerFeeBasis;
 use App\Domain\Auction\Enums\PaymentChannel;
-use App\Domain\Auction\Enums\PaymentCountry;
 use App\Domain\Auction\Enums\PaymentPurpose;
 use App\Domain\Auction\Enums\PaymentRail;
-use App\Domain\Auction\ValueObjects\Currency;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Auction\PaymentMethodResource;
 use App\Models\Auction\Auction;
@@ -126,7 +124,7 @@ final class PaymentMethodController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'code' => ['required', 'string', 'max:80', 'unique:payment_methods,code'],
+            'code' => ['required', 'string', 'max:80', Rule::unique('payment_methods', 'code')->where('market_id', app(\App\Support\Market\MarketContext::class)->marketId())],
             'channel' => ['sometimes', Rule::in(array_column(PaymentChannel::cases(), 'value'))],
             'rail' => ['sometimes', Rule::in(array_column(PaymentRail::cases(), 'value'))],
             'provider_code' => ['nullable', 'string', 'max:60', 'required_if:channel,online'],
@@ -134,10 +132,6 @@ final class PaymentMethodController extends Controller
             'display_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
             'allowed_purposes' => ['nullable', 'array'],
             'allowed_purposes.*' => ['string', Rule::in(array_column(PaymentPurpose::cases(), 'value'))],
-            'country_codes' => ['nullable', 'array'],
-            'country_codes.*' => ['string', Rule::in(PaymentCountry::codes())],
-            'currency_codes' => ['nullable', 'array'],
-            'currency_codes.*' => ['string', Rule::in(Currency::supportedCodes())],
             'min_amount_minor' => ['nullable', 'integer', 'min:0'],
             'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
             'fee_basis' => ['nullable', Rule::in(array_column(CustomerFeeBasis::cases(), 'value'))],
@@ -170,6 +164,8 @@ final class PaymentMethodController extends Controller
     #[Response(200, description: 'بيانات طريقة الدفع.')]
     public function show(PaymentMethod $paymentMethod): JsonResponse
     {
+        abort_unless($paymentMethod->is_active, 404);
+
         return $this->sendResponse(new PaymentMethodResource($paymentMethod), __('auction.messages.payment_method_fetched'));
     }
 
@@ -199,10 +195,6 @@ final class PaymentMethodController extends Controller
             'display_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
             'allowed_purposes' => ['nullable', 'array'],
             'allowed_purposes.*' => ['string', Rule::in(array_column(PaymentPurpose::cases(), 'value'))],
-            'country_codes' => ['nullable', 'array'],
-            'country_codes.*' => ['string', Rule::in(PaymentCountry::codes())],
-            'currency_codes' => ['nullable', 'array'],
-            'currency_codes.*' => ['string', Rule::in(Currency::supportedCodes())],
             'min_amount_minor' => ['nullable', 'integer', 'min:0'],
             'max_amount_minor' => ['nullable', 'integer', 'min:0', 'gte:min_amount_minor'],
             'fee_basis' => ['nullable', Rule::in(array_column(CustomerFeeBasis::cases(), 'value'))],

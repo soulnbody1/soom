@@ -8,15 +8,15 @@ use App\DTO\Ad\AdFilterDTO;
 use App\Models\Ad;
 use App\Models\AttributeValue;
 use App\Services\Ad\Support\AdKeywordFilter;
-use App\Services\Ad\Support\CategoryTreeResolver;
+use App\Services\Market\MarketCategoryCatalog;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 final class AdListingQuery
 {
     public function __construct(
-        private readonly CategoryTreeResolver $categories,
         private readonly AdKeywordFilter $keywords,
+        private readonly MarketCategoryCatalog $marketCategories,
     ) {}
 
     public function paginate(AdFilterDTO $filters, ?object $viewer): LengthAwarePaginator
@@ -70,7 +70,7 @@ final class AdListingQuery
                 $filters->categoryId !== null,
                 fn (Builder $q): Builder => $q->whereIn(
                     'category_id',
-                    $this->categories->subtreeIds($filters->categoryId)
+                    $this->marketCategories->subtreeIds($filters->categoryId)
                 )
             )
             ->when(

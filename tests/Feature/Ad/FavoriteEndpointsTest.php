@@ -61,7 +61,7 @@ final class FavoriteEndpointsTest extends AdTestCase
         $ad = $this->makeAd();
 
         $this->actingAs($user, 'sanctum')
-            ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
+            ->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id])
             ->assertOk()
             ->assertJsonStructure(['message']);
 
@@ -80,7 +80,7 @@ final class FavoriteEndpointsTest extends AdTestCase
         Favorite::factory()->create(['user_id' => $user->id, 'ad_id' => $ad->id]);
 
         $this->actingAs($user, 'sanctum')
-            ->postJson('/api/soom/favorites', ['ad_id' => $ad->id])
+            ->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id])
             ->assertStatus(409);
 
         $this->assertSame(1, Favorite::where('user_id', $user->id)->count());
@@ -91,9 +91,9 @@ final class FavoriteEndpointsTest extends AdTestCase
         $user = $this->adUser();
         $ad = $this->makeAd();
 
-        $this->actingAs($user, 'sanctum')->postJson('/api/soom/favorites', ['ad_id' => $ad->id]);
-        $this->actingAs($user, 'sanctum')->deleteJson('/api/soom/favorites/'.$ad->id);
-        $this->actingAs($user, 'sanctum')->postJson('/api/soom/favorites', ['ad_id' => $ad->id]);
+        $this->actingAs($user, 'sanctum')->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id]);
+        $this->actingAs($user, 'sanctum')->deleteJson('/api/soom/favorites/'.$ad->public_id);
+        $this->actingAs($user, 'sanctum')->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id]);
 
         $this->assertSame(
             1,
@@ -116,7 +116,7 @@ final class FavoriteEndpointsTest extends AdTestCase
         Favorite::factory()->create(['user_id' => $user->id, 'ad_id' => $ad->id]);
 
         $this->actingAs($user, 'sanctum')
-            ->deleteJson('/api/soom/favorites/'.$ad->id)
+            ->deleteJson('/api/soom/favorites/'.$ad->public_id)
             ->assertOk();
 
         $this->assertDatabaseMissing('favorites', ['user_id' => $user->id, 'ad_id' => $ad->id]);
@@ -125,7 +125,7 @@ final class FavoriteEndpointsTest extends AdTestCase
     public function test_destroy_404s_when_the_ad_is_not_favorited(): void
     {
         $this->actingAs($this->adUser(), 'sanctum')
-            ->deleteJson('/api/soom/favorites/'.$this->makeAd()->id)
+            ->deleteJson('/api/soom/favorites/'.$this->makeAd()->public_id)
             ->assertNotFound();
     }
 
@@ -138,7 +138,7 @@ final class FavoriteEndpointsTest extends AdTestCase
         Favorite::factory()->create(['user_id' => $owner->id, 'ad_id' => $ad->id]);
         Favorite::factory()->create(['user_id' => $other->id, 'ad_id' => $ad->id]);
 
-        $this->actingAs($owner, 'sanctum')->deleteJson('/api/soom/favorites/'.$ad->id)->assertOk();
+        $this->actingAs($owner, 'sanctum')->deleteJson('/api/soom/favorites/'.$ad->public_id)->assertOk();
 
         $this->assertDatabaseMissing('favorites', ['user_id' => $owner->id, 'ad_id' => $ad->id]);
         $this->assertDatabaseHas('favorites', ['user_id' => $other->id, 'ad_id' => $ad->id]);
@@ -150,7 +150,7 @@ final class FavoriteEndpointsTest extends AdTestCase
         $stranger = $this->adUser();
         $ad = $this->makeAd();
 
-        $this->actingAs($owner, 'sanctum')->postJson('/api/soom/favorites', ['ad_id' => $ad->id])->assertOk();
+        $this->actingAs($owner, 'sanctum')->postJson('/api/soom/favorites', ['ad_id' => $ad->public_id])->assertOk();
 
         $this->assertTrue(
             $this->actingAs($owner, 'sanctum')->getJson('/api/soom/ads')->json('data.0.is_favorite')

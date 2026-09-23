@@ -8,13 +8,16 @@ use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Services\ContentReview\Actions\BackfillContentReviewsAction;
 use App\Services\ContentReview\Support\ContentReviewLogContext;
 use App\Services\ContentReview\Support\ReviewSubjectResolver;
+use App\Services\Market\MarketCommandRunner;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 final class BackfillContentReviews extends Command
 {
     protected $signature = 'content-review:backfill
         {--execute : Create shadow reviews instead of only reporting what is eligible}
+        {--market= : Required ISO market code}
         {--subject-type= : The reviewable subject type, defaults to the only registered one}
         {--limit= : Maximum number of subjects to enqueue}
         {--chunk= : Number of subjects read per database round trip}';
@@ -22,6 +25,28 @@ final class BackfillContentReviews extends Command
     protected $description = 'Report, and optionally enqueue, shadow content reviews for content that was waiting before the feature shipped.';
 
     public function handle(
+        BackfillContentReviewsAction $backfill,
+        ReviewSubjectResolver $subjects,
+        ContentReviewLogContext $logContext,
+        MarketCommandRunner $markets,
+    ): int {
+        $market = $this->stringOption('market');
+        if ($market === null) {
+            $this->error('The --market option is required.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            return $markets->in($market, fn (): int => $this->handleMarket($backfill, $subjects, $logContext));
+        } catch (InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+    }
+
+    private function handleMarket(
         BackfillContentReviewsAction $backfill,
         ReviewSubjectResolver $subjects,
         ContentReviewLogContext $logContext,

@@ -6,7 +6,7 @@ namespace App\Repositories\Ad\Queries;
 
 use App\Models\Ad;
 use App\Models\Category;
-use App\Services\Ad\Support\CategoryTreeResolver;
+use App\Services\Market\MarketCategoryCatalog;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as BaseCollection;
@@ -17,11 +17,15 @@ final class CategoryFeedQuery
 
     private const NEARBY_LIMIT = 15;
 
-    public function __construct(private readonly CategoryTreeResolver $categories) {}
+    public function __construct(
+        private readonly MarketCategoryCatalog $marketCategories,
+    ) {}
 
     public function build(int $categoryId, ?object $viewer): array
     {
-        $categoryIds = $this->categories->subtreeIds($categoryId);
+        $categoryIds = $this->marketCategories->subtreeIds($categoryId);
+
+        abort_if($categoryIds === [], 404);
 
         return [
             'ads' => $this->paginateAds($categoryIds, $viewer),
@@ -59,6 +63,7 @@ final class CategoryFeedQuery
         $children = Category::query()
             ->select('id', 'name', 'image')
             ->where('parent_id', $categoryId)
+            ->whereIn('id', $this->marketCategories->visibleIds())
             ->get();
 
         if ($children->isEmpty()) {
@@ -68,7 +73,7 @@ final class CategoryFeedQuery
         $owner = [];
 
         foreach ($children as $child) {
-            foreach ($this->categories->subtreeIds((int) $child->id) as $descendantId) {
+            foreach ($this->marketCategories->subtreeIds((int) $child->id) as $descendantId) {
                 $owner[$descendantId] = (int) $child->id;
             }
         }

@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
+use App\Contracts\Market\RunsAcrossMarkets;
 use App\Domain\Auction\Enums\AuctionDepositStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Auction\AuctionDeposit;
 use App\Services\Auction\Actions\RefundAuctionDepositAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
-final class RefundPendingAuctionDepositsJob implements ShouldQueue
+final class RefundPendingAuctionDepositsJob implements RunsAcrossMarkets, ShouldQueue
 {
-    use Queueable;
+    use HasMarketJobContext, Queueable;
 
     public int $tries = 3;
 

@@ -10,6 +10,7 @@ use App\DTO\Auction\ParticipationStateDTO;
 use App\Models\Auction\Concerns\HasPublicId;
 use App\Models\Category;
 use App\Models\City;
+use App\Models\Concerns\BelongsToMarket;
 use App\Models\ContentReview\ContentReview;
 use App\Models\Country;
 use App\Models\State;
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 final class Auction extends Model
 {
+    use BelongsToMarket;
     use HasFactory;
     use HasPublicId;
     use SoftDeletes;
@@ -30,6 +32,7 @@ final class Auction extends Model
     public ?ParticipationStateDTO $participationState = null;
 
     protected $fillable = [
+        'market_id',
         'public_id',
         'seller_id',
         'category_id',

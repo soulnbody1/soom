@@ -24,7 +24,8 @@ final class AccountDashboardSummaryQuery
             'favorites_count' => Favorite::query()->where('user_id', $userId)->whereHas('ad')->count(),
             'seller_auctions_count' => Auction::query()->where('seller_id', $userId)->count(),
             'recent_ads' => Ad::query()->withTrashed()->where('user_id', $userId)
-                ->withCount('views')->with('images:id,ad_id,image_path')->latest()->limit(3)->get(),
+                ->withCount('views')->with(['images:id,ad_id,image_path', 'market:id,code,web_host'])
+                ->latest()->limit(3)->get(),
         ];
     }
 }

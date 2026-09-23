@@ -6,7 +6,10 @@ use App\Domain\ContentReview\Exceptions\ContentReviewErrorCodeCatalog;
 use App\Domain\ContentReview\Exceptions\ContentReviewException;
 use App\Exceptions\User\AccountDeletionBlockedException;
 use App\Http\Middleware\ApiMaintenanceMode;
+use App\Http\Middleware\RequireAdminMarket;
+use App\Http\Middleware\ResolveMarketContext;
 use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\UseAccountGlobalContext;
 use App\Http\Responses\ApiErrorResponse;
 use App\Models\Auction\Auction;
 use App\Models\ContentReview\ContentReview;
@@ -17,6 +20,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -29,8 +33,34 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->trustHosts(at: fn (): array => array_values(array_filter([
+            '^api-[a-z]{2}\\.'.preg_quote(config('markets.root_domain'), '/').'$',
+            '^'.preg_quote(config('markets.admin_api_host'), '/').'$',
+            config('markets.legacy_api_host') ? '^'.preg_quote((string) config('markets.legacy_api_host'), '/').'$' : null,
+        ])), subdomains: false);
+
         app('router')->aliasMiddleware('role', RoleMiddleware::class);
         app('router')->aliasMiddleware('api_maintenance', ApiMaintenanceMode::class);
+        app('router')->aliasMiddleware('market', ResolveMarketContext::class);
+        app('router')->aliasMiddleware('account_global', UseAccountGlobalContext::class);
+        app('router')->aliasMiddleware('admin_market_required', RequireAdminMarket::class);
+        $middleware->priority([
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
+            \Illuminate\Cookie\Middleware\EncryptCookies::class,
+            \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+            \Illuminate\Session\Middleware\StartSession::class,
+            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            ResolveMarketContext::class,
+            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            \Illuminate\Routing\Middleware\ThrottleRequestsWithRedis::class,
+            \Illuminate\Contracts\Session\Middleware\AuthenticatesSessions::class,
+            UseAccountGlobalContext::class,
+            RequireAdminMarket::class,
+            SubstituteBindings::class,
+            \Illuminate\Auth\Middleware\Authorize::class,
+        ]);
 
         //
     })

@@ -7,13 +7,16 @@ namespace App\Http\Controllers\Auction;
 use App\Http\Controllers\Controller;
 use App\Services\Auction\Actions\HandlePaymentWebhookAction;
 use App\Services\Auction\Payments\Contracts\RendersProviderResponse;
+use App\Services\Auction\Payments\FinancialMarketBootstrap;
 use App\Services\Auction\Payments\PaymentProviderFactory;
+use App\Support\Market\MarketContext;
 use App\Traits\ApiResponseTrait;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\PathParameter;
 use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 use Throwable;
 
@@ -32,12 +35,30 @@ final class PaymentWebhookController extends Controller
         Request $request,
         string $provider,
         HandlePaymentWebhookAction $action,
-        PaymentProviderFactory $providers
+        PaymentProviderFactory $providers,
+        FinancialMarketBootstrap $bootstrap,
+        MarketContext $context,
     ): HttpResponse {
+        abort_unless($providers->isRegistered($provider), 404);
+
         $renderer = $this->renderer($provider, $providers);
 
         try {
-            $outcome = $action->execute($provider, $request);
+            $event = $providers->make($provider)->parseEvent($request);
+            $marketId = $bootstrap->forEvent($provider, $event);
+
+            if ($marketId !== null) {
+                $outcome = $context->runInMarket($marketId, fn (): string => $action->execute($provider, $request));
+            } elseif (! $event->signatureVerified) {
+                $outcome = $context->runGlobally(fn (): string => $action->execute($provider, $request));
+            } else {
+                Log::warning('payment.webhook_unmatched', [
+                    'provider' => $provider,
+                    'event_id' => $event->eventId,
+                    'provider_transaction_id' => $event->providerTransactionId,
+                ]);
+                $outcome = $context->runGlobally(fn (): string => $action->recordUnmatched($provider, $request));
+            }
         } catch (Throwable $error) {
             if ($renderer) {
                 return $renderer->renderEventFailure($request, $error);

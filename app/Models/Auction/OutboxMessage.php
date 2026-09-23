@@ -6,11 +6,12 @@ namespace App\Models\Auction;
 
 use App\Domain\Auction\Enums\OutboxStatus;
 use App\Models\Auction\Concerns\HasPublicId;
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Model;
 
 final class OutboxMessage extends Model
 {
-    use HasPublicId;
+    use BelongsToMarket, HasPublicId;
 
     protected $fillable = [
         'public_id',

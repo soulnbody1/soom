@@ -35,7 +35,7 @@ final class ContentReviewSettingsApiTest extends TestCase
         $this->publishSettings(ReviewMode::Shadow);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/settings?scope=auction')
+            ->getJson('/api/admin/content-review/settings?scope=auction&market=jo')
             ->assertOk()
             ->assertJsonPath('data.scope', 'auction')
             ->assertJsonPath('data.master_switch_enabled', true)
@@ -49,7 +49,7 @@ final class ContentReviewSettingsApiTest extends TestCase
         $this->publishSettings(ReviewMode::AiAutomatic);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/settings?scope=auction')
+            ->getJson('/api/admin/content-review/settings?scope=auction&market=jo')
             ->assertOk()
             ->assertJsonPath('data.master_switch_enabled', false)
             ->assertJsonPath('data.active.settings.mode', ReviewMode::AiAutomatic->value)
@@ -61,7 +61,7 @@ final class ContentReviewSettingsApiTest extends TestCase
         $first = $this->publishSettings(ReviewMode::Manual);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', [
+            ->postJson('/api/admin/content-review/settings?market=jo', [
                 'scope' => 'auction',
                 'settings' => $this->settingsPayload(ReviewMode::Shadow),
             ])
@@ -92,7 +92,7 @@ final class ContentReviewSettingsApiTest extends TestCase
 
         try {
             $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-                ->postJson('/api/admin/content-review/settings', [
+                ->postJson('/api/admin/content-review/settings?market=jo', [
                     'scope' => 'auction',
                     'settings' => $this->settingsPayload(ReviewMode::Shadow),
                 ])
@@ -128,14 +128,14 @@ final class ContentReviewSettingsApiTest extends TestCase
         $payload['unexpected_flag'] = true;
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', ['scope' => 'auction', 'settings' => $payload])
+            ->postJson('/api/admin/content-review/settings?market=jo', ['scope' => 'auction', 'settings' => $payload])
             ->assertStatus(422)
             ->assertJsonPath('code', 'validation_failed');
 
         unset($payload['anthropic_api_key']);
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', ['scope' => 'auction', 'settings' => $payload])
+            ->postJson('/api/admin/content-review/settings?market=jo', ['scope' => 'auction', 'settings' => $payload])
             ->assertCreated();
 
         $stored = (array) ContentReviewSetting::where('scope', 'auction')->where('is_active', true)->firstOrFail()->settings;
@@ -148,7 +148,7 @@ final class ContentReviewSettingsApiTest extends TestCase
     public function test_invalid_settings_are_rejected(array $overrides): void
     {
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', [
+            ->postJson('/api/admin/content-review/settings?market=jo', [
                 'scope' => 'auction',
                 'settings' => array_replace($this->settingsPayload(ReviewMode::Shadow), $overrides),
             ])
@@ -174,7 +174,7 @@ final class ContentReviewSettingsApiTest extends TestCase
     public function test_a_model_is_validated_against_the_provider_being_published(): void
     {
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', [
+            ->postJson('/api/admin/content-review/settings?market=jo', [
                 'scope' => 'auction',
                 'settings' => array_replace($this->settingsPayload(ReviewMode::Shadow), [
                     'provider' => 'openrouter',
@@ -185,7 +185,7 @@ final class ContentReviewSettingsApiTest extends TestCase
             ->assertJsonPath('code', 'validation_failed');
 
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', [
+            ->postJson('/api/admin/content-review/settings?market=jo', [
                 'scope' => 'auction',
                 'settings' => array_replace($this->settingsPayload(ReviewMode::Shadow), [
                     'provider' => 'openrouter',
@@ -203,7 +203,7 @@ final class ContentReviewSettingsApiTest extends TestCase
     public function test_an_unknown_scope_is_rejected(): void
     {
         $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->postJson('/api/admin/content-review/settings', [
+            ->postJson('/api/admin/content-review/settings?market=jo', [
                 'scope' => 'advertisement',
                 'settings' => $this->settingsPayload(ReviewMode::Shadow),
             ])
@@ -216,7 +216,7 @@ final class ContentReviewSettingsApiTest extends TestCase
         $this->publishSettings(ReviewMode::Shadow);
 
         $response = $this->actingAs($this->fullyPermittedAdmin(), 'sanctum')
-            ->getJson('/api/admin/content-review/settings/versions?scope='.ReviewableSubjectType::Auction->value)
+            ->getJson('/api/admin/content-review/settings/versions?scope='.ReviewableSubjectType::Auction->value.'&market=jo')
             ->assertOk();
 
         $this->assertCount(2, (array) $response->json('data'));

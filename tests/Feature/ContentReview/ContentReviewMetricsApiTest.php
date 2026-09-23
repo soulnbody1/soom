@@ -32,7 +32,7 @@ final class ContentReviewMetricsApiTest extends TestCase
 {
     use BuildsContentReviewFixtures;
 
-    private const PATH = '/api/admin/content-review/metrics';
+    private const PATH = '/api/admin/content-review/metrics?market=jo';
 
     protected function setUp(): void
     {
@@ -252,12 +252,12 @@ final class ContentReviewMetricsApiTest extends TestCase
         config()->set('content_review.metrics.max_range_days', 30);
 
         $this->actingAs($this->admin(), 'sanctum')
-            ->getJson(self::PATH.'?date_from='.now()->subDays(5)->toDateString().'&date_to='.now()->toDateString())
+            ->getJson(self::PATH.'&date_from='.now()->subDays(5)->toDateString().'&date_to='.now()->toDateString())
             ->assertOk()
             ->assertJsonPath('data.range.key', 'custom');
 
         $this->actingAs($this->admin(), 'sanctum')
-            ->getJson(self::PATH.'?date_from='.now()->subDays(400)->toDateString().'&date_to='.now()->toDateString())
+            ->getJson(self::PATH.'&date_from='.now()->subDays(400)->toDateString().'&date_to='.now()->toDateString())
             ->assertStatus(422);
     }
 
@@ -291,7 +291,7 @@ final class ContentReviewMetricsApiTest extends TestCase
     private function metrics(?object $user = null, array $query = []): array
     {
         $user ??= $this->admin();
-        $path = self::PATH.($query === [] ? '' : '?'.http_build_query($query));
+        $path = self::PATH.($query === [] ? '' : '&'.http_build_query($query));
 
         return $this->actingAs($user, 'sanctum')->getJson($path)->assertOk()->json('data');
     }

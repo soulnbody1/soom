@@ -17,8 +17,8 @@ use App\Models\Category;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\Message;
-use App\Models\Support\SupportTicket;
 use App\Models\State;
+use App\Models\Support\SupportTicket;
 use App\Policies\AdPolicy;
 use App\Policies\AdReelPolicy;
 use App\Policies\Auction\AuctionDashboardPolicy;
@@ -31,6 +31,7 @@ use App\Policies\Auction\PaymentSubmissionPolicy;
 use App\Policies\Auction\SellerPayoutPolicy;
 use App\Policies\MessagePolicy;
 use App\Policies\Support\SupportTicketPolicy;
+use App\Services\Ad\ContentReview\AdReviewSubjectAdapter;
 use App\Services\Ad\Support\AdCacheVersion;
 use App\Services\Ad\Support\CategoryTreeResolver;
 use App\Services\Ad\Support\GeoNameResolver;
@@ -52,7 +53,9 @@ use App\Services\ContentReview\Support\ReviewSubjectRegistry;
 use App\Services\Location\LocationCache;
 use App\Services\Outbox\OutboxContentReviewEventPublisher;
 use App\Services\Outbox\OutboxTopicRouter;
+use App\Support\Market\MarketContext;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -65,6 +68,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->scoped(MarketContext::class);
         $this->registerTelescope();
 
         $this->app->singleton(CategoryTreeResolver::class);
@@ -93,6 +97,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(ReviewSubjectRegistry::class, function ($app): ReviewSubjectRegistry {
             $registry = new ReviewSubjectRegistry;
+            $registry->register($app->make(AdReviewSubjectAdapter::class));
             $registry->register($app->make(AuctionReviewSubjectAdapter::class));
 
             return $registry;
@@ -102,8 +107,24 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      */
+    /**
+     * Trusted proxies are configured here rather than in bootstrap/app.php,
+     * because the middleware callback there runs while the HTTP kernel is being
+     * resolved, which is before the configuration repository exists.
+     */
+    private function trustConfiguredProxies(): void
+    {
+        $proxies = config('markets.trusted_proxies');
+
+        if (is_array($proxies) && $proxies !== []) {
+            TrustProxies::at($proxies);
+        }
+    }
+
     public function boot(): void
     {
+        $this->trustConfiguredProxies();
+
         Gate::policy(Auction::class, AuctionPolicy::class);
         Gate::policy(PaymentSubmission::class, PaymentSubmissionPolicy::class);
         Gate::policy(AuctionDeposit::class, AuctionDepositPolicy::class);

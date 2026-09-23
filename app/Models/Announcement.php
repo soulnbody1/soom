@@ -2,13 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class Announcement extends Model
 {
+    use BelongsToMarket;
+
     protected $table = 'announcements';
-    protected $fillable = ['title', 'icon', 'display_order', 'is_active'];
+
+    protected $fillable = ['market_id', 'title', 'icon', 'display_order', 'is_active'];
+
     protected $casts = [
         'is_active' => 'boolean',
     ];
@@ -27,6 +32,7 @@ class Announcement extends Model
     {
         /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
         $disk = Storage::disk('spaces');
+
         return $value ? $disk->url($value) : null;
     }
 }

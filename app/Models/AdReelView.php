@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToMarket;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class AdReelView extends Model
 {
-    use HasFactory;
+    use BelongsToMarket, HasFactory;
 
     protected $fillable = [
+        'market_id',
         'ad_reel_id',
         'user_id',
         'viewed_at',

@@ -4,19 +4,21 @@ declare(strict_types=1);
 
 namespace App\Jobs\Auction;
 
+use App\Contracts\Market\RunsAcrossMarkets;
 use App\Domain\Auction\Enums\AuctionStatus;
 use App\Domain\Auction\Enums\PaymentSubmissionStatus;
 use App\Domain\Auction\Enums\SettlementStatus;
 use App\Domain\Auction\Exceptions\AuctionException;
+use App\Jobs\Concerns\HasMarketJobContext;
 use App\Models\Auction\AuctionSettlement;
 use App\Services\Auction\Actions\MarkWinnerDefaultedAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
 
-final class AutoDefaultOverdueWinnersJob implements ShouldQueue
+final class AutoDefaultOverdueWinnersJob implements RunsAcrossMarkets, ShouldQueue
 {
-    use Queueable;
+    use HasMarketJobContext, Queueable;
 
     public const REASON = 'winner_payment_deadline_expired';
 

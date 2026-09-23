@@ -6,13 +6,15 @@ namespace App\Repositories\User\Queries;
 
 use App\Models\Auction\AuctionActivityLog;
 use App\Models\User;
+use App\Services\Market\MarketQuery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 final class UserActivityQuery
 {
+    public function __construct(private readonly MarketQuery $markets) {}
+
     public function paginate(User $user, array $filters, int $perPage): LengthAwarePaginator
     {
         return $this->base($user)
@@ -29,7 +31,7 @@ final class UserActivityQuery
 
     public function eventTypes(User $user): array
     {
-        return DB::table('auction_activity_logs')
+        return $this->markets->table('auction_activity_logs')
             ->where('user_id', $user->id)
             ->distinct()
             ->orderBy('event_type')

@@ -26,7 +26,7 @@ final class AdminAdEndpointsTest extends AdTestCase
             ->assertOk()
             ->json('data');
 
-        $this->assertSame($featured->id, $data[0]['id']);
+        $this->assertSame($featured->public_id, $data[0]['id']);
         $this->assertTrue($data[0]['is_featured']);
     }
 
@@ -41,7 +41,7 @@ final class AdminAdEndpointsTest extends AdTestCase
         )->keyBy('id');
 
         $this->assertCount(2, $rows);
-        $this->assertFalse($rows[$blocked->id]['status']);
+        $this->assertFalse($rows[$blocked->public_id]['status']);
     }
 
     public function test_listing_is_admin_only(): void
@@ -59,14 +59,14 @@ final class AdminAdEndpointsTest extends AdTestCase
         $ad = $this->makeAd();
 
         $this->actingAs($admin, 'sanctum')
-            ->putJson('/api/admin/ads/toggle-block/'.$ad->id)
+            ->putJson('/api/admin/ads/toggle-block/'.$ad->public_id.'?market=jo')
             ->assertOk()
             ->assertJsonStructure(['message']);
 
         $this->assertSoftDeleted('ads', ['id' => $ad->id]);
 
         $this->actingAs($admin, 'sanctum')
-            ->putJson('/api/admin/ads/toggle-block/'.$ad->id)
+            ->putJson('/api/admin/ads/toggle-block/'.$ad->public_id.'?market=jo')
             ->assertOk();
 
         $this->assertDatabaseHas('ads', ['id' => $ad->id, 'deleted_at' => null]);
@@ -85,13 +85,13 @@ final class AdminAdEndpointsTest extends AdTestCase
         $ad = $this->makeAd();
 
         $this->actingAs($admin, 'sanctum')
-            ->putJson('/api/admin/ads/toggle-featured/'.$ad->id)
+            ->putJson('/api/admin/ads/toggle-featured/'.$ad->public_id.'?market=jo')
             ->assertOk();
 
         $this->assertTrue((bool) $ad->fresh()->is_featured);
 
         $this->actingAs($admin, 'sanctum')
-            ->putJson('/api/admin/ads/toggle-featured/'.$ad->id)
+            ->putJson('/api/admin/ads/toggle-featured/'.$ad->public_id.'?market=jo')
             ->assertOk();
 
         $this->assertFalse((bool) $ad->fresh()->is_featured);
@@ -102,7 +102,7 @@ final class AdminAdEndpointsTest extends AdTestCase
         $ad = $this->makeAd();
 
         $this->actingAs($this->adUser('admin'), 'sanctum')
-            ->deleteJson('/api/admin/ads/force-delete/'.$ad->id)
+            ->deleteJson('/api/admin/ads/force-delete/'.$ad->public_id.'?market=jo')
             ->assertOk()
             ->assertJsonPath('success', true);
 
@@ -121,9 +121,9 @@ final class AdminAdEndpointsTest extends AdTestCase
         $ad = $this->makeAd();
         $user = $this->adUser();
 
-        $this->actingAs($user, 'sanctum')->putJson('/api/admin/ads/toggle-block/'.$ad->id)->assertForbidden();
-        $this->actingAs($user, 'sanctum')->putJson('/api/admin/ads/toggle-featured/'.$ad->id)->assertForbidden();
-        $this->actingAs($user, 'sanctum')->deleteJson('/api/admin/ads/force-delete/'.$ad->id)->assertForbidden();
+        $this->actingAs($user, 'sanctum')->putJson('/api/admin/ads/toggle-block/'.$ad->public_id.'?market=jo')->assertForbidden();
+        $this->actingAs($user, 'sanctum')->putJson('/api/admin/ads/toggle-featured/'.$ad->public_id.'?market=jo')->assertForbidden();
+        $this->actingAs($user, 'sanctum')->deleteJson('/api/admin/ads/force-delete/'.$ad->public_id.'?market=jo')->assertForbidden();
 
         $this->assertDatabaseHas('ads', ['id' => $ad->id, 'deleted_at' => null]);
         $this->assertSame(0, Ad::where('is_featured', true)->count());
