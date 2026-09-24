@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ProtectApiDocumentation;
+use Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy;
 
 $rootDomain = strtolower((string) env('SOOM_ROOT_DOMAIN', 'soom.test'));
 $adminApiHost = strtolower((string) env('SOOM_ADMIN_API_HOST', 'api-admin.'.$rootDomain));
@@ -34,7 +35,10 @@ return [
      * Multiple includes or wildcards → server defaults to / and paths stay full (/api/users).
      * Override with `servers`, or use Scramble::registerApi() for separate bases.
      */
-    'api_path' => 'api',
+    'api_path' => [
+        'include' => 'api',
+        'exclude' => ['api/broadcasting'],
+    ],
 
     /*
      * Your API domain. By default, app domain is used. This is also a part of the default API routes
@@ -191,5 +195,5 @@ return [
      * ],
      */
     // 'security_strategy' => \Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy::class,
-    'security_strategy' => \Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy::class,
+    'security_strategy' => MiddlewareAuthSecurityStrategy::class,
 ];

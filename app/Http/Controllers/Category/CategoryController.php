@@ -13,9 +13,16 @@ use App\Services\CategoryService;
 use App\Services\Market\MarketCacheKey;
 use App\Services\Market\MarketCategoryCatalog;
 use App\Support\Market\MarketContext;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
+#[Group(name: 'التصنيفات', description: 'شجرة تصنيفات الإعلانات وإدارتها والتحكم في ظهورها داخل كل سوق.', weight: 15)]
 class CategoryController extends Controller
 {
     private const TTL_SECONDS = 3600;
@@ -28,6 +35,9 @@ class CategoryController extends Controller
         protected MarketCategoryCatalog $marketCategories,
     ) {}
 
+    #[Endpoint(title: 'عرض التصنيفات', description: 'يعرض شجرة التصنيفات الظاهرة في السوق الحالي، ويمكن قصر النتيجة على التصنيفات الرئيسية.')]
+    #[QueryParameter('parent', description: 'عند تمرير true تُعرض التصنيفات الرئيسية فقط.', type: 'boolean')]
+    #[Response(200, description: 'قائمة التصنيفات أو شجرتها حسب الطلب.')]
     public function index(Request $request)
     {
         $parentOnly = $request->boolean('parent');
@@ -46,11 +56,16 @@ class CategoryController extends Controller
         return response()->json(['data' => $categories]);
     }
 
+    #[Endpoint(title: 'إنشاء تصنيف', description: 'ينشئ تصنيفًا جديدًا داخل شجرة التصنيفات.')]
+    #[Response(200, description: 'بيانات التصنيف بعد إنشائه.')]
     public function store(StoreCategoryRequest $request)
     {
         return new CategoryResource($this->service->store($request->validated()));
     }
 
+    #[Endpoint(title: 'عرض تصنيف', description: 'يعرض التصنيف المحدد وفروعه الظاهرة في السوق الحالي.')]
+    #[PathParameter('category', description: 'المعرّف الرقمي للتصنيف.')]
+    #[Response(200, description: 'بيانات التصنيف وفروعه.')]
     public function show(Category $category)
     {
         abort_unless($this->marketCategories->isVisible((int) $category->id), 404);
@@ -58,11 +73,17 @@ class CategoryController extends Controller
         return new CategoryResource($this->tree->withDescendants($category, $this->marketCategories->visibleIds()));
     }
 
+    #[Endpoint(title: 'تحديث تصنيف', description: 'يحدّث بيانات التصنيف المحدد وموقعه داخل الشجرة.')]
+    #[PathParameter('category', description: 'المعرّف الرقمي للتصنيف.')]
+    #[Response(200, description: 'بيانات التصنيف بعد التحديث.')]
     public function update(UpdateCategoryRequest $request, Category $category)
     {
         return new CategoryResource($this->service->update($category, $request->validated()));
     }
 
+    #[Endpoint(title: 'حذف تصنيف', description: 'يحذف التصنيف المحدد وفق قواعد سلامة شجرة التصنيفات.')]
+    #[PathParameter('category', description: 'المعرّف الرقمي للتصنيف.')]
+    #[Response(200, description: 'تم حذف التصنيف بنجاح.')]
     public function destroy(Category $category)
     {
         $this->service->delete($category);
@@ -70,6 +91,11 @@ class CategoryController extends Controller
         return response()->json(['message' => 'Category deleted.']);
     }
 
+    #[Endpoint(title: 'تحديث ظهور تصنيف في السوق', description: 'يحدّث حالة ظهور التصنيف وترتيبه داخل السوق الحالي.')]
+    #[PathParameter('category', description: 'المعرّف الرقمي للتصنيف.')]
+    #[BodyParameter('is_visible', description: 'هل يظهر التصنيف في السوق الحالي.', required: true, type: 'boolean')]
+    #[BodyParameter('display_order', description: 'ترتيب ظهور التصنيف، ويبدأ من صفر.', required: true, type: 'integer')]
+    #[Response(200, description: 'حالة ظهور التصنيف وترتيبه بعد التحديث.')]
     public function updateMarketVisibility(Request $request, Category $category, MarketContext $context)
     {
         $data = $request->validate([

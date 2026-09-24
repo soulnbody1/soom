@@ -15,10 +15,14 @@ use App\Services\Auth\OtpManager;
 use App\Services\Auth\UserSessionManager;
 use App\Services\OtpRateLimiterService;
 use App\Services\OtpService;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
+#[Group(name: 'المصادقة والحساب', description: 'إنشاء الحساب وتسجيل الدخول وإدارة الجلسات وكلمة المرور والتحقق من رقم الهاتف.', weight: 18)]
 class RegistrationController extends Controller
 {
     use HandlesOtpFailures;
@@ -28,6 +32,9 @@ class RegistrationController extends Controller
         private readonly UserSessionManager $sessions,
     ) {}
 
+    #[Endpoint(title: 'إنشاء حساب جديد', description: 'ينشئ حسابًا غير مؤكد ويرسل رمز تحقق إلى رقم الهاتف عبر واتساب.')]
+    #[Response(201, description: 'تم إنشاء الحساب وإرسال رمز التحقق.')]
+    #[Response(500, description: 'تعذّر إرسال رمز التحقق، وتم التراجع عن إنشاء الحساب.')]
     public function register(RegisterRequest $request, OtpService $otpService, OtpRateLimiterService $otpLimiter): JsonResponse
     {
         $limited = $otpLimiter->check($request->phone, $request->ip());
@@ -62,6 +69,9 @@ class RegistrationController extends Controller
         ], 201);
     }
 
+    #[Endpoint(title: 'تأكيد رقم الهاتف', description: 'يتحقق من الرمز المرسل، ويفعّل الحساب، ثم يصدر رموز جلسة للمستخدم.')]
+    #[Response(200, description: 'تم تأكيد الحساب وإرجاع بيانات المستخدم ورموز الجلسة.')]
+    #[Response(404, description: 'المستخدم غير موجود.')]
     public function verify(Verify_otp $request): JsonResponse
     {
         $user = User::where('phone', $request->phone)->first();

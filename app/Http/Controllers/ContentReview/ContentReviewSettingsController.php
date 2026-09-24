@@ -12,16 +12,24 @@ use App\Repositories\ContentReview\ContentReviewSettingRepository;
 use App\Services\ContentReview\Actions\PublishContentReviewSettingsAction;
 use App\Services\ContentReview\Support\ReviewModeResolver;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+#[Group(name: 'إدارة مراجعة المحتوى', description: 'إعداد منظومة مراجعة المحتوى ومراقبة مزوّد الذكاء الاصطناعي والسياسات والمقاييس التشغيلية.', weight: 21)]
 final class ContentReviewSettingsController extends Controller
 {
     use ApiResponseTrait;
 
     private const DEFAULT_SCOPE = 'global';
 
+    #[Endpoint(title: 'عرض إعدادات المراجعة الفعالة', description: 'يعرض الإعدادات الفعالة ونمط المراجعة المحسوب لكل نوع محتوى داخل النطاق المحدد.')]
+    #[QueryParameter('scope', description: 'نطاق الإعدادات، والقيمة الافتراضية global.')]
+    #[Response(200, description: 'الإعدادات الفعالة وحالة المفتاح العام وإعدادات أنواع المحتوى.')]
     public function show(
         Request $request,
         ContentReviewSettingRepository $settings,
@@ -52,6 +60,9 @@ final class ContentReviewSettingsController extends Controller
         ], __('content_review.messages.review_fetched'));
     }
 
+    #[Endpoint(title: 'عرض إصدارات إعدادات المراجعة', description: 'يعرض سجل إصدارات إعدادات المراجعة للنطاق المحدد.')]
+    #[QueryParameter('scope', description: 'نطاق الإعدادات، والقيمة الافتراضية global.')]
+    #[Response(200, description: 'قائمة إصدارات إعدادات المراجعة.')]
     public function index(Request $request, ContentReviewSettingRepository $settings): JsonResponse
     {
         return $this->sendResponse(
@@ -60,6 +71,8 @@ final class ContentReviewSettingsController extends Controller
         );
     }
 
+    #[Endpoint(title: 'نشر إعدادات مراجعة جديدة', description: 'ينشئ إصدارًا جديدًا من إعدادات المراجعة ويجعله فعالًا في النطاق المحدد.')]
+    #[Response(201, description: 'تم نشر إعدادات المراجعة وإرجاع الإصدار الجديد.')]
     public function store(
         PublishContentReviewSettingsRequest $request,
         PublishContentReviewSettingsAction $action

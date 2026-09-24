@@ -8,14 +8,22 @@ use App\Http\Requests\Attribute\UpdateAttributeOptionRequest;
 use App\Models\Attribute;
 use App\Models\AttributeOption;
 use App\Services\Catalog\CatalogCacheVersion;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Support\Facades\DB;
 
+#[Group(name: 'خصائص الإعلانات', description: 'تعريف خصائص التصنيفات وخياراتها والتحكم في توريثها وظهورها داخل نماذج الإعلانات.', weight: 16)]
 class AttributeOptionController extends Controller
 {
     private const BETWEEN_OPTION_LIMIT = 2;
 
     public function __construct(protected CatalogCacheVersion $version) {}
 
+    #[Endpoint(title: 'إضافة خيار إلى خاصية', description: 'ينشئ خيارًا جديدًا للخاصية مع تطبيق القيود الخاصة بنوع الخاصية.')]
+    #[Response(200, description: 'بيانات الخيار بعد إنشائه.')]
+    #[Response(422, description: 'لا يمكن إضافة الخيار بسبب قيود نوع الخاصية.')]
     public function store(StoreAttributeOptionRequest $request)
     {
         $option = DB::transaction(function () use ($request): ?AttributeOption {
@@ -44,6 +52,9 @@ class AttributeOptionController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'تحديث خيار خاصية', description: 'يحدّث بيانات الخيار المحدد للخاصية.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي لخيار الخاصية.')]
+    #[Response(200, description: 'بيانات الخيار بعد التحديث.')]
     public function update(UpdateAttributeOptionRequest $request, $id)
     {
         $option = AttributeOption::findOrFail($id);
@@ -57,6 +68,9 @@ class AttributeOptionController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'حذف خيار خاصية', description: 'يحذف الخيار المحدد ويحدّث نسخة الكتالوج المخزنة مؤقتًا.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي لخيار الخاصية.')]
+    #[Response(200, description: 'تم حذف خيار الخاصية بنجاح.')]
     public function destroy($id)
     {
         $option = AttributeOption::findOrFail($id);

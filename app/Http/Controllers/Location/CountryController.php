@@ -11,9 +11,16 @@ use App\Models\Country;
 use App\Services\Location\GeographyDeletionGuard;
 use App\Services\Location\LocationCache;
 use App\Support\Market\MarketContext;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 
+#[Group(name: 'المواقع الجغرافية', description: 'الدول والمحافظات والمدن المتاحة في السوق الحالي وإدارتها من لوحة التحكم.', weight: 15)]
 class CountryController extends Controller
 {
+    #[Endpoint(title: 'عرض دولة السوق', description: 'يعرض الدولة المرتبطة بالسوق الحالي.')]
+    #[Response(200, description: 'بيانات دولة السوق الحالي.')]
     public function index(LocationCache $cache, MarketContext $market)
     {
         return response()->json([
@@ -26,6 +33,8 @@ class CountryController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'إنشاء دولة', description: 'ينشئ دولة جديدة بالبيانات ورمز الاتصال المحددين.')]
+    #[Response(201, description: 'تم إنشاء الدولة وإرجاع بياناتها.')]
     public function store(StoreCountryRequest $request)
     {
         $country = Country::create($request->validated());
@@ -36,6 +45,10 @@ class CountryController extends Controller
         ], 201);
     }
 
+    #[Endpoint(title: 'عرض محافظات دولة', description: 'يعرض محافظات الدولة المطلوبة إذا كانت مرتبطة بالسوق الحالي.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للدولة.')]
+    #[Response(200, description: 'قائمة محافظات الدولة.')]
+    #[Response(404, description: 'الدولة غير موجودة في السوق الحالي.')]
     public function show($id, LocationCache $cache, MarketContext $market)
     {
         $country = Country::query()->whereKey($market->market()->country_id)->find($id);
@@ -51,6 +64,10 @@ class CountryController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'تحديث دولة', description: 'يحدّث بيانات الدولة المحددة.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للدولة.')]
+    #[Response(200, description: 'تم تحديث الدولة وإرجاع بياناتها.')]
+    #[Response(404, description: 'الدولة غير موجودة.')]
     public function update(UpdateCountryRequest $request, $id)
     {
         $country = Country::find($id);
@@ -66,6 +83,10 @@ class CountryController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'حذف دولة', description: 'يحذف الدولة بعد التأكد من عدم ارتباط بيانات تشغيلية تمنع حذفها.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للدولة.')]
+    #[Response(200, description: 'تم حذف الدولة بنجاح.')]
+    #[Response(404, description: 'الدولة غير موجودة.')]
     public function destroy($id)
     {
         $country = Country::find($id);

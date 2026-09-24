@@ -15,9 +15,13 @@ use App\Services\Auth\OtpManager;
 use App\Services\Auth\UserSessionManager;
 use App\Services\OtpRateLimiterService;
 use App\Services\OtpService;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 
+#[Group(name: 'المصادقة والحساب', description: 'إنشاء الحساب وتسجيل الدخول وإدارة الجلسات وكلمة المرور والتحقق من رقم الهاتف.', weight: 18)]
 class PasswordResetController extends Controller
 {
     use HandlesOtpFailures;
@@ -27,6 +31,9 @@ class PasswordResetController extends Controller
         private readonly UserSessionManager $sessions,
     ) {}
 
+    #[Endpoint(title: 'إرسال رمز استعادة كلمة المرور', description: 'يرسل رمز تحقق إلى رقم الهاتف عبر واتساب بعد تطبيق حدود المحاولات.')]
+    #[Response(200, description: 'تم إرسال رمز التحقق إلى رقم الهاتف.')]
+    #[Response(500, description: 'تعذّر إرسال رمز التحقق حاليًا.')]
     public function sendCode(ForgetPasswordRequest $request, OtpService $otpService, OtpRateLimiterService $otpLimiter): JsonResponse
     {
         $limited = $otpLimiter->check($request->phone, $request->ip());
@@ -49,6 +56,9 @@ class PasswordResetController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'إعادة تعيين كلمة المرور', description: 'يتحقق من رمز الاستعادة ثم يعيّن كلمة مرور جديدة ويصدر رموز جلسة للمستخدم.')]
+    #[Response(200, description: 'تم تغيير كلمة المرور وإرجاع بيانات المستخدم ورموز الجلسة.')]
+    #[Response(404, description: 'المستخدم غير موجود.')]
     public function reset(Reset_password $request): JsonResponse
     {
         $user = User::where('phone', $request->phone)->first();

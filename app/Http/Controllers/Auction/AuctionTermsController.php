@@ -10,6 +10,7 @@ use App\Models\Auction\Auction;
 use App\Models\Auction\AuctionConfigurationSnapshot;
 use App\Models\Auction\AuctionTermsAcceptance;
 use App\Models\Auction\AuctionTermsVersion;
+use App\Repositories\Auction\Queries\AuctionTermsQuery;
 use App\Services\Auction\Actions\CreateAuctionTermsVersionAction;
 use App\Services\Auction\Actions\ListAuctionTermsAction;
 use App\Traits\ApiResponseTrait;
@@ -40,7 +41,12 @@ final class AuctionTermsController extends Controller
         );
     }
 
-    public function adminIndex(\App\Repositories\Auction\Queries\AuctionTermsQuery $query): JsonResponse
+    #[Endpoint(
+        title: 'عرض نسخ الشروط للإدارة',
+        description: 'يعرض جميع نسخ شروط المزادات داخل لوحة الإدارة مع بيانات النشر والحالة والسوق.'
+    )]
+    #[Response(200, description: 'قائمة نسخ شروط المزادات المخصصة للإدارة.')]
+    public function adminIndex(AuctionTermsQuery $query): JsonResponse
     {
         Gate::authorize('viewAny', Auction::class);
 

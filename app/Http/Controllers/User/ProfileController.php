@@ -10,8 +10,12 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\User\Actions\DeleteUserAccountAction;
 use App\Services\User\Actions\UpdateUserProfileAction;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 
+#[Group(name: 'حساب المستخدم', description: 'بيانات الحساب والملف الشخصي الخاصة بالمستخدم الحالي وإجراءات إدارته.', weight: 8)]
 final class ProfileController extends Controller
 {
     public function __construct(
@@ -19,11 +23,15 @@ final class ProfileController extends Controller
         private readonly DeleteUserAccountAction $deleteAccount,
     ) {}
 
+    #[Endpoint(title: 'عرض الملف الشخصي', description: 'يعرض بيانات الحساب والملف الشخصي للمستخدم الحالي.')]
+    #[Response(200, description: 'بيانات المستخدم الحالي.')]
     public function show(): UserResource
     {
         return new UserResource($this->currentUser());
     }
 
+    #[Endpoint(title: 'تحديث الملف الشخصي', description: 'يحدّث البيانات المسموح بها في الملف الشخصي للمستخدم الحالي، بما في ذلك الصورة عند إرسالها.')]
+    #[Response(200, description: 'بيانات المستخدم بعد التحديث.')]
     public function update(UpdateProfileRequest $request): UserResource
     {
         return new UserResource(
@@ -31,6 +39,8 @@ final class ProfileController extends Controller
         );
     }
 
+    #[Endpoint(title: 'حذف الحساب نهائيًا', description: 'يحذف حساب المستخدم الحالي نهائيًا مع البيانات والإعلانات المرتبطة به وفق سياسة حذف الحساب.')]
+    #[Response(200, description: 'تم حذف الحساب والبيانات المرتبطة به نهائيًا.')]
     public function destroy(): JsonResponse
     {
         $this->deleteAccount->execute($this->currentUser());

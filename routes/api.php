@@ -1,21 +1,10 @@
 <?php
 
 use App\Http\Controllers\MarketController;
+use App\Http\Controllers\StatusController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/status', function () {
-    if (config('app.api_maintenance')) {
-        return response()->json([
-            'status' => 'maintenance',
-            'message' => 'الموقع تحت الصيانة الآن، برجاء المحاولة لاحقاً.',
-        ], 503);
-    }
-
-    return response()->json([
-        'status' => 'ok',
-        'message' => 'الموقع يعمل الآن.',
-    ]);
-});
+Route::get('/status', StatusController::class);
 Route::middleware(['api_maintenance'])->group(function () {
     Route::get('/markets', [MarketController::class, 'index']);
     Route::middleware('market')->group(function () {

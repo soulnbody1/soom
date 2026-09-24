@@ -10,10 +10,15 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Repositories\User\Queries\UserDirectoryQuery;
 use App\Services\User\Actions\DeleteUserAccountAction;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
+#[Group(name: 'إدارة المستخدمين', description: 'استعراض حسابات المستخدمين والبحث فيها ومتابعة إحصاءاتها وحالات الحظر والحذف النهائي.', weight: 19)]
 final class AdminUserController extends Controller
 {
     public function __construct(
@@ -21,11 +26,15 @@ final class AdminUserController extends Controller
         private readonly DeleteUserAccountAction $deleteAccount,
     ) {}
 
+    #[Endpoint(title: 'عرض المستخدمين', description: 'يعرض حسابات المستخدمين مرتبة ومقسّمة إلى صفحات داخل لوحة الإدارة.')]
+    #[Response(200, description: 'قائمة المستخدمين وبيانات الصفحات.')]
     public function index(): AnonymousResourceCollection
     {
         return UserResource::collection($this->users->listing()->paginate(20));
     }
 
+    #[Endpoint(title: 'البحث عن مستخدمين', description: 'يبحث في دليل المستخدمين بالكلمة المرسلة ويعيد النتائج من الأحدث إلى الأقدم.')]
+    #[Response(200, description: 'نتائج البحث وبيانات الصفحات، أو نتيجة فارغة عند عدم وجود تطابق.')]
     public function search(AdminUserSearchRequest $request): JsonResponse
     {
         $users = $this->users->listing($request->keyword())->latest()->paginate(10);
@@ -48,6 +57,8 @@ final class AdminUserController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'عرض إحصاءات المستخدمين', description: 'يعرض عدد المستخدمين الذين لديهم إعلانات وعدد المستخدمين الذين لا يملكون إعلانات.')]
+    #[Response(200, description: 'ملخص إحصاءات نشاط المستخدمين.')]
     public function analytics(): JsonResponse
     {
         return response()->json([
@@ -56,6 +67,10 @@ final class AdminUserController extends Controller
         ], 200);
     }
 
+    #[Endpoint(title: 'حظر مستخدم أو استعادته', description: 'يبدّل حالة المستخدم بين الحظر والنشاط وفق صلاحيات المشرف.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للمستخدم.')]
+    #[Response(200, description: 'تم تحديث حالة المستخدم بنجاح.')]
+    #[Response(404, description: 'المستخدم غير موجود.')]
     public function toggleBlock(string $id): JsonResponse
     {
         $user = User::withTrashed()->find($id);
@@ -77,6 +92,10 @@ final class AdminUserController extends Controller
         return response()->json(['message' => 'تم حظر المستخدم .'], 200);
     }
 
+    #[Endpoint(title: 'حذف حساب مستخدم نهائيًا', description: 'يحذف حساب المستخدم نهائيًا مع البيانات والإعلانات المرتبطة به وفق سياسة حذف الحساب.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للمستخدم.')]
+    #[Response(200, description: 'تم حذف الحساب والبيانات المرتبطة به نهائيًا.')]
+    #[Response(404, description: 'المستخدم غير موجود.')]
     public function forceDelete(string $id): JsonResponse
     {
         $user = User::withTrashed()->find($id);

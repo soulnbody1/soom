@@ -14,9 +14,15 @@ use App\Models\AttributeCategoryException;
 use App\Models\Category;
 use App\Services\Catalog\CatalogCacheVersion;
 use App\Services\Catalog\CategoryAttributeCache;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+#[Group(name: 'خصائص الإعلانات', description: 'تعريف خصائص التصنيفات وخياراتها والتحكم في توريثها وظهورها داخل نماذج الإعلانات.', weight: 16)]
 class AttributeController extends Controller
 {
     public function __construct(
@@ -24,6 +30,9 @@ class AttributeController extends Controller
         protected CatalogCacheVersion $version,
     ) {}
 
+    #[Endpoint(title: 'عرض خصائص تصنيف', description: 'يعرض الخصائص الفعالة للتصنيف المحدد بعد احتساب الخصائص الموروثة والاستثناءات.')]
+    #[QueryParameter('category_id', description: 'المعرّف الرقمي للتصنيف.', required: true)]
+    #[Response(200, description: 'قائمة الخصائص المتاحة للتصنيف.')]
     public function getAttributesByCategory(Request $request)
     {
         $request->validate([
@@ -36,6 +45,8 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'إنشاء خاصية', description: 'ينشئ خاصية جديدة ويمكن ربطها بمجموعة من التصنيفات وإعداد قابلية التوريث لكل ارتباط.')]
+    #[Response(200, description: 'بيانات الخاصية بعد إنشائها مع التصنيفات والخيارات.')]
     public function store(StoreAttributeRequest $request)
     {
         $attribute = DB::transaction(function () use ($request): Attribute {
@@ -56,6 +67,9 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'تحديث خاصية', description: 'يحدّث تعريف الخاصية وروابطها بالتصنيفات داخل عملية آمنة.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للخاصية.')]
+    #[Response(200, description: 'بيانات الخاصية بعد التحديث.')]
     public function update(UpdateAttributeRequest $request, $id)
     {
         $attribute = DB::transaction(function () use ($request, $id): Attribute {
@@ -77,6 +91,9 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'حذف خاصية', description: 'يحذف الخاصية المحددة ويحدّث نسخة ذاكرة التخزين المؤقت للكتالوج.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للخاصية.')]
+    #[Response(200, description: 'تم حذف الخاصية بنجاح.')]
     public function destroy($id)
     {
         $attribute = Attribute::findOrFail($id);
@@ -90,6 +107,9 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'عرض خيارات خاصية', description: 'يعرض اسم الخاصية وجميع الخيارات المعرفة لها.')]
+    #[PathParameter('id', description: 'المعرّف الرقمي للخاصية.')]
+    #[Response(200, description: 'اسم الخاصية وقائمة خياراتها.')]
     public function getOptionsByAttributeId($id)
     {
         $attribute = Attribute::with('options')->findOrFail($id);
@@ -101,6 +121,8 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'مزامنة خصائص تصنيف', description: 'يستبدل روابط خصائص التصنيف بالقائمة المرسلة مع حفظ حالة التوريث لكل خاصية.')]
+    #[Response(200, description: 'تمت مزامنة الخصائص مع التصنيف بنجاح.')]
     public function syncAttributesToCategory(Request $request)
     {
         $request->validate([
@@ -124,6 +146,8 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'استثناء خاصية من تصنيف', description: 'يمنع ظهور خاصية موروثة داخل تصنيف محدد دون حذف تعريف الخاصية الأصلي.')]
+    #[Response(200, description: 'تم استثناء الخاصية من التصنيف.')]
     public function excludeAttributeFromCategory(ExcludeAttributeFromCategoryRequest $request)
     {
         AttributeCategoryException::firstOrCreate([
@@ -139,6 +163,8 @@ class AttributeController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'إعادة خاصية إلى تصنيف', description: 'يلغي استثناء الخاصية لتعود إلى الظهور في التصنيف وفق قواعد التوريث.')]
+    #[Response(200, description: 'تمت إعادة الخاصية إلى التصنيف.')]
     public function includeAttributeBack(IncludeAttributeBackRequest $request)
     {
         AttributeCategoryException::query()

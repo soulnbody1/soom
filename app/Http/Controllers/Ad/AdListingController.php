@@ -13,13 +13,20 @@ use App\Repositories\Ad\Queries\AdListingQuery;
 use App\Repositories\Ad\Queries\CategoryFeedQuery;
 use App\Repositories\Ad\Queries\HomeFeedQuery;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+#[Group(name: 'الإعلانات', description: 'استعراض الإعلانات العامة وتفاصيلها والبحث فيها وتجميعها حسب التصنيف.', weight: 7)]
 class AdListingController extends Controller
 {
     use ApiResponseTrait;
 
+    #[Endpoint(title: 'عرض قائمة الإعلانات', description: 'يعرض الإعلانات المتاحة في السوق الحالي مع دعم التصفية والترتيب وتقسيم النتائج إلى صفحات.')]
+    #[Response(200, description: 'قائمة الإعلانات وبيانات الصفحات.')]
     public function index(AdIndexRequest $request, AdListingQuery $listing): JsonResponse
     {
         $ads = $listing->paginate(AdFilterDTO::fromRequest($request), $this->viewer());
@@ -30,6 +37,8 @@ class AdListingController extends Controller
         );
     }
 
+    #[Endpoint(title: 'عرض محتوى الصفحة الرئيسية', description: 'يعرض الإعلانات مجمّعة تحت تصنيفاتها الرئيسية مع مراعاة السوق والمستخدم الحالي.')]
+    #[Response(200, description: 'مجموعات التصنيفات والإعلانات التابعة لكل مجموعة.')]
     public function home(Request $request, HomeFeedQuery $feed): JsonResponse
     {
         $groups = array_map(
@@ -44,6 +53,9 @@ class AdListingController extends Controller
         return $this->sendResponse($groups, 'تم جلب الإعلانات بنجاح.');
     }
 
+    #[Endpoint(title: 'عرض إعلانات تصنيف', description: 'يعرض إعلانات التصنيف المحدد وفروعه، إلى جانب التصنيفات الفرعية والإعلانات القريبة عند توافرها.')]
+    #[PathParameter('categoryId', description: 'المعرّف الرقمي للتصنيف.')]
+    #[Response(200, description: 'إعلانات التصنيف والبيانات المرافقة مقسّمة إلى صفحات.')]
     public function byCategory(int $categoryId, CategoryFeedQuery $feed): JsonResponse
     {
         $data = $feed->build($categoryId, $this->viewer());

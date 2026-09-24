@@ -12,16 +12,25 @@ use App\Repositories\ContentReview\ContentReviewPolicyRepository;
 use App\Services\ContentReview\Actions\PublishContentReviewPolicyAction;
 use App\Services\ContentReview\Support\ReviewSubjectResolver;
 use App\Traits\ApiResponseTrait;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\PathParameter;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+#[Group(name: 'إدارة مراجعة المحتوى', description: 'إعداد منظومة مراجعة المحتوى ومراقبة مزوّد الذكاء الاصطناعي والسياسات والمقاييس التشغيلية.', weight: 21)]
 final class ContentReviewPolicyController extends Controller
 {
     use ApiResponseTrait;
 
     public function __construct(private readonly ReviewSubjectResolver $subjects) {}
 
+    #[Endpoint(title: 'عرض إصدارات سياسات المراجعة', description: 'يعرض جميع إصدارات سياسات المراجعة لنوع المحتوى مع عدد مرات استخدامها.')]
+    #[QueryParameter('subject_type', description: 'نوع المحتوى المطلوب عرض سياساته.')]
+    #[Response(200, description: 'قائمة إصدارات سياسات المراجعة.')]
     public function index(Request $request, ContentReviewPolicyRepository $policies): JsonResponse
     {
         $type = $this->subjects->typeOrDefault($request->query('subject_type'));
@@ -32,6 +41,9 @@ final class ContentReviewPolicyController extends Controller
         );
     }
 
+    #[Endpoint(title: 'عرض سياسة المراجعة الفعالة', description: 'يعرض السياسة المنشورة والفعالة حاليًا لنوع المحتوى المحدد.')]
+    #[QueryParameter('subject_type', description: 'نوع المحتوى المطلوب عرض سياسته الفعالة.')]
+    #[Response(200, description: 'السياسة الفعالة وتفاصيلها، أو قيمة فارغة إذا لم تُنشر سياسة بعد.')]
     public function active(Request $request, ContentReviewPolicyRepository $policies): JsonResponse
     {
         $type = $this->subjects->typeOrDefault($request->query('subject_type'));
@@ -49,6 +61,9 @@ final class ContentReviewPolicyController extends Controller
         );
     }
 
+    #[Endpoint(title: 'عرض إصدار سياسة مراجعة', description: 'يعرض تفاصيل إصدار محدد من سياسة مراجعة المحتوى مع الحمولة الكاملة للسياسة.')]
+    #[PathParameter('contentReviewPolicy', description: 'المعرّف العام لإصدار سياسة المراجعة.')]
+    #[Response(200, description: 'تفاصيل إصدار سياسة المراجعة.')]
     public function show(Request $request, ContentReviewPolicy $contentReviewPolicy): JsonResponse
     {
         $contentReviewPolicy->loadMissing('creator:id,name')->loadCount('reviews');
@@ -59,6 +74,8 @@ final class ContentReviewPolicyController extends Controller
         );
     }
 
+    #[Endpoint(title: 'نشر سياسة مراجعة جديدة', description: 'ينشئ إصدارًا غير قابل للتعديل من سياسة المراجعة ويجعله السياسة الفعالة لنوع المحتوى.')]
+    #[Response(201, description: 'تم نشر سياسة المراجعة وإرجاع تفاصيل إصدارها.')]
     public function store(
         PublishContentReviewPolicyRequest $request,
         PublishContentReviewPolicyAction $action

@@ -10,10 +10,15 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\Auth\UserSessionManager;
 use App\Services\TokenService;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Endpoint;
+use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
+#[Group(name: 'المصادقة والحساب', description: 'إنشاء الحساب وتسجيل الدخول وإدارة الجلسات وكلمة المرور والتحقق من رقم الهاتف.', weight: 18)]
 class SessionController extends Controller
 {
     private const DUMMY_HASH = '$2y$12$0000000000000000000000000000000000000000000000000000u';
@@ -23,6 +28,10 @@ class SessionController extends Controller
         private readonly TokenService $tokenService,
     ) {}
 
+    #[Endpoint(title: 'تسجيل الدخول', description: 'يتحقق من بيانات الحساب وتأكيد رقم الهاتف ثم يصدر رمزي الوصول والتحديث.')]
+    #[Response(200, description: 'بيانات المستخدم ورموز الجلسة.')]
+    #[Response(430, description: 'رقم الهاتف غير مؤكد.')]
+    #[Response(431, description: 'بيانات تسجيل الدخول غير صحيحة.')]
     public function login(Login $request): JsonResponse
     {
         $user = User::where('phone', $request->phone)->first();
@@ -50,6 +59,8 @@ class SessionController extends Controller
         ]);
     }
 
+    #[Endpoint(title: 'تسجيل الخروج', description: 'يلغي جميع رموز الجلسة النشطة للمستخدم الحالي.')]
+    #[Response(200, description: 'تم تسجيل الخروج بنجاح.')]
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -61,6 +72,10 @@ class SessionController extends Controller
         return response()->json(['message' => 'تم تسجيل الخروج بنجاح']);
     }
 
+    #[Endpoint(title: 'تجديد جلسة الدخول', description: 'يستهلك رمز التحديث الصالح ويصدر زوجًا جديدًا من رموز الوصول والتحديث.')]
+    #[BodyParameter('refresh_token', description: 'رمز التحديث الصادر عند تسجيل الدخول.', required: true, type: 'string')]
+    #[Response(200, description: 'بيانات المستخدم ورموز الجلسة الجديدة.')]
+    #[Response(431, description: 'رمز التحديث غير صالح أو منتهي الصلاحية.')]
     public function refresh(Request $request): JsonResponse
     {
         $request->validate(['refresh_token' => 'required|string']);
