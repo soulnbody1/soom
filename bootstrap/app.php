@@ -33,7 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $rootDomainPattern = preg_quote(config('markets.root_domain'), '/');
+
         $middleware->trustHosts(at: fn (): array => array_values(array_filter([
+            '^'.$rootDomainPattern.'$',
+            '^[a-z]{2}\\.'.$rootDomainPattern.'$',
             '^api-[a-z]{2}\\.'.preg_quote(config('markets.root_domain'), '/').'$',
             '^'.preg_quote(config('markets.admin_api_host'), '/').'$',
             config('markets.legacy_api_host') ? '^'.preg_quote((string) config('markets.legacy_api_host'), '/').'$' : null,
