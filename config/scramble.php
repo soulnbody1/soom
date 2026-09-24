@@ -1,6 +1,6 @@
 <?php
 
-use Dedoc\Scramble\Http\Middleware\RestrictedDocsAccess;
+use App\Http\Middleware\ProtectApiDocumentation;
 
 return [
     /*
@@ -142,7 +142,12 @@ return [
 
     'middleware' => [
         'web',
-        RestrictedDocsAccess::class,
+        ProtectApiDocumentation::class,
+    ],
+
+    'auth' => [
+        'username' => env('API_DOCS_USERNAME'),
+        'password' => env('API_DOCS_PASSWORD'),
     ],
 
     'extensions' => [],
