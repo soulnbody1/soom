@@ -92,6 +92,7 @@ APP_URL=https://soomnow.com
 
 SOOM_ROOT_DOMAIN=soomnow.com
 SOOM_ADMIN_API_HOST=api-admin.soomnow.com
+SOOM_DOCS_MARKET_CODES=JO,EG
 SOOM_LEGACY_API_HOST=
 SOOM_LEGACY_MARKET_CODE=JO
 SOOM_DEFAULT_MARKET_CODE=JO
@@ -173,6 +174,8 @@ API_DOCS_PASSWORD=كلمة-سر-قوية-وفريدة
 ```
 
 وتسمح بالتوثيق على Host الموجود في `APP_URL` فقط. عند غياب أي من القيمتين ترجع المسارات `404`.
+
+تعرض واجهة التوثيق قائمة Servers للأسواق الموجودة في `SOOM_DOCS_MARKET_CODES` بالإضافة إلى Admin API. اختر Server السوق للـ public/user endpoints، واختر Admin API لمسارات `/admin/*`. لا تُرسل الواجهة Cookies أو بيانات Basic Auth الخاصة بصفحة التوثيق إلى دومينات الـ API.
 
 بعد تغيير بيانات الدخول:
 

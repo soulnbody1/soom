@@ -2,6 +2,22 @@
 
 use App\Http\Middleware\ProtectApiDocumentation;
 
+$rootDomain = strtolower((string) env('SOOM_ROOT_DOMAIN', 'soom.test'));
+$adminApiHost = strtolower((string) env('SOOM_ADMIN_API_HOST', 'api-admin.'.$rootDomain));
+$docsMarketCodes = array_values(array_filter(
+    array_map(
+        static fn (string $code): string => strtoupper(trim($code)),
+        explode(',', (string) env('SOOM_DOCS_MARKET_CODES', 'JO,EG'))
+    ),
+    static fn (string $code): bool => preg_match('/^[A-Z]{2}$/', $code) === 1
+));
+
+$servers = [];
+foreach ($docsMarketCodes as $code) {
+    $servers[$code.' Market API'] = 'https://api-'.strtolower($code).'.'.$rootDomain.'/api';
+}
+$servers['Admin API'] = 'https://'.$adminApiHost.'/api';
+
 return [
     /*
      * Which routes to document. String or array form; use Scramble::routes() for custom selection.
@@ -69,7 +85,7 @@ return [
             'hideTryIt' => false,
             'hideSchemas' => false,
             'logo' => '',
-            'tryItCredentialsPolicy' => 'include',
+            'tryItCredentialsPolicy' => 'omit',
             'layout' => 'responsive',
             'router' => 'hash',
         ],
@@ -84,7 +100,7 @@ return [
             'darkMode' => false,
             'showDeveloperTools' => 'never',
             'agent' => ['disabled' => true],
-            'credentials' => 'include',
+            'credentials' => 'omit',
         ],
     ],
 
@@ -102,7 +118,7 @@ return [
      * ],
      * ```
      */
-    'servers' => null,
+    'servers' => $servers,
 
     /**
      * Determines how Scramble stores the descriptions of enum cases.
