@@ -144,14 +144,57 @@ php artisan migrate --force
 php artisan market:validate
 ```
 
-فعّل مصر عند جاهزية بياناتها القانونية والتجارية:
+راجع خطة تهيئة كل سوق دون تعديل قاعدة البيانات:
 
 ```bash
-php artisan market:provision EG
+php artisan market:bootstrap JO --dry-run
+php artisan market:bootstrap EG --dry-run
+```
+
+بعد مراجعة الخطة، طبّق ملفات السوق. يتطلب Production إضافة `--force` عمدًا:
+
+```bash
+php artisan market:bootstrap JO --apply --force
+php artisan market:bootstrap EG --apply --force
 php artisan market:validate
 ```
 
-الأمر `market:provision EG` مصمم ليكون idempotent؛ تشغيله مرة أخرى لا يكرر البيانات المكتملة.
+الأمر `market:bootstrap` مصمم ليكون idempotent: لا يكرر الإصدارات المطابقة، ولا يحذف طرق الدفع القديمة، بل يعطّل الطرق التي لا تنتمي إلى الملف المعتمد للسوق. ينشر إصدارًا جديدًا فقط عند تغير إعدادات المزاد أو الشروط أو سياسة مراجعة المحتوى.
+
+ملف الأردن ينشئ تحويلًا يدويًا تجريبيًا وN-Genius وeFAWATEERcom. تظل الطرق الإلكترونية غير فعالة حتى تكتمل بيانات اعتمادها:
+
+```dotenv
+NGENIUS_API_KEY=
+NGENIUS_OUTLET_REFERENCE=
+NGENIUS_BASE_URL=https://api-gateway.sandbox.ngenius-payments.com
+NGENIUS_WEBHOOK_SECRET=
+
+AUCTION_PAYMENTS_EFAWATEERCOM_BILLER_CODE=
+AUCTION_PAYMENTS_EFAWATEERCOM_USERNAME=
+AUCTION_PAYMENTS_EFAWATEERCOM_PASSWORD=
+AUCTION_PAYMENTS_EFAWATEERCOM_BIDDER_DEPOSIT_CODE=SOOMBID
+AUCTION_PAYMENTS_EFAWATEERCOM_SELLER_DEPOSIT_CODE=SOOMSELL
+AUCTION_PAYMENTS_EFAWATEERCOM_WINNER_SETTLEMENT_CODE=SOOMWIN
+```
+
+ملف مصر ينشئ طريقة تحويل يدوي واحدة. بيانات المستفيد وأرقام الحسابات وقنوات الدعم في الملفين بيانات اختبار واضحة، ويجب استبدالها من لوحة الإدارة قبل استقبال أي أموال.
+
+تُنشأ مراجعة المحتوى في السوقين باستخدام Gemini بوضع `shadow` وميزانية 5 دولارات يوميًا و100 دولار شهريًا. لتشغيلها فعليًا:
+
+```dotenv
+CONTENT_REVIEW_ENABLED=true
+CONTENT_REVIEW_PROVIDER=gemini
+GEMINI_API_KEY=ضع-المفتاح-هنا
+GEMINI_CONTENT_REVIEW_MODEL=gemini-3.6-flash
+```
+
+ثم شغّل عامل الطابور المخصص:
+
+```bash
+php artisan queue:work --queue=content-review --tries=3 --timeout=120
+```
+
+الشروط المنشورة بواسطة ملفات السوق مسودات تشغيلية تجريبية وليست بديلًا عن اعتماد مستشار قانوني محلي. استبدل بيانات الكيان والدعم وراجع النص قبل الإطلاق التجاري.
 
 أنشئ رابط الملفات العامة:
 

@@ -1,5 +1,10 @@
 <?php
 
+use App\Services\Auction\Payments\Providers\EFawateercomPaymentProvider;
+use App\Services\Auction\Payments\Providers\FakeBillPaymentProvider;
+use App\Services\Auction\Payments\Providers\FakePaymentProvider;
+use App\Services\Auction\Payments\Providers\NGeniusPaymentProvider;
+
 return [
     'admin_permissions' => [
         'auction.review',
@@ -41,13 +46,13 @@ return [
         'return_url' => env('AUCTION_PAYMENTS_RETURN_URL', env('APP_URL', 'http://localhost').'/payments/return'),
         'providers' => [
             'fake' => [
-                'class' => App\Services\Auction\Payments\Providers\FakePaymentProvider::class,
+                'class' => FakePaymentProvider::class,
                 'required_credentials' => ['webhook_secret'],
                 'checkout_url' => env('AUCTION_PAYMENTS_FAKE_CHECKOUT_URL', 'https://fake-checkout.test'),
             ],
 
             'fake_bill' => [
-                'class' => App\Services\Auction\Payments\Providers\FakeBillPaymentProvider::class,
+                'class' => FakeBillPaymentProvider::class,
                 'required_credentials' => ['webhook_secret'],
                 'bill_ttl_seconds' => (int) env('AUCTION_PAYMENTS_FAKE_BILL_TTL_SECONDS', 86400),
                 'billing_reference' => ['length' => 10, 'charset' => 'numeric', 'check_digit' => true],
@@ -55,8 +60,13 @@ return [
             ],
 
             'efawateercom' => [
-                'class' => App\Services\Auction\Payments\Providers\EFawateercomPaymentProvider::class,
+                'class' => EFawateercomPaymentProvider::class,
                 'required_credentials' => ['biller_code', 'username', 'password'],
+                'purpose_codes' => [
+                    'bidder_deposit' => env('AUCTION_PAYMENTS_EFAWATEERCOM_BIDDER_DEPOSIT_CODE', 'SOOMBID'),
+                    'seller_deposit' => env('AUCTION_PAYMENTS_EFAWATEERCOM_SELLER_DEPOSIT_CODE', 'SOOMSELL'),
+                    'winner_settlement' => env('AUCTION_PAYMENTS_EFAWATEERCOM_WINNER_SETTLEMENT_CODE', 'SOOMWIN'),
+                ],
                 'bill_ttl_seconds' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_BILL_TTL_SECONDS', 86400),
                 'bill_reference' => [
                     'length' => (int) env('AUCTION_PAYMENTS_EFAWATEERCOM_REFERENCE_LENGTH', 12),
@@ -83,7 +93,7 @@ return [
             ],
 
             'ngenius' => [
-                'class' => App\Services\Auction\Payments\Providers\NGeniusPaymentProvider::class,
+                'class' => NGeniusPaymentProvider::class,
                 'required_credentials' => ['api_key', 'outlet_reference', 'base_url', 'webhook_secret'],
                 'sandbox' => (bool) env('AUCTION_PAYMENTS_NGENIUS_SANDBOX', true),
                 'currencies' => array_values(array_filter(array_map(
